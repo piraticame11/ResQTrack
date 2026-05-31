@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard — ResQTrack Responder</title>
+  <link rel="icon" type="image/png" href="/public/images/favicon.png">
+  <link rel="stylesheet" href="/public/css/output.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+</head>
+<body class="bg-gray-50 font-sans">
+<div class="flex h-screen overflow-hidden">
+
+  <div id="sidebar-backdrop" onclick="closeSidebar()" class="fixed inset-0 bg-black bg-opacity-50 z-40 hidden lg:hidden"></div>
+
+  <!-- Sidebar -->
+  <aside id="sidebar" class="fixed inset-y-0 left-0 z-50 w-64 bg-slate-900 flex-shrink-0 flex flex-col -translate-x-full transition-transform duration-200 ease-in-out lg:static lg:translate-x-0">
+    <div class="h-16 flex items-center px-5 border-b border-slate-800">
+      <span class="text-red-400 font-bold text-xl">ResQ</span><span class="text-white font-bold text-xl">Track</span>
+      <span class="ml-2 text-slate-500 text-xs uppercase tracking-wider">Responder</span>
+    </div>
+    <nav class="flex-1 py-4 px-3 space-y-0.5 overflow-y-auto">
+      <a href="/pages/responder/dashboard.html"    class="nav-item active"><i class="fa-solid fa-gauge w-5 text-center"></i> Dashboard</a>
+      <a href="/pages/responder/my-incidents.html" class="nav-item"><i class="fa-solid fa-clipboard-list w-5 text-center"></i> My Incidents</a>
+    </nav>
+    <div class="border-t border-slate-800 p-4">
+      <div class="flex items-center gap-3">
+        <a href="/pages/shared/profile.html" class="flex items-center gap-3 flex-1 min-w-0 hover:opacity-75 transition-opacity" title="My Profile">
+          <div class="w-9 h-9 rounded-full bg-green-600 flex items-center justify-center text-white font-bold text-sm shrink-0 overflow-hidden" id="user-avatar">R</div>
+          <div class="min-w-0">
+            <p class="text-white text-sm font-medium truncate" id="user-name">Responder</p>
+            <p class="text-slate-400 text-xs">Field Responder</p>
+          </div>
+        </a>
+        <button onclick="logout()" title="Logout" class="text-slate-400 hover:text-red-400 transition-colors shrink-0">
+          <i class="fa-solid fa-right-from-bracket"></i>
+        </button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <div class="flex-1 flex flex-col overflow-hidden">
+    <header class="h-16 bg-white border-b border-gray-200 px-4 lg:px-6 flex items-center justify-between shrink-0">
+      <div class="flex items-center gap-3">
+        <button onclick="toggleSidebar()" class="lg:hidden text-gray-500 hover:text-gray-700 -ml-1 p-1"><i class="fa-solid fa-bars text-xl"></i></button>
+        <h1 class="text-lg font-semibold text-gray-800">Responder Dashboard</h1>
+      </div>
+      <div class="flex items-center gap-3 text-sm text-gray-500">
+        <i class="fa-solid fa-circle text-green-500 text-xs"></i> Live
+        <span id="live-time"></span>
+      </div>
+    </header>
+
+    <main class="flex-1 overflow-y-auto p-4 lg:p-6 space-y-4 lg:space-y-6">
+
+      <!-- Stat Cards -->
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div class="card border-l-4 border-l-yellow-400">
+          <p class="text-xs font-medium text-gray-500 uppercase tracking-wider">My Assignments</p>
+          <p class="text-3xl font-bold text-yellow-600 mt-2" id="stat-active">—</p>
+          <p class="text-xs text-gray-400 mt-1">Assigned to me</p>
+        </div>
+        <div class="card border-l-4 border-l-green-500">
+          <p class="text-xs font-medium text-gray-500 uppercase tracking-wider">Resolved Today</p>
+          <p class="text-3xl font-bold text-green-600 mt-2" id="stat-resolved">—</p>
+          <p class="text-xs text-gray-400 mt-1">Closed by you today</p>
+        </div>
+        <div class="card border-l-4 border-l-blue-500">
+          <p class="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Assigned</p>
+          <p class="text-3xl font-bold text-blue-600 mt-2" id="stat-total">—</p>
+          <p class="text-xs text-gray-400 mt-1">All time</p>
+        </div>
+      </div>
+
+      <!-- GPS + Map Row -->
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+        <!-- GPS Card -->
+        <div class="card flex flex-col gap-4">
+          <div>
+            <h2 class="font-semibold text-gray-800 mb-1"><i class="fa-solid fa-location-dot text-red-500 mr-2"></i>Location Sharing</h2>
+            <p class="text-xs text-gray-500">Share your GPS location so the admin can track your position on the live map.</p>
+          </div>
+          <div id="gps-status" class="flex items-center gap-2 text-sm">
+            <span class="w-2.5 h-2.5 rounded-full bg-gray-300" id="gps-dot"></span>
+            <span id="gps-label" class="text-gray-500">Not sharing</span>
+          </div>
+          <button id="gps-toggle" onclick="toggleGPS()"
+            class="btn-primary flex items-center justify-center gap-2">
+            <i class="fa-solid fa-satellite-dish"></i>
+            <span id="gps-btn-text">Start Sharing Location</span>
+          </button>
+          <p id="gps-coords" class="text-xs text-gray-400 font-mono hidden"></p>
+        </div>
+
+        <!-- Incident Map -->
+        <div class="card p-0 overflow-hidden lg:col-span-2" style="isolation:isolate;z-index:0;position:relative;">
+          <div class="px-5 py-4 border-b border-gray-100">
+            <h2 class="font-semibold text-gray-800">Active Incident Locations</h2>
+          </div>
+          <div id="incident-map" class="h-56"></div>
+        </div>
+      </div>
+
+      <!-- Active Incidents Queue -->
+      <div class="card p-0 overflow-hidden">
+        <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+          <div>
+            <h2 class="font-semibold text-gray-800">All Active Incidents</h2>
+            <p class="text-xs text-gray-400 mt-0.5">Your assignments are highlighted in blue</p>
+          </div>
+          <span id="queue-count" class="text-sm text-gray-500"></span>
+        </div>
+
+        <!-- Mobile: card list -->
+        <div id="queue-cards" class="md:hidden p-3 space-y-2">
+          <p class="text-center text-gray-400 py-6 text-sm">Loading…</p>
+        </div>
+
+        <!-- Desktop: table -->
+        <div class="hidden md:block overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead class="bg-gray-50 text-gray-500 text-xs uppercase border-b border-gray-200">
+              <tr>
+                <th class="px-4 py-3 text-left">Ref #</th>
+                <th class="px-4 py-3 text-left">Type</th>
+                <th class="px-4 py-3 text-left">Purok</th>
+                <th class="px-4 py-3 text-left">Triage</th>
+                <th class="px-4 py-3 text-left">Status</th>
+                <th class="px-4 py-3 text-left">Reported</th>
+                <th class="px-4 py-3 text-left">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="queue-body" class="divide-y divide-gray-100">
+              <tr><td colspan="7" class="px-4 py-10 text-center text-gray-400">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </main>
+  </div>
+</div>
+
+<!-- Incident Detail Modal -->
+<div id="incident-modal" class="modal-overlay hidden">
+  <div class="modal-box">
+    <div class="flex items-center justify-between p-5 border-b border-gray-100">
+      <h3 class="font-bold text-gray-800 text-lg" id="modal-ref">Incident Details</h3>
+      <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600"><i class="fa-solid fa-xmark text-xl"></i></button>
+    </div>
+    <div class="p-5 space-y-4" id="modal-content"></div>
+    <div class="p-5 border-t border-gray-100 flex flex-wrap gap-3" id="modal-actions"></div>
+  </div>
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+<script src="/js/shared/auth.js"></script>
+<script src="/js/shared/api.js"></script>
+<script src="/js/responder/dashboard.js"></script>
+</body>
+</html>

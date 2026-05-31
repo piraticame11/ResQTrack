@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Home — ResQTrack</title>
+  <link rel="icon" type="image/png" href="/public/images/favicon.png">
+  <link rel="stylesheet" href="/public/css/output.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" crossorigin="anonymous">
+</head>
+<body class="bg-gray-50 font-sans min-h-screen">
+
+  <!-- Navbar -->
+  <nav class="bg-white border-b border-gray-200 sticky top-0 z-40">
+    <div class="max-w-4xl mx-auto px-4 h-16 flex items-center justify-between">
+      <div class="flex items-center gap-2">
+        <span class="text-red-500 font-bold text-xl">ResQ</span><span class="text-gray-800 font-bold text-xl">Track</span>
+        <span class="text-gray-400 text-xs ml-1 hidden sm:inline">Barangay Manay</span>
+      </div>
+      <div class="flex items-center gap-4">
+        <a href="/pages/client/my-reports.html" class="text-sm text-gray-600 hover:text-blue-600 font-medium">
+          <i class="fa-solid fa-list-check mr-1"></i> My Reports
+        </a>
+        <a href="/pages/shared/profile.html" class="flex items-center gap-2 hover:opacity-75 transition-opacity" title="My Profile">
+          <div class="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold text-sm overflow-hidden" id="user-avatar">R</div>
+          <span class="text-sm text-gray-700 font-medium hidden sm:inline" id="user-name">Resident</span>
+        </a>
+        <button onclick="logout()" class="text-gray-400 hover:text-red-500 text-sm" title="Logout">
+          <i class="fa-solid fa-right-from-bracket"></i>
+        </button>
+      </div>
+    </div>
+  </nav>
+
+  <div class="max-w-4xl mx-auto px-4 py-6 space-y-6">
+
+    <!-- Emergency Report Button -->
+    <div class="bg-gradient-to-r from-red-600 to-red-700 rounded-2xl p-8 text-white shadow-lg text-center">
+      <h2 class="text-xl font-bold mb-1">Need Emergency Help?</h2>
+      <p class="text-red-200 text-sm mb-6">Report an incident to alert Barangay responders immediately.</p>
+      <div class="flex flex-col items-center gap-3">
+        <a href="/pages/client/report-incident.html"
+           class="w-28 h-28 rounded-full bg-white text-red-600 flex items-center justify-center shadow-xl ring-4 ring-white/40 animate-pulse hover:animate-none hover:bg-red-50 transition-colors">
+          <i class="fa-solid fa-circle-exclamation text-5xl"></i>
+        </a>
+        <span class="text-white font-bold text-sm tracking-wide">Report Incident</span>
+      </div>
+    </div>
+
+    <!-- Emergency Contacts -->
+    <div class="card">
+      <h2 class="font-semibold text-gray-800 mb-4"><i class="fa-solid fa-phone-volume text-red-500 mr-2"></i>Emergency Hotlines</h2>
+      <div id="contacts-accordion" class="divide-y divide-gray-100">
+        <div class="text-center py-4 text-gray-400">Loading contacts…</div>
+      </div>
+    </div>
+
+    <!-- Announcements -->
+    <div class="card">
+      <h2 class="font-semibold text-gray-800 mb-4"><i class="fa-solid fa-bullhorn text-blue-500 mr-2"></i>Barangay Announcements</h2>
+      <div id="announcements-list" class="space-y-4">
+        <div class="text-center py-4 text-gray-400">Loading announcements…</div>
+      </div>
+    </div>
+
+    <!-- Safety Protocols -->
+    <div class="card">
+      <h2 class="font-semibold text-gray-800 mb-4"><i class="fa-solid fa-shield-halved text-green-500 mr-2"></i>Safety Protocols</h2>
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div class="bg-red-50 rounded-xl p-4">
+          <div class="text-2xl mb-2">🔥</div>
+          <h3 class="font-semibold text-gray-800 text-sm mb-1">Fire Emergency</h3>
+          <ul class="text-xs text-gray-600 space-y-1 list-disc list-inside">
+            <li>Call 911 immediately</li>
+            <li>Evacuate the building</li>
+            <li>Stay low to avoid smoke</li>
+            <li>Do not use elevators</li>
+            <li>Meet at the assembly point</li>
+          </ul>
+        </div>
+        <div class="bg-blue-50 rounded-xl p-4">
+          <div class="text-2xl mb-2">🏥</div>
+          <h3 class="font-semibold text-gray-800 text-sm mb-1">Medical Emergency</h3>
+          <ul class="text-xs text-gray-600 space-y-1 list-disc list-inside">
+            <li>Call the RHU hotline</li>
+            <li>Do not move the patient</li>
+            <li>Keep the patient conscious</li>
+            <li>Apply basic first aid</li>
+            <li>Wait for responders</li>
+          </ul>
+        </div>
+        <div class="bg-orange-50 rounded-xl p-4">
+          <div class="text-2xl mb-2">🚨</div>
+          <h3 class="font-semibold text-gray-800 text-sm mb-1">Crime / Security</h3>
+          <ul class="text-xs text-gray-600 space-y-1 list-disc list-inside">
+            <li>Call PNP 117</li>
+            <li>Do not confront suspects</li>
+            <li>Move to a safe location</li>
+            <li>Document if safe to do so</li>
+            <li>Report to Barangay Tanod</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <footer class="text-center text-gray-400 text-xs py-6">
+    © 2024 ResQTrack · Barangay Manay Emergency Response System
+  </footer>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/js/shared/auth.js"></script>
+  <script src="/js/shared/api.js"></script>
+  <script src="/js/client/home.js"></script>
+</body>
+</html>

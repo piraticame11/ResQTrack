@@ -1,0 +1,30 @@
+{
+  "name": "resqtrack",
+  "version": "1.0.0",
+  "description": "ResQTrack: Incident Reporting and Response System for Barangay Manay",
+  "main": "server/index.js",
+  "scripts": {
+    "dev": "concurrently \"nodemon server/index.js\" \"npx tailwindcss -i ./client/src/input.css -o ./client/public/css/output.css --watch\"",
+    "build:css": "npx tailwindcss -i ./client/src/input.css -o ./client/public/css/output.css --minify",
+    "migrate": "node database/migrate.js",
+    "start": "node server/index.js"
+  },
+  "dependencies": {
+    "bcrypt": "^5.1.1",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "jsonwebtoken": "^9.0.2",
+    "multer": "^2.1.1",
+    "mysql2": "^3.9.7",
+    "node-cron": "^3.0.3",
+    "socket.io": "^4.7.5"
+  },
+  "devDependencies": {
+    "autoprefixer": "^10.4.19",
+    "concurrently": "^8.2.2",
+    "nodemon": "^3.1.0",
+    "postcss": "^8.4.38",
+    "tailwindcss": "^3.4.3"
+  }
+}

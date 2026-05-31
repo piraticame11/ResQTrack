@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Users — ResQTrack Admin</title>
+  <link rel="icon" type="image/png" href="/public/images/favicon.png">
+  <link rel="stylesheet" href="/public/css/output.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" crossorigin="anonymous">
+</head>
+<body class="bg-gray-50 font-sans">
+<div class="flex h-screen overflow-hidden">
+
+  <div id="sidebar-backdrop" onclick="closeSidebar()" class="fixed inset-0 bg-black bg-opacity-50 z-40 hidden lg:hidden"></div>
+
+  <aside id="sidebar" class="fixed inset-y-0 left-0 z-50 w-64 bg-slate-900 flex-shrink-0 flex flex-col -translate-x-full transition-transform duration-200 ease-in-out lg:static lg:translate-x-0">
+    <div class="h-16 flex items-center px-5 border-b border-slate-800">
+      <span class="text-red-400 font-bold text-xl">ResQ</span><span class="text-white font-bold text-xl">Track</span>
+      <span class="ml-2 text-slate-500 text-xs uppercase tracking-wider">Admin</span>
+    </div>
+    <nav class="flex-1 py-4 px-3 space-y-0.5 overflow-y-auto">
+      <a href="/pages/admin/dashboard.html"    class="nav-item"><i class="fa-solid fa-gauge w-5 text-center"></i> Dashboard</a>
+      <a href="/pages/admin/incidents.html"    class="nav-item"><i class="fa-solid fa-triangle-exclamation w-5 text-center"></i> Incidents</a>
+      <a href="/pages/admin/users.html"        class="nav-item active"><i class="fa-solid fa-users w-5 text-center"></i> Users</a>
+      <a href="/pages/admin/logbook.html"      class="nav-item"><i class="fa-solid fa-book w-5 text-center"></i> Logbook</a>
+      <a href="/pages/admin/announcements.html" class="nav-item"><i class="fa-solid fa-bullhorn w-5 text-center"></i> Announcements</a>
+      <a href="/pages/admin/reports.html"      class="nav-item"><i class="fa-solid fa-chart-bar w-5 text-center"></i> Reports</a>
+    </nav>
+    <div class="border-t border-slate-800 p-4">
+      <div class="flex items-center gap-3">
+        <a href="/pages/shared/profile.html" class="flex items-center gap-3 flex-1 min-w-0 hover:opacity-75 transition-opacity" title="My Profile">
+          <div class="w-9 h-9 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold text-sm shrink-0 overflow-hidden" id="user-avatar">A</div>
+          <div class="min-w-0"><p class="text-white text-sm font-medium truncate" id="user-name">Admin</p><p class="text-slate-400 text-xs">Administrator</p></div>
+        </a>
+        <button onclick="logout()" class="text-slate-400 hover:text-red-400 transition-colors shrink-0"><i class="fa-solid fa-right-from-bracket"></i></button>
+      </div>
+    </div>
+  </aside>
+
+  <div class="flex-1 flex flex-col overflow-hidden">
+    <header class="h-16 bg-white border-b border-gray-200 px-4 lg:px-6 flex items-center justify-between shrink-0">
+      <div class="flex items-center gap-3">
+        <button onclick="toggleSidebar()" class="lg:hidden text-gray-500 hover:text-gray-700 -ml-1 p-1"><i class="fa-solid fa-bars text-xl"></i></button>
+        <h1 class="text-lg font-semibold text-gray-800">User Management</h1>
+      </div>
+      <button onclick="openCreateModal()" class="btn-primary btn-sm"><i class="fa-solid fa-plus mr-1"></i> Add User</button>
+    </header>
+
+    <main class="flex-1 overflow-y-auto p-4 lg:p-6">
+      <!-- Tab filters -->
+      <div class="flex flex-wrap gap-2 mb-5">
+        <button onclick="setTab('all')"       id="tab-all"       class="px-4 py-2 rounded-lg text-sm font-medium bg-blue-600 text-white">All</button>
+        <button onclick="setTab('responder')" id="tab-responder" class="px-4 py-2 rounded-lg text-sm font-medium bg-gray-100 text-gray-600 hover:bg-gray-200">Responders</button>
+        <button onclick="setTab('resident')"  id="tab-resident"  class="px-4 py-2 rounded-lg text-sm font-medium bg-gray-100 text-gray-600 hover:bg-gray-200">Residents</button>
+        <input type="text" id="search-user" placeholder="Search name or email…" class="input-field w-full sm:w-56 sm:ml-auto">
+      </div>
+
+      <div class="card p-0 overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead class="bg-gray-50 text-gray-500 text-xs uppercase border-b border-gray-200">
+              <tr>
+                <th class="px-4 py-3 text-left">Name</th>
+                <th class="px-4 py-3 text-left">Email</th>
+                <th class="px-4 py-3 text-left">Role</th>
+                <th class="px-4 py-3 text-left">Purok</th>
+                <th class="px-4 py-3 text-left">Verified</th>
+                <th class="px-4 py-3 text-left">Status</th>
+                <th class="px-4 py-3 text-left">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="users-body" class="divide-y divide-gray-100">
+              <tr><td colspan="7" class="px-4 py-10 text-center text-gray-400">Loading users…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- Create/Edit User Modal -->
+<div id="user-modal" class="modal-overlay hidden">
+  <div class="modal-box">
+    <div class="flex items-center justify-between p-5 border-b border-gray-100">
+      <h3 class="font-bold text-gray-800 text-lg" id="user-modal-title">Add User</h3>
+      <button onclick="closeUserModal()" class="text-gray-400 hover:text-gray-600"><i class="fa-solid fa-xmark text-xl"></i></button>
+    </div>
+    <form id="user-form" class="p-5 space-y-4">
+      <input type="hidden" id="edit-user-id">
+      <div class="grid grid-cols-2 gap-4">
+        <div class="col-span-2">
+          <label class="block text-sm font-medium text-gray-700 mb-1.5">Full Name</label>
+          <input type="text" id="u-full_name" required class="input-field">
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1.5">Email</label>
+          <input type="email" id="u-email" required class="input-field">
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1.5">Phone</label>
+          <input type="tel" id="u-phone" class="input-field">
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1.5">Role</label>
+          <select id="u-role" class="input-field">
+            <option value="responder">Responder</option>
+            <option value="admin">Admin</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1.5">Purok (optional)</label>
+          <select id="u-purok" class="input-field"><option value="">None</option></select>
+        </div>
+        <div class="col-span-2">
+          <label class="block text-sm font-medium text-gray-700 mb-1.5" id="password-label">Password</label>
+          <input type="password" id="u-password" class="input-field" placeholder="Leave blank to keep current">
+        </div>
+      </div>
+      <div class="flex gap-3 pt-2">
+        <button type="submit" class="btn-primary flex-1" id="user-submit-btn">Save User</button>
+        <button type="button" onclick="closeUserModal()" class="btn-secondary flex-1">Cancel</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="/js/shared/auth.js"></script>
+<script src="/js/shared/api.js"></script>
+<script src="/js/admin/notify.js"></script>
+<script src="/js/admin/users.js"></script>
+</body>
+</html>

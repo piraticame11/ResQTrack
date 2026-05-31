@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My Incidents — ResQTrack Responder</title>
+  <link rel="icon" type="image/png" href="/public/images/favicon.png">
+  <link rel="stylesheet" href="/public/css/output.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+</head>
+<body class="bg-gray-50 font-sans">
+<div class="flex h-screen overflow-hidden">
+
+  <div id="sidebar-backdrop" onclick="closeSidebar()" class="fixed inset-0 bg-black bg-opacity-50 z-40 hidden lg:hidden"></div>
+
+  <!-- Sidebar -->
+  <aside id="sidebar" class="fixed inset-y-0 left-0 z-50 w-64 bg-slate-900 flex-shrink-0 flex flex-col -translate-x-full transition-transform duration-200 ease-in-out lg:static lg:translate-x-0">
+    <div class="h-16 flex items-center px-5 border-b border-slate-800">
+      <span class="text-red-400 font-bold text-xl">ResQ</span><span class="text-white font-bold text-xl">Track</span>
+      <span class="ml-2 text-slate-500 text-xs uppercase tracking-wider">Responder</span>
+    </div>
+    <nav class="flex-1 py-4 px-3 space-y-0.5 overflow-y-auto">
+      <a href="/pages/responder/dashboard.html"    class="nav-item"><i class="fa-solid fa-gauge w-5 text-center"></i> Dashboard</a>
+      <a href="/pages/responder/my-incidents.html" class="nav-item active"><i class="fa-solid fa-clipboard-list w-5 text-center"></i> My Incidents</a>
+    </nav>
+    <div class="border-t border-slate-800 p-4">
+      <div class="flex items-center gap-3">
+        <a href="/pages/shared/profile.html" class="flex items-center gap-3 flex-1 min-w-0 hover:opacity-75 transition-opacity" title="My Profile">
+          <div class="w-9 h-9 rounded-full bg-green-600 flex items-center justify-center text-white font-bold text-sm shrink-0 overflow-hidden" id="user-avatar">R</div>
+          <div class="min-w-0">
+            <p class="text-white text-sm font-medium truncate" id="user-name">Responder</p>
+            <p class="text-slate-400 text-xs">Field Responder</p>
+          </div>
+        </a>
+        <button onclick="logout()" title="Logout" class="text-slate-400 hover:text-red-400 transition-colors shrink-0">
+          <i class="fa-solid fa-right-from-bracket"></i>
+        </button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <div class="flex-1 flex flex-col overflow-hidden">
+    <header class="h-16 bg-white border-b border-gray-200 px-4 lg:px-6 flex items-center justify-between shrink-0">
+      <div class="flex items-center gap-3">
+        <button onclick="toggleSidebar()" class="lg:hidden text-gray-500 hover:text-gray-700 -ml-1 p-1"><i class="fa-solid fa-bars text-xl"></i></button>
+        <h1 class="text-lg font-semibold text-gray-800">My Incident History</h1>
+      </div>
+      <span id="total-count" class="text-sm text-gray-500"></span>
+    </header>
+
+    <main class="flex-1 overflow-y-auto p-4 lg:p-6">
+
+      <!-- Filters -->
+      <div class="card mb-5">
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <input type="text" id="filter-search" placeholder="Search ref / description…" class="input-field col-span-2 md:col-span-1">
+          <select id="filter-status" class="input-field">
+            <option value="">All Statuses</option>
+            <option>Dispatched</option><option>Ongoing</option><option>Resolved</option><option>Archived</option>
+          </select>
+          <select id="filter-type" class="input-field">
+            <option value="">All Types</option>
+            <option>Fire</option><option>Medical</option><option>Crime</option><option>Noise</option><option>Garbage</option><option>Other</option>
+          </select>
+          <button onclick="applyFilter()" class="btn-primary"><i class="fa-solid fa-filter mr-1"></i> Filter</button>
+        </div>
+      </div>
+
+      <!-- Table -->
+      <div class="card p-0 overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead class="bg-gray-50 text-gray-500 text-xs uppercase border-b border-gray-200">
+              <tr>
+                <th class="px-4 py-3 text-left">Ref #</th>
+                <th class="px-4 py-3 text-left">Type</th>
+                <th class="px-4 py-3 text-left">Purok</th>
+                <th class="px-4 py-3 text-left">Triage</th>
+                <th class="px-4 py-3 text-left">Status</th>
+                <th class="px-4 py-3 text-left">Reported</th>
+                <th class="px-4 py-3 text-left">Resolved</th>
+                <th class="px-4 py-3 text-left">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="incidents-body" class="divide-y divide-gray-100">
+              <tr><td colspan="8" class="px-4 py-10 text-center text-gray-400">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </main>
+  </div>
+</div>
+
+<!-- Incident Detail Modal (read-only) -->
+<div id="incident-modal" class="modal-overlay hidden">
+  <div class="modal-box">
+    <div class="flex items-center justify-between p-5 border-b border-gray-100">
+      <h3 class="font-bold text-gray-800 text-lg" id="modal-ref">Incident Details</h3>
+      <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600"><i class="fa-solid fa-xmark text-xl"></i></button>
+    </div>
+    <div class="p-5 space-y-4" id="modal-content"></div>
+    <div class="p-5 border-t border-gray-100 flex flex-wrap gap-3" id="modal-actions">
+      <button onclick="closeModal()" class="btn-secondary btn-sm ml-auto">Close</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+<script src="/js/shared/auth.js"></script>
+<script src="/js/shared/api.js"></script>
+<script src="/js/responder/my-incidents.js"></script>
+</body>
+</html>

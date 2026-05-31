@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Register — ResQTrack</title>
+  <link rel="icon" type="image/png" href="/public/images/favicon.png">
+  <link rel="stylesheet" href="/public/css/output.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" crossorigin="anonymous">
+</head>
+<body class="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+
+  <div class="w-full max-w-md">
+    <div class="text-center mb-8">
+      <img src="/public/images/favicon.png" alt="ResQTrack" class="mx-auto h-auto drop-shadow-lg">
+    </div>
+
+    <div class="bg-white rounded-2xl shadow-lg border border-gray-100 p-8">
+      <h2 class="text-xl font-bold text-gray-800 mb-2">Create your account</h2>
+      <p class="text-sm text-gray-500 mb-6">Your account will be verified by the Barangay Admin before you can log in.</p>
+
+      <div id="success-msg" class="hidden mb-4 bg-green-50 border border-green-200 text-green-700 rounded-lg px-4 py-3 text-sm"></div>
+      <div id="error-msg"   class="hidden mb-4 bg-red-50   border border-red-200   text-red-700   rounded-lg px-4 py-3 text-sm"></div>
+
+      <form id="reg-form" class="space-y-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1.5">Full Name</label>
+          <input type="text" id="full_name" required class="input-field" placeholder="Juan dela Cruz">
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1.5">Email Address</label>
+          <input type="email" id="email" required class="input-field" placeholder="you@example.com">
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1.5">Phone Number</label>
+          <input type="tel" id="phone" class="input-field" placeholder="09XXXXXXXXX">
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1.5">Purok</label>
+          <select id="purok_id" class="input-field">
+            <option value="">-- Select your Purok --</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1.5">Password</label>
+          <input type="password" id="password" required minlength="6" class="input-field" placeholder="Minimum 6 characters">
+        </div>
+        <button type="submit" id="reg-btn" class="btn-primary w-full flex items-center justify-center gap-2 py-2.5">
+          <i class="fa-solid fa-user-plus"></i> Register
+        </button>
+      </form>
+
+      <div class="mt-5 text-center">
+        <p class="text-sm text-gray-500">Already have an account?
+          <a href="/pages/shared/login.html" class="text-blue-600 font-medium hover:underline">Sign in</a>
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- <p class="text-center text-gray-400 text-xs mt-6">© 2024 ResQTrack · Barangay Manay, Panabo City Emergency Response</p> -->
+
+  <script>
+    // Load puroks
+    (async () => {
+      // We populate from a static list since puroks are fixed
+      const sel = document.getElementById('purok_id');
+      for (let i = 1; i <= 14; i++) {
+        const opt = document.createElement('option');
+        opt.value = i; opt.textContent = `Purok ${i}`;
+        sel.appendChild(opt);
+      }
+    })();
+
+    document.getElementById('reg-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn    = document.getElementById('reg-btn');
+      const errEl  = document.getElementById('error-msg');
+      const succEl = document.getElementById('success-msg');
+      errEl.classList.add('hidden');
+      succEl.classList.add('hidden');
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Registering…';
+
+      try {
+        const res = await fetch('/api/auth/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            full_name: document.getElementById('full_name').value.trim(),
+            email:     document.getElementById('email').value.trim(),
+            phone:     document.getElementById('phone').value.trim(),
+            purok_id:  document.getElementById('purok_id').value || null,
+            password:  document.getElementById('password').value,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || 'Registration failed');
+        succEl.textContent = data.message;
+        succEl.classList.remove('hidden');
+        document.getElementById('reg-form').reset();
+      } catch (err) {
+        errEl.textContent = err.message;
+        errEl.classList.remove('hidden');
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fa-solid fa-user-plus"></i> Register';
+      }
+    });
+  </script>
+</body>
+</html>

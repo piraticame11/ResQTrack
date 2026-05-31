@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Report Incident — ResQTrack</title>
+  <link rel="icon" type="image/png" href="/public/images/favicon.png">
+  <link rel="stylesheet" href="/public/css/output.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+</head>
+<body class="bg-gray-50 font-sans min-h-screen">
+
+  <nav class="bg-white border-b border-gray-200 sticky top-0 z-40">
+    <div class="max-w-2xl mx-auto px-4 h-16 flex items-center justify-between">
+      <a href="/pages/client/home.html" class="text-gray-500 hover:text-gray-700 flex items-center gap-2 text-sm">
+        <i class="fa-solid fa-arrow-left"></i> Back
+      </a>
+      <span class="font-semibold text-gray-800">Report an Incident</span>
+      <div class="w-16"></div>
+    </div>
+  </nav>
+
+  <div class="max-w-2xl mx-auto px-4 py-8">
+
+    <!-- Step Indicator -->
+    <div class="flex items-center justify-center mb-8">
+      <div class="flex items-center gap-0">
+        <div class="step-dot flex flex-col items-center" data-step="1">
+          <div class="w-9 h-9 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-sm step-circle">1</div>
+          <span class="text-xs text-blue-600 font-medium mt-1">Type</span>
+        </div>
+        <div class="w-12 h-0.5 bg-gray-300 step-line mx-1" data-after="1"></div>
+        <div class="step-dot flex flex-col items-center" data-step="2">
+          <div class="w-9 h-9 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center font-bold text-sm step-circle">2</div>
+          <span class="text-xs text-gray-400 font-medium mt-1">Details</span>
+        </div>
+        <div class="w-12 h-0.5 bg-gray-300 step-line mx-1" data-after="2"></div>
+        <div class="step-dot flex flex-col items-center" data-step="3">
+          <div class="w-9 h-9 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center font-bold text-sm step-circle">3</div>
+          <span class="text-xs text-gray-400 font-medium mt-1">Location</span>
+        </div>
+        <div class="w-12 h-0.5 bg-gray-300 step-line mx-1" data-after="3"></div>
+        <div class="step-dot flex flex-col items-center" data-step="4">
+          <div class="w-9 h-9 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center font-bold text-sm step-circle">4</div>
+          <span class="text-xs text-gray-400 font-medium mt-1">Confirm</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 1: Incident Type -->
+    <div id="step-1" class="space-y-4">
+      <h2 class="text-xl font-bold text-gray-800 text-center mb-6">What type of incident are you reporting?</h2>
+      <div class="grid grid-cols-2 sm:grid-cols-3 gap-3" id="type-cards">
+        <button onclick="selectType('Fire')"    class="type-card p-4 rounded-xl border-2 border-gray-200 hover:border-red-400 hover:bg-red-50 transition-all text-center group">
+          <div class="text-3xl mb-2">🔥</div>
+          <span class="font-semibold text-gray-700 text-sm group-hover:text-red-700">Fire</span>
+        </button>
+        <button onclick="selectType('Medical')" class="type-card p-4 rounded-xl border-2 border-gray-200 hover:border-blue-400 hover:bg-blue-50 transition-all text-center group">
+          <div class="text-3xl mb-2">🚑</div>
+          <span class="font-semibold text-gray-700 text-sm group-hover:text-blue-700">Medical</span>
+        </button>
+        <button onclick="selectType('Crime')"   class="type-card p-4 rounded-xl border-2 border-gray-200 hover:border-orange-400 hover:bg-orange-50 transition-all text-center group">
+          <div class="text-3xl mb-2">🚔</div>
+          <span class="font-semibold text-gray-700 text-sm group-hover:text-orange-700">Crime</span>
+        </button>
+        <button onclick="selectType('Noise')"   class="type-card p-4 rounded-xl border-2 border-gray-200 hover:border-yellow-400 hover:bg-yellow-50 transition-all text-center group">
+          <div class="text-3xl mb-2">📢</div>
+          <span class="font-semibold text-gray-700 text-sm group-hover:text-yellow-700">Noise</span>
+        </button>
+        <button onclick="selectType('Garbage')" class="type-card p-4 rounded-xl border-2 border-gray-200 hover:border-green-400 hover:bg-green-50 transition-all text-center group">
+          <div class="text-3xl mb-2">🗑️</div>
+          <span class="font-semibold text-gray-700 text-sm group-hover:text-green-700">Garbage</span>
+        </button>
+        <button onclick="selectType('Other')"   class="type-card p-4 rounded-xl border-2 border-gray-200 hover:border-gray-400 hover:bg-gray-50 transition-all text-center group">
+          <div class="text-3xl mb-2">❗</div>
+          <span class="font-semibold text-gray-700 text-sm">Other</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Step 2: Details -->
+    <div id="step-2" class="hidden space-y-5">
+      <h2 class="text-xl font-bold text-gray-800 text-center mb-6">Describe the incident</h2>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1.5">Purok Location</label>
+        <select id="purok-select" class="input-field">
+          <option value="">-- Select Purok --</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1.5">Description <span class="text-red-500">*</span></label>
+        <textarea id="description" rows="5" class="input-field resize-none"
+          placeholder="Describe the incident in detail — what happened, how many people are involved, any injuries, etc."></textarea>
+      </div>
+      <div class="flex gap-3">
+        <button onclick="goToStep(1)" class="btn-secondary flex-1">Back</button>
+        <button onclick="goToStep(3)" class="btn-primary flex-1">Next</button>
+      </div>
+    </div>
+
+    <!-- Step 3: Location + Photo -->
+    <div id="step-3" class="hidden space-y-5">
+      <h2 class="text-xl font-bold text-gray-800 text-center mb-6">Add your location & evidence</h2>
+
+      <div>
+        <div class="flex items-center justify-between mb-2">
+          <label class="block text-sm font-medium text-gray-700">GPS Location</label>
+          <button onclick="autoDetectLocation()" class="text-blue-600 text-xs font-medium hover:underline">
+            <i class="fa-solid fa-location-crosshairs mr-1"></i> Auto-detect
+          </button>
+        </div>
+        <div id="location-map" class="w-full h-48 rounded-xl border border-gray-300 bg-gray-100"></div>
+        <p id="location-info" class="text-xs text-gray-500 mt-1.5">Click the map or use Auto-detect to set your location.</p>
+      </div>
+
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1.5">Photo Evidence <span class="text-gray-400 font-normal">(optional)</span></label>
+
+        <!-- Idle: prompt to open camera -->
+        <div id="camera-idle" class="border-2 border-dashed border-gray-300 rounded-xl p-6 text-center">
+          <i class="fa-solid fa-camera text-gray-400 text-2xl mb-2"></i>
+          <p class="text-sm text-gray-600 font-medium">Take a real-time photo as evidence</p>
+          <button type="button" onclick="openCamera()" class="mt-3 btn-primary btn-sm">
+            <i class="fa-solid fa-camera mr-1.5"></i> Open Camera
+          </button>
+        </div>
+
+        <!-- Active: live camera feed -->
+        <div id="camera-active" class="hidden rounded-xl overflow-hidden border border-gray-300 bg-black">
+          <video id="camera-feed" autoplay playsinline muted class="w-full max-h-64 object-cover block"></video>
+          <div class="bg-black px-4 py-3 flex items-center justify-center gap-4">
+            <button type="button" onclick="closeCamera()" class="text-gray-400 hover:text-white text-sm px-4 py-2 rounded-lg border border-gray-600 hover:border-gray-400 transition-colors">
+              Cancel
+            </button>
+            <button type="button" onclick="capturePhoto()" class="w-14 h-14 rounded-full bg-white hover:bg-gray-100 flex items-center justify-center shadow-lg transition-colors" title="Capture">
+              <span class="w-10 h-10 rounded-full bg-red-500 block"></span>
+            </button>
+            <button type="button" onclick="flipCamera()" class="text-gray-400 hover:text-white text-sm px-4 py-2 rounded-lg border border-gray-600 hover:border-gray-400 transition-colors">
+              <i class="fa-solid fa-rotate"></i> Flip
+            </button>
+          </div>
+        </div>
+
+        <!-- Captured: preview + retake -->
+        <div id="camera-captured" class="hidden rounded-xl overflow-hidden border border-gray-300">
+          <img id="photo-preview" class="w-full max-h-64 object-cover block">
+          <div class="bg-gray-50 border-t border-gray-200 px-4 py-2.5 flex items-center justify-between">
+            <span class="text-sm text-green-600 font-medium flex items-center gap-1.5">
+              <i class="fa-solid fa-circle-check"></i> Photo captured
+            </span>
+            <button type="button" onclick="retakePhoto()" class="text-blue-600 text-sm font-medium hover:underline">
+              <i class="fa-solid fa-rotate-right mr-1"></i> Retake
+            </button>
+          </div>
+        </div>
+
+        <canvas id="capture-canvas" class="hidden"></canvas>
+      </div>
+
+      <div class="flex gap-3">
+        <button onclick="goToStep(2)" class="btn-secondary flex-1">Back</button>
+        <button onclick="goToStep(4)" class="btn-primary flex-1">Next</button>
+      </div>
+    </div>
+
+    <!-- Step 4: Confirm -->
+    <div id="step-4" class="hidden space-y-5">
+      <h2 class="text-xl font-bold text-gray-800 text-center mb-2">Review your report</h2>
+      <p class="text-sm text-gray-500 text-center mb-6">Please confirm the details before submitting.</p>
+
+      <div class="card space-y-3">
+        <div class="flex justify-between items-center">
+          <span class="text-sm text-gray-500">Incident Type</span>
+          <span id="review-type" class="font-semibold text-gray-800">—</span>
+        </div>
+        <div class="flex justify-between items-center">
+          <span class="text-sm text-gray-500">Purok</span>
+          <span id="review-purok" class="font-semibold text-gray-800">—</span>
+        </div>
+        <div>
+          <span class="text-sm text-gray-500">Description</span>
+          <p id="review-description" class="text-gray-800 text-sm mt-1 bg-gray-50 rounded-lg p-3">—</p>
+        </div>
+        <div class="flex justify-between items-center">
+          <span class="text-sm text-gray-500">GPS</span>
+          <span id="review-gps" class="font-semibold text-gray-800 text-sm">Not set</span>
+        </div>
+        <div class="flex justify-between items-center">
+          <span class="text-sm text-gray-500">Photo</span>
+          <span id="review-photo" class="font-semibold text-gray-800">None</span>
+        </div>
+      </div>
+
+      <div id="submit-error" class="hidden bg-red-50 border border-red-200 text-red-700 rounded-lg p-3 text-sm"></div>
+
+      <div class="flex gap-3">
+        <button onclick="goToStep(3)" class="btn-secondary flex-1">Back</button>
+        <button onclick="submitReport()" id="submit-btn" class="btn-danger flex-1">
+          <i class="fa-solid fa-circle-exclamation mr-1"></i> Submit Report
+        </button>
+      </div>
+    </div>
+
+    <!-- Success -->
+    <div id="step-success" class="hidden text-center py-12 space-y-4">
+      <div class="text-6xl mb-4">✅</div>
+      <h2 class="text-2xl font-bold text-gray-800">Report Submitted!</h2>
+      <p class="text-gray-500">Your incident has been reported and Barangay responders have been notified.</p>
+      <p class="text-sm text-gray-400">Reference: <span id="success-ref" class="font-mono font-bold text-gray-700"></span></p>
+      <div class="flex gap-3 justify-center mt-6">
+        <a href="/pages/client/home.html"       class="btn-secondary">Back to Home</a>
+        <a href="/pages/client/my-reports.html" class="btn-primary">View My Reports</a>
+      </div>
+    </div>
+
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+  <script src="/js/shared/auth.js"></script>
+  <script src="/js/shared/api.js"></script>
+  <script src="/js/client/report-incident.js"></script>
+</body>
+</html>

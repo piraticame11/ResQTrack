@@ -1,0 +1,91 @@
+// Shared admin real-time notification module.
+// Included in every admin page before the page-specific JS.
+// Creates one shared socket (window._adminSocket) to avoid duplicate connections.
+
+(function () {
+  if (typeof io === 'undefined') return;
+
+  window._adminSocket = io();
+
+  window._adminSocket.on('incident:new', (inc) => {
+    playAlertSound();
+    showAdminNotification(inc);
+  });
+})();
+
+function playAlertSound() {
+  try {
+    const ctx  = new (window.AudioContext || window.webkitAudioContext)();
+    const beep = (freq, startAt, dur) => {
+      const osc  = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, ctx.currentTime + startAt);
+      gain.gain.setValueAtTime(0, ctx.currentTime + startAt);
+      gain.gain.linearRampToValueAtTime(0.35, ctx.currentTime + startAt + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + startAt + dur);
+      osc.start(ctx.currentTime + startAt);
+      osc.stop(ctx.currentTime + startAt + dur + 0.05);
+    };
+    // Three-tone alert: A5 — A5 — C6
+    beep(880,  0.00, 0.14);
+    beep(880,  0.18, 0.14);
+    beep(1047, 0.36, 0.28);
+  } catch (_) {}
+}
+
+function showAdminNotification(inc) {
+  const typeColors = {
+    Fire:    '#ef4444',
+    Medical: '#ef4444',
+    Crime:   '#f97316',
+    Noise:   '#eab308',
+    Garbage: '#22c55e',
+    Other:   '#6366f1',
+  };
+  const color = typeColors[inc.incident_type] || '#6366f1';
+
+  const el = document.createElement('div');
+  el.style.cssText = [
+    'position:fixed', 'top:1rem', 'right:1rem',
+    'transform:translateX(110%)',
+    'z-index:9999', 'width:92vw', 'max-width:360px',
+    'opacity:0', 'transition:transform 0.35s ease, opacity 0.35s ease',
+  ].join(';');
+
+  el.innerHTML = `
+    <div style="border-left:4px solid ${color};background:#fff"
+         class="rounded-2xl shadow-2xl p-4 flex items-start gap-3">
+      <span class="text-2xl shrink-0 mt-0.5">🚨</span>
+      <div class="flex-1 min-w-0">
+        <p class="font-bold text-gray-800 text-sm">New Incident Reported</p>
+        <p class="text-gray-600 text-xs mt-0.5">
+          <span class="font-semibold" style="color:${color}">${inc.incident_type}</span>
+          · ${inc.purok_name || 'Unknown Purok'}
+        </p>
+        <p class="font-mono text-xs text-gray-400 mt-0.5">${inc.reference_no}</p>
+        <p class="text-gray-500 text-xs mt-1 line-clamp-2">${inc.description || ''}</p>
+        <a href="/pages/admin/incidents.html"
+           class="text-blue-600 text-xs font-medium mt-1.5 inline-block hover:underline">
+          View Incidents →
+        </a>
+      </div>
+      <button class="text-gray-400 hover:text-gray-600 text-xl leading-none shrink-0 ml-1"
+              onclick="this.closest('div[style]').remove()">×</button>
+    </div>`;
+
+  document.body.appendChild(el);
+
+  requestAnimationFrame(() => {
+    el.style.transform = 'translateX(0)';
+    el.style.opacity   = '1';
+  });
+
+  setTimeout(() => {
+    el.style.transform = 'translateX(110%)';
+    el.style.opacity   = '0';
+    setTimeout(() => el.remove(), 350);
+  }, 10000);
+}

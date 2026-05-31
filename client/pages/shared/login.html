@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login — ResQTrack</title>
+  <link rel="icon" type="image/png" href="/public/images/favicon.png">
+  <link rel="stylesheet" href="/public/css/output.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" crossorigin="anonymous">
+  <style>
+    .role-tab { transition: all 0.2s ease; }
+    .role-tab.active-resident  { background: #eff6ff; border-color: #3b82f6; color: #1d4ed8; }
+    .role-tab.active-responder { background: #fff7ed; border-color: #f97316; color: #c2410c; }
+    .role-tab.active-admin     { background: #f0fdf4; border-color: #22c55e; color: #15803d; }
+    .role-tab:not([class*="active"]) { background: #f9fafb; border-color: #e5e7eb; color: #6b7280; }
+    .role-tab:not([class*="active"]):hover { background: #f3f4f6; border-color: #d1d5db; color: #374151; }
+    .portal-badge-resident  { background: #dbeafe; color: #1d4ed8; }
+    .portal-badge-responder { background: #ffedd5; color: #c2410c; }
+    .portal-badge-admin     { background: #dcfce7; color: #15803d; }
+    .btn-resident  { background: #3b82f6; }
+    .btn-resident:hover  { background: #2563eb; }
+    .btn-responder { background: #f97316; }
+    .btn-responder:hover { background: #ea580c; }
+    .btn-admin     { background: #22c55e; }
+    .btn-admin:hover     { background: #16a34a; }
+    .btn-role { color: white; width: 100%; display: flex; align-items: center; justify-content: center; gap: 0.5rem; padding: 0.625rem 1rem; border-radius: 0.5rem; font-weight: 600; cursor: pointer; border: none; transition: background 0.2s; }
+    .btn-role:disabled { opacity: 0.6; cursor: not-allowed; }
+  </style>
+</head>
+<body class="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+
+  <div class="w-full max-w-md">
+    <!-- Branding -->
+    <div class="text-center mb-8">
+      <img src="/public/images/favicon.png" alt="ResQTrack" class="mx-auto h-auto drop-shadow-lg">
+    </div>
+
+    <!-- Login Card -->
+    <div class="bg-white rounded-2xl shadow-lg border border-gray-100 p-8">
+
+      <!-- Role Selector -->
+      <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Sign in as</p>
+      <div class="grid grid-cols-3 gap-2 mb-6">
+        <button type="button" onclick="selectRole('resident')"
+          id="tab-resident"
+          class="role-tab active-resident border-2 rounded-xl py-3 px-2 flex flex-col items-center gap-1 cursor-pointer">
+          <i class="fa-solid fa-house text-lg"></i>
+          <span class="text-xs font-semibold">Resident</span>
+        </button>
+        <button type="button" onclick="selectRole('responder')"
+          id="tab-responder"
+          class="role-tab border-2 rounded-xl py-3 px-2 flex flex-col items-center gap-1 cursor-pointer">
+          <i class="fa-solid fa-truck-medical text-lg"></i>
+          <span class="text-xs font-semibold">Responder</span>
+        </button>
+        <button type="button" onclick="selectRole('admin')"
+          id="tab-admin"
+          class="role-tab border-2 rounded-xl py-3 px-2 flex flex-col items-center gap-1 cursor-pointer">
+          <i class="fa-solid fa-user-shield text-lg"></i>
+          <span class="text-xs font-semibold">Official</span>
+        </button>
+      </div>
+
+      <!-- Portal Label -->
+      <div class="flex items-center gap-2 mb-5">
+        <span id="portal-badge" class="portal-badge-resident text-xs font-bold px-2.5 py-1 rounded-full">Resident Portal</span>
+        <h2 id="portal-title" class="text-base font-bold text-gray-800">Sign in to your account</h2>
+      </div>
+
+      <div id="error-msg" class="hidden mb-4 bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-3 text-sm"></div>
+
+      <form id="login-form" class="space-y-5">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1.5">Email address</label>
+          <div class="relative">
+            <i class="fa-solid fa-envelope absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
+            <input type="email" id="email" required
+              class="input-field pl-9"
+              placeholder="you@example.com">
+          </div>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1.5">Password</label>
+          <div class="relative">
+            <i class="fa-solid fa-lock absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
+            <input type="password" id="password" required
+              class="input-field pl-9"
+              placeholder="••••••••">
+          </div>
+        </div>
+        <button type="submit" id="login-btn" class="btn-role btn-resident">
+          <i class="fa-solid fa-right-to-bracket"></i>
+          <span id="btn-label">Sign In as Resident</span>
+        </button>
+      </form>
+
+      <!-- Role-specific footer -->
+      <div class="mt-6 pt-5 border-t border-gray-100 text-center">
+        <p id="footer-resident" class="text-sm text-gray-500">New resident?
+          <a href="/pages/shared/register.html" class="text-blue-600 font-medium hover:underline">Create an account</a>
+        </p>
+        <p id="footer-responder" class="hidden text-sm text-gray-500">
+          <i class="fa-solid fa-circle-info mr-1 text-orange-400"></i>
+          Responder accounts are managed by the admin.
+        </p>
+        <p id="footer-admin" class="hidden text-sm text-gray-500">
+          <i class="fa-solid fa-circle-info mr-1 text-green-500"></i>
+          Official accounts are issued by the barangay.
+        </p>
+      </div>
+    </div>
+
+    <p class="text-center text-gray-400 text-xs mt-6">ResQTrack · Barangay Manay, Panabo City Emergency Response</p>
+  </div>
+
+  <script>
+    let selectedRole = 'resident';
+
+    const roleConfig = {
+      resident: {
+        tabClass:    'active-resident',
+        badgeClass:  'portal-badge-resident',
+        badgeText:   'Resident Portal',
+        btnClass:    'btn-resident',
+        btnLabel:    'Sign In as Resident',
+        footers:     ['footer-resident'],
+        redirect:    '/pages/client/home.html',
+      },
+      responder: {
+        tabClass:    'active-responder',
+        badgeClass:  'portal-badge-responder',
+        badgeText:   'Responder Portal',
+        btnClass:    'btn-responder',
+        btnLabel:    'Sign In as Responder',
+        footers:     ['footer-responder'],
+        redirect:    '/pages/responder/dashboard.html',
+      },
+      admin: {
+        tabClass:    'active-admin',
+        badgeClass:  'portal-badge-admin',
+        badgeText:   'Official Portal',
+        btnClass:    'btn-admin',
+        btnLabel:    'Sign In as Official',
+        footers:     ['footer-admin'],
+        redirect:    '/pages/admin/dashboard.html',
+      },
+    };
+
+    function selectRole(role) {
+      selectedRole = role;
+      const cfg = roleConfig[role];
+
+      // Update tabs
+      ['resident', 'responder', 'admin'].forEach(r => {
+        const tab = document.getElementById('tab-' + r);
+        tab.className = 'role-tab border-2 rounded-xl py-3 px-2 flex flex-col items-center gap-1 cursor-pointer';
+        if (r === role) tab.classList.add(roleConfig[r].tabClass);
+      });
+
+      // Update badge
+      const badge = document.getElementById('portal-badge');
+      badge.className = cfg.badgeClass + ' text-xs font-bold px-2.5 py-1 rounded-full';
+      badge.textContent = cfg.badgeText;
+
+      // Update button
+      const btn = document.getElementById('login-btn');
+      btn.className = 'btn-role ' + cfg.btnClass;
+      document.getElementById('btn-label').textContent = cfg.btnLabel;
+
+      // Update footers
+      ['footer-resident', 'footer-responder', 'footer-admin'].forEach(id => {
+        document.getElementById(id).classList.add('hidden');
+      });
+      cfg.footers.forEach(id => document.getElementById(id).classList.remove('hidden'));
+
+      document.getElementById('error-msg').classList.add('hidden');
+    }
+
+    // Redirect if already logged in
+    const token = localStorage.getItem('accessToken');
+    const user  = (() => { try { return JSON.parse(localStorage.getItem('user')); } catch { return null; } })();
+    if (token && user) {
+      if (user.role === 'admin')          window.location.href = '/pages/admin/dashboard.html';
+      else if (user.role === 'responder') window.location.href = '/pages/responder/dashboard.html';
+      else                                window.location.href = '/pages/client/home.html';
+    }
+
+    document.getElementById('login-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn    = document.getElementById('login-btn');
+      const errEl  = document.getElementById('error-msg');
+      errEl.classList.add('hidden');
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Signing in…';
+
+      try {
+        const res  = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email:    document.getElementById('email').value.trim(),
+            password: document.getElementById('password').value,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || 'Login failed');
+
+        // Check that the user's actual role matches the selected portal
+        const actualRole = data.user.role;
+        const expectedRole = selectedRole === 'admin' ? 'admin' : selectedRole;
+        if (actualRole !== expectedRole) {
+          const label = roleConfig[actualRole]?.badgeText || actualRole;
+          throw new Error(`This account belongs to the ${label}. Please select the correct portal.`);
+        }
+
+        localStorage.setItem('accessToken',  data.accessToken);
+        localStorage.setItem('refreshToken', data.refreshToken);
+        localStorage.setItem('user',         JSON.stringify(data.user));
+
+        if (data.user.role === 'admin')          window.location.href = '/pages/admin/dashboard.html';
+        else if (data.user.role === 'responder') window.location.href = '/pages/responder/dashboard.html';
+        else                                     window.location.href = '/pages/client/home.html';
+      } catch (err) {
+        errEl.textContent = err.message;
+        errEl.classList.remove('hidden');
+        btn.disabled = false;
+        const cfg = roleConfig[selectedRole];
+        btn.className = 'btn-role ' + cfg.btnClass;
+        btn.innerHTML = '<i class="fa-solid fa-right-to-bracket"></i> <span>' + cfg.btnLabel + '</span>';
+      }
+    });
+  </script>
+</body>
+</html>
