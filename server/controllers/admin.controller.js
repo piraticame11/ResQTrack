@@ -1,5 +1,6 @@
 const bcrypt = require('bcrypt');
 const db     = require('../config/db');
+const { sendVerificationEmail } = require('../utils/mailer');
 
 exports.getUsers = async (req, res) => {
   try {
@@ -84,7 +85,17 @@ exports.deleteUser = async (req, res) => {
 
 exports.verifyUser = async (req, res) => {
   try {
+    const [[user]] = await db.query('SELECT email, full_name FROM users WHERE id = ?', [req.params.id]);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
     await db.query('UPDATE users SET is_verified = 1 WHERE id = ?', [req.params.id]);
+
+    try {
+      await sendVerificationEmail(user.email, user.full_name);
+    } catch (mailErr) {
+      console.error('Verification email failed:', mailErr.message);
+    }
+
     res.json({ message: 'User verified' });
   } catch (err) {
     res.status(500).json({ message: 'Server error', error: err.message });

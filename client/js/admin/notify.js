@@ -15,24 +15,33 @@
 
 function playAlertSound() {
   try {
-    const ctx  = new (window.AudioContext || window.webkitAudioContext)();
-    const beep = (freq, startAt, dur) => {
-      const osc  = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(freq, ctx.currentTime + startAt);
-      gain.gain.setValueAtTime(0, ctx.currentTime + startAt);
-      gain.gain.linearRampToValueAtTime(0.35, ctx.currentTime + startAt + 0.01);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + startAt + dur);
-      osc.start(ctx.currentTime + startAt);
-      osc.stop(ctx.currentTime + startAt + dur + 0.05);
-    };
-    // Three-tone alert: A5 — A5 — C6
-    beep(880,  0.00, 0.14);
-    beep(880,  0.18, 0.14);
-    beep(1047, 0.36, 0.28);
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+
+    // Siren sweep: square wave sliding between loFreq and hiFreq over ~5 seconds
+    const osc  = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.type = 'square';
+
+    const loFreq = 660, hiFreq = 1320, cycleLen = 0.40, totalDur = 5.0;
+    const now = ctx.currentTime;
+    const cycles = Math.ceil(totalDur / cycleLen);
+
+    for (let i = 0; i < cycles; i++) {
+      const t = now + i * cycleLen;
+      osc.frequency.setValueAtTime(loFreq, t);
+      osc.frequency.linearRampToValueAtTime(hiFreq, t + cycleLen * 0.5);
+      osc.frequency.linearRampToValueAtTime(loFreq, t + cycleLen);
+    }
+
+    gain.gain.setValueAtTime(0, now);
+    gain.gain.linearRampToValueAtTime(0.7, now + 0.05);
+    gain.gain.setValueAtTime(0.7, now + totalDur - 0.3);
+    gain.gain.linearRampToValueAtTime(0, now + totalDur);
+
+    osc.start(now);
+    osc.stop(now + totalDur);
   } catch (_) {}
 }
 
