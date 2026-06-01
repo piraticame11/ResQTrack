@@ -107,7 +107,7 @@ exports.getResponderPerformance = async (req, res) => {
       LEFT JOIN (
         SELECT incident_id, MIN(logged_at) AS dispatched_at
         FROM incident_logs
-        WHERE action LIKE 'Responder assigned%'
+        WHERE action LIKE 'Responder(s) assigned%'
         GROUP BY incident_id
       ) dl ON dl.incident_id = i.id
       WHERE u.role = 'responder' AND u.is_active = 1
