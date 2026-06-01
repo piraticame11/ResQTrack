@@ -125,6 +125,64 @@
   </div>
 </div>
 
+<!-- View User Modal -->
+<div id="view-modal" class="modal-overlay hidden">
+  <div class="modal-box max-w-lg">
+    <div class="flex items-center justify-between p-5 border-b border-gray-100">
+      <h3 class="font-bold text-gray-800 text-lg">Resident Details</h3>
+      <button onclick="closeViewModal()" class="text-gray-400 hover:text-gray-600"><i class="fa-solid fa-xmark text-xl"></i></button>
+    </div>
+    <div class="p-5 space-y-4">
+      <!-- Valid ID image -->
+      <div>
+        <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Valid ID</p>
+        <div id="view-id-wrap" class="rounded-lg overflow-hidden border border-gray-200 bg-gray-50 flex items-center justify-center min-h-[160px]">
+          <img id="view-id-img" src="" alt="Valid ID" class="hidden max-h-64 object-contain w-full">
+          <span id="view-id-none" class="text-sm text-gray-400 italic">No ID uploaded</span>
+        </div>
+      </div>
+      <!-- Details grid -->
+      <div class="grid grid-cols-2 gap-3 text-sm">
+        <div>
+          <p class="text-xs text-gray-400 font-medium">Full Name</p>
+          <p class="text-gray-800 font-semibold" id="view-name">—</p>
+        </div>
+        <div>
+          <p class="text-xs text-gray-400 font-medium">Birthdate</p>
+          <p class="text-gray-800" id="view-birthdate">—</p>
+        </div>
+        <div>
+          <p class="text-xs text-gray-400 font-medium">Email</p>
+          <p class="text-gray-800 break-all" id="view-email">—</p>
+        </div>
+        <div>
+          <p class="text-xs text-gray-400 font-medium">Phone</p>
+          <p class="text-gray-800" id="view-phone">—</p>
+        </div>
+        <div>
+          <p class="text-xs text-gray-400 font-medium">Purok</p>
+          <p class="text-gray-800" id="view-purok">—</p>
+        </div>
+        <div>
+          <p class="text-xs text-gray-400 font-medium">Registered</p>
+          <p class="text-gray-800" id="view-created">—</p>
+        </div>
+        <div>
+          <p class="text-xs text-gray-400 font-medium">Status</p>
+          <p id="view-status">—</p>
+        </div>
+      </div>
+      <!-- Action buttons -->
+      <div class="flex gap-3 pt-2" id="view-actions">
+        <button id="view-verify-btn" onclick="verifyFromModal()" class="btn-primary flex-1 hidden">
+          <i class="fa-solid fa-circle-check mr-1"></i> Verify Account
+        </button>
+        <button onclick="closeViewModal()" class="btn-secondary flex-1">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script src="/socket.io/socket.io.js"></script>
 <script src="/js/shared/auth.js"></script>
 <script src="/js/shared/api.js"></script>

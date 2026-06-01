@@ -4,8 +4,8 @@ const db     = require('../config/db');
 exports.getUsers = async (req, res) => {
   try {
     const { role, purok_id } = req.query;
-    let q = `SELECT u.id, u.full_name, u.email, u.phone, u.role, u.purok_id,
-                    u.is_verified, u.is_active, u.created_at, p.name AS purok_name
+    let q = `SELECT u.id, u.full_name, u.email, u.phone, u.birthdate, u.role, u.purok_id,
+                    u.id_image, u.is_verified, u.is_active, u.created_at, p.name AS purok_name
              FROM users u
              LEFT JOIN puroks p ON u.purok_id = p.id
              WHERE 1=1`;
@@ -23,8 +23,8 @@ exports.getUsers = async (req, res) => {
 exports.getUserById = async (req, res) => {
   try {
     const [rows] = await db.query(
-      `SELECT u.id, u.full_name, u.email, u.phone, u.role, u.purok_id,
-              u.is_verified, u.is_active, u.created_at, p.name AS purok_name
+      `SELECT u.id, u.full_name, u.email, u.phone, u.birthdate, u.role, u.purok_id,
+              u.id_image, u.is_verified, u.is_active, u.created_at, p.name AS purok_name
        FROM users u LEFT JOIN puroks p ON u.purok_id = p.id WHERE u.id = ?`,
       [req.params.id]
     );
