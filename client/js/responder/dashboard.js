@@ -146,8 +146,15 @@ function renderCards(list) {
 }
 
 // ── Map ───────────────────────────────────────────────────────────────────────
+// The map centers on wherever the incident data actually is (fitBounds
+// below). When there's nothing to fit to yet, it falls back to the
+// midpoint between Barangay Manay and Barangay New Visayas (Panabo City) —
+// covers both pilot areas without hardcoding just one.
+const SERVICE_AREA_FALLBACK_CENTER = [7.3269, 125.6352];
+const SERVICE_AREA_FALLBACK_ZOOM   = 12;
+
 function initMap() {
-  incidentMap = L.map('incident-map').setView([7.3456, 125.6022], 15);
+  incidentMap = L.map('incident-map').setView(SERVICE_AREA_FALLBACK_CENTER, SERVICE_AREA_FALLBACK_ZOOM);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '© OpenStreetMap contributors',
   }).addTo(incidentMap);
@@ -157,6 +164,7 @@ function plotMapMarkers(incidents) {
   if (!incidentMap) return;
   incidentMap.eachLayer(l => { if (l instanceof L.Marker) incidentMap.removeLayer(l); });
 
+  const points = [];
   incidents.forEach(i => {
     if (!i.latitude || !i.longitude) return;
     const isMine = i.assigned_responder_id === currentUser.id;
@@ -171,7 +179,10 @@ function plotMapMarkers(incidents) {
     L.marker([i.latitude, i.longitude], { icon })
       .addTo(incidentMap)
       .bindPopup(`<b>${i.reference_no}</b><br>${i.incident_type} · ${i.purok_name || '—'}${isMine ? '<br><b style="color:#2563eb">Assigned to you</b>' : ''}`);
+    points.push([i.latitude, i.longitude]);
   });
+
+  if (points.length) incidentMap.fitBounds(points, { padding: [30, 30], maxZoom: 16 });
 }
 
 // ── Incident detail modal ─────────────────────────────────────────────────────

@@ -155,11 +155,22 @@ function renderPhotoStrip() {
 
 function showLocationMap() {
   if (locationMap) return;
-  locationMap = L.map('location-map').setView([7.3456, 125.6022], 15);
+  // Starts on the Manay/New Visayas midpoint, then silently recenters on
+  // the resident's actual position if geolocation is already permitted
+  // (the "Auto-detect" button covers the explicit ask).
+  locationMap = L.map('location-map').setView([7.3269, 125.6352], 12);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '© OpenStreetMap contributors',
   }).addTo(locationMap);
   locationMap.on('click', (e) => setLocation(e.latlng.lat, e.latlng.lng));
+
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(
+      pos => { if (!report.latitude) locationMap.setView([pos.coords.latitude, pos.coords.longitude], 15); },
+      () => {}, // permission not yet granted — leave the service-area fallback view
+      { maximumAge: 60000 }
+    );
+  }
 }
 
 function setLocation(lat, lng) {

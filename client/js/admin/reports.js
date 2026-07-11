@@ -181,7 +181,9 @@ let hotspotMarkers = [];
 
 function plotHotspots(incidents) {
   if (!hotspotMap) {
-    hotspotMap = L.map('hotspot-map').setView([7.3456, 125.6022], 14);
+    // Starts on the Manay/New Visayas midpoint and zooms to fit whatever
+    // incident data actually exists, below.
+    hotspotMap = L.map('hotspot-map').setView([7.3269, 125.6352], 12);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '© OpenStreetMap contributors',
     }).addTo(hotspotMap);
@@ -193,6 +195,7 @@ function plotHotspots(incidents) {
 
   const points = incidents.filter(i => i.latitude && i.longitude);
   hotspotHeatLayer = L.heatLayer(points.map(i => [i.latitude, i.longitude, 0.6]), { radius: 30, blur: 25 }).addTo(hotspotMap);
+  if (points.length) hotspotMap.fitBounds(points.map(i => [i.latitude, i.longitude]), { padding: [30, 30], maxZoom: 15 });
 
   points.forEach(i => {
     const color = { Red: '#ef4444', Orange: '#f97316', Yellow: '#eab308', Green: '#22c55e' }[i.triage_color] || '#6b7280';

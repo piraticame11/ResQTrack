@@ -103,17 +103,22 @@
 
   function initMap(locations) {
     if (window._dashMap) { window._dashMap.remove(); }
-    const map = L.map('responder-map').setView([7.3456, 125.6022], 15);
+    // Centers on wherever responders actually are (fitBounds below);
+    // falls back to the Manay/New Visayas midpoint when no one is tracked yet.
+    const map = L.map('responder-map').setView([7.3269, 125.6352], 12);
     window._dashMap = map;
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '© OpenStreetMap contributors',
     }).addTo(map);
 
+    const points = [];
     locations.forEach(loc => {
       L.marker([loc.latitude, loc.longitude])
         .addTo(map)
         .bindPopup(`<b>${loc.responder_name}</b><br>Responder`);
+      points.push([loc.latitude, loc.longitude]);
     });
+    if (points.length) map.fitBounds(points, { padding: [30, 30], maxZoom: 16 });
   }
 
   // Socket.IO — uses the shared socket created by notify.js
