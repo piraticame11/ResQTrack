@@ -6,11 +6,7 @@ let currentIncidentPurokId = null;
   if (!user) return;
   setUserUI(user);
 
-  const purokSel = document.getElementById('filter-purok');
-  for (let i = 1; i <= 14; i++) {
-    const o = document.createElement('option'); o.value = i; o.textContent = `Purok ${i}`;
-    purokSel.appendChild(o);
-  }
+  await populatePurokSelect(document.getElementById('filter-purok'), { placeholder: 'All Puroks' });
 
   document.getElementById('filter-search').addEventListener('keydown', e => { if (e.key === 'Enter') loadIncidents(); });
 
@@ -85,14 +81,39 @@ async function openIncidentModal(id) {
   currentIncidentPurokId = inc.purok_id;
   document.getElementById('modal-ref').textContent = inc.reference_no;
 
-  const photoHtml = inc.photo_path
-    ? `<img src="${inc.photo_path}" class="w-full rounded-lg max-h-48 object-cover">`
+  const photos = inc.attachments?.length ? inc.attachments.map(a => a.file_path) : (inc.photo_path ? [inc.photo_path] : []);
+  const photoHtml = photos.length
+    ? `<div class="grid grid-cols-3 gap-2">${photos.map(p => `<a href="${p}" target="_blank" rel="noopener"><img src="${p}" class="w-full h-24 object-cover rounded-lg border border-gray-200"></a>`).join('')}</div>`
     : `<p class="text-gray-400 text-sm italic">No photo uploaded</p>`;
 
   const respondersDisplay = inc.all_responder_names || inc.responder_name || 'Not assigned';
+  const isAdmin = getUser()?.role === 'admin';
+
+  const fakeBanner = inc.is_fake
+    ? `<div class="col-span-2 bg-red-50 border border-red-200 text-red-700 rounded-lg px-3 py-2 text-xs">
+         <i class="fa-solid fa-flag mr-1"></i> Flagged as a fake report by ${inc.flagged_by_name || 'a responder'}: ${inc.fake_reason || ''}
+       </div>`
+    : '';
+
+  const reclassifyHtml = isAdmin ? `
+    <div class="col-span-2 border-t pt-3 mt-1">
+      <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Admin Override</p>
+      <div class="grid grid-cols-2 gap-2">
+        <select id="reclass-type" class="input-field text-sm">
+          ${['Fire','Rescue','Crime','Noise','Garbage','Other'].map(t => `<option ${t === inc.incident_type ? 'selected' : ''}>${t}</option>`).join('')}
+        </select>
+        <select id="reclass-triage" class="input-field text-sm">
+          ${['Red','Orange','Yellow','Green'].map(c => `<option ${c === inc.triage_color ? 'selected' : ''}>${c}</option>`).join('')}
+        </select>
+      </div>
+      <button onclick="submitReclassify(${id})" class="btn-secondary btn-sm mt-2 w-full">
+        <i class="fa-solid fa-rotate mr-1"></i> Save Category / Priority
+      </button>
+    </div>` : '';
 
   document.getElementById('modal-content').innerHTML = `
     <div class="grid grid-cols-2 gap-3 text-sm">
+      ${fakeBanner}
       <div><span class="text-gray-500">Type</span><p class="font-semibold"><span class="inline-flex px-2 py-0.5 rounded text-xs ${typeColor(inc.incident_type)}">${inc.incident_type}</span></p></div>
       <div><span class="text-gray-500">Triage</span><p class="mt-0.5">${triageBadge(inc.triage_color)}</p></div>
       <div><span class="text-gray-500">Status</span><p class="mt-0.5">${statusBadge(inc.status)}</p></div>
@@ -103,6 +124,7 @@ async function openIncidentModal(id) {
       <div class="col-span-2"><span class="text-gray-500">Description</span><p class="bg-gray-50 rounded-lg p-3 mt-1 text-gray-700">${inc.description}</p></div>
       ${inc.latitude ? `<div class="col-span-2"><span class="text-gray-500">GPS</span><p class="font-mono text-sm">${inc.latitude}, ${inc.longitude}</p></div>` : ''}
       <div class="col-span-2">${photoHtml}</div>
+      ${reclassifyHtml}
     </div>
     <div class="border-t pt-4 mt-2">
       <p class="text-sm font-medium text-gray-700 mb-2">Activity Log</p>
@@ -130,11 +152,16 @@ async function openIncidentModal(id) {
     html += `<button onclick="closeModal(); openAssignModal(${id}, ${inc.purok_id || 0})" class="btn-secondary btn-sm">
                <i class="fa-solid fa-user-pen mr-1"></i> Manage Responders
              </button>`;
-    html += `<button onclick="changeStatus(${id},'Ongoing')" class="btn-primary btn-sm">Mark Ongoing</button>`;
-    html += `<button onclick="changeStatus(${id},'Resolved')" class="btn-primary btn-sm">Mark Resolved</button>`;
-  } else if (inc.status === 'Ongoing') {
-    html += `<button onclick="changeStatus(${id},'Resolved')" class="btn-primary btn-sm">Mark Resolved</button>`;
   }
+  (INCIDENT_TRANSITIONS[inc.status] || []).forEach(s => {
+    html += `<button onclick="changeStatus(${id},'${s}')" class="btn-primary btn-sm">Mark ${s}</button>`;
+  });
+
+  html += inc.is_fake
+    ? (isAdmin ? `<button onclick="unflagIncident(${id})" class="text-xs text-gray-500 hover:underline">Remove Fake Flag</button>` : '')
+    : `<button onclick="promptFlagFake(${id})" class="text-xs text-red-500 hover:underline">
+         <i class="fa-solid fa-flag mr-1"></i> Flag as Fake
+       </button>`;
 
   html += `<button onclick="closeModal()" class="btn-secondary btn-sm ml-auto">Close</button>`;
   actionsDiv.innerHTML = html;
@@ -149,6 +176,49 @@ async function changeStatus(id, status) {
   } else {
     const data = res ? await res.json() : null;
     showToast(data?.message || 'Failed to update status', 'error');
+  }
+}
+
+async function submitReclassify(id) {
+  const incident_type = document.getElementById('reclass-type').value;
+  const triage_color  = document.getElementById('reclass-triage').value;
+  const res = await api.patch(`/incidents/${id}/reclassify`, { incident_type, triage_color });
+  if (res && res.ok) {
+    showToast('Incident reclassified');
+    openIncidentModal(id);
+    loadIncidents();
+  } else {
+    const data = res ? await res.json() : null;
+    showToast(data?.message || 'Failed to reclassify', 'error');
+  }
+}
+
+function promptFlagFake(id) {
+  const reason = prompt('Why is this being flagged as a fake report?');
+  if (!reason || !reason.trim()) return;
+  flagFake(id, reason.trim());
+}
+
+async function flagFake(id, reason) {
+  const res = await api.patch(`/incidents/${id}/flag-fake`, { reason });
+  if (res && res.ok) {
+    showToast('Incident flagged as fake');
+    openIncidentModal(id);
+    loadIncidents();
+  } else {
+    const data = res ? await res.json() : null;
+    showToast(data?.message || 'Failed to flag incident', 'error');
+  }
+}
+
+async function unflagIncident(id) {
+  const res = await api.patch(`/incidents/${id}/unflag-fake`, {});
+  if (res && res.ok) {
+    showToast('Fake flag removed');
+    openIncidentModal(id);
+    loadIncidents();
+  } else {
+    showToast('Failed to remove flag', 'error');
   }
 }
 

@@ -12,6 +12,10 @@ const incidentRoutes     = require('./routes/incident.routes');
 const responderRoutes    = require('./routes/responder.routes');
 const announcementRoutes = require('./routes/announcement.routes');
 const reportRoutes       = require('./routes/report.routes');
+const blotterRoutes      = require('./routes/blotter.routes');
+const purokRoutes        = require('./routes/purok.routes');
+const auditRoutes        = require('./routes/audit.routes');
+const smsRoutes          = require('./routes/sms.routes');
 const setupSockets       = require('./sockets/incidentSocket');
 require('./utils/archiver');
 
@@ -39,6 +43,10 @@ app.use('/api/incidents',     incidentRoutes);
 app.use('/api/responders',    responderRoutes);
 app.use('/api/announcements', announcementRoutes);
 app.use('/api/reports',       reportRoutes);
+app.use('/api/blotter',       blotterRoutes);
+app.use('/api/puroks',        purokRoutes);
+app.use('/api/audit',         auditRoutes);
+app.use('/api/sms',           smsRoutes);
 
 // Root → login
 app.get('/', (_req, res) => {

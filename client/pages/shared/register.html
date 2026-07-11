@@ -23,6 +23,8 @@
       background: #eff6ff;
       box-shadow: 0 4px 16px rgba(59,130,246,0.15), 0 1px 4px rgba(59,130,246,0.10);
     }
+    .residency-tab { background: #f9fafb; border-color: #e5e7eb; color: #6b7280; }
+    .residency-tab.active { background: #eff6ff; border-color: #3b82f6; color: #1d4ed8; }
   </style>
 </head>
 <body class="min-h-screen bg-gray-50 flex items-center justify-center p-4 py-10">
@@ -97,6 +99,40 @@
                 <select id="purok_id" class="input-field">
                   <option value="">— Select Purok —</option>
                 </select>
+              </div>
+              <div class="col-span-2">
+                <label class="block text-xs font-medium text-gray-600 mb-1">Complete Address <span class="text-blue-500">*</span></label>
+                <input type="text" id="address_line" required class="input-field" placeholder="House No., Street, Landmark">
+                <p class="text-xs text-gray-400 mt-1">A Purok alone isn't enough for responders to find you — please be specific.</p>
+              </div>
+            </div>
+          </fieldset>
+
+          <!-- ── Residency ── -->
+          <fieldset>
+            <legend class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
+              <i class="fa-solid fa-house-user text-blue-400"></i> Residency
+            </legend>
+            <div class="grid grid-cols-2 gap-2 mb-3">
+              <button type="button" id="res-owner" onclick="selectResidency('Owner')"
+                      class="residency-tab border-2 rounded-lg py-2.5 text-sm font-semibold transition-colors">
+                <i class="fa-solid fa-key mr-1"></i> Homeowner
+              </button>
+              <button type="button" id="res-tenant" onclick="selectResidency('Tenant')"
+                      class="residency-tab border-2 rounded-lg py-2.5 text-sm font-semibold transition-colors">
+                <i class="fa-solid fa-people-roof mr-1"></i> Tenant / Boarder
+              </button>
+            </div>
+            <input type="hidden" id="residency_type" value="Owner">
+            <div id="landlord-fields" class="hidden grid grid-cols-2 gap-3">
+              <p class="col-span-2 text-xs text-gray-400 -mb-1">Since your ID may not show this address, provide your landlord's details as proof you live here.</p>
+              <div>
+                <label class="block text-xs font-medium text-gray-600 mb-1">Landlord's Name <span class="text-blue-500">*</span></label>
+                <input type="text" id="landlord_name" class="input-field" placeholder="Full name">
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-600 mb-1">Landlord's Contact No. <span class="text-blue-500">*</span></label>
+                <input type="tel" id="landlord_contact" inputmode="numeric" maxlength="11" class="input-field" placeholder="09XXXXXXXXX">
               </div>
             </div>
           </fieldset>
@@ -192,14 +228,30 @@
 
   <script>
     // Populate puroks
-    (() => {
+    (async () => {
       const sel = document.getElementById('purok_id');
-      for (let i = 1; i <= 14; i++) {
-        const o = document.createElement('option');
-        o.value = i; o.textContent = `Purok ${i}`;
-        sel.appendChild(o);
-      }
+      try {
+        const res = await fetch('/api/puroks');
+        const puroks = res.ok ? await res.json() : [];
+        puroks.forEach(p => {
+          const o = document.createElement('option');
+          o.value = p.id; o.textContent = p.name;
+          sel.appendChild(o);
+        });
+      } catch { /* leave the placeholder-only select if this fails */ }
     })();
+
+    // Homeowner / Tenant toggle
+    function selectResidency(type) {
+      document.getElementById('residency_type').value = type;
+      document.getElementById('res-owner').classList.toggle('active', type === 'Owner');
+      document.getElementById('res-tenant').classList.toggle('active', type === 'Tenant');
+      const landlordFields = document.getElementById('landlord-fields');
+      landlordFields.classList.toggle('hidden', type !== 'Tenant');
+      document.getElementById('landlord_name').required    = type === 'Tenant';
+      document.getElementById('landlord_contact').required = type === 'Tenant';
+    }
+    selectResidency('Owner');
 
     // Phone — digits only
     document.getElementById('phone').addEventListener('input', function () {
@@ -326,6 +378,15 @@
       if (!/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/.test(pw))
         return showErr('Password must be at least 8 characters with uppercase, lowercase, and a number.');
 
+      const address = document.getElementById('address_line').value.trim();
+      if (address.length < 5) return showErr('Please provide a complete address (house number, street, and landmark).');
+
+      const residency = document.getElementById('residency_type').value;
+      const landlordName    = document.getElementById('landlord_name').value.trim();
+      const landlordContact = document.getElementById('landlord_contact').value.trim();
+      if (residency === 'Tenant' && (!landlordName || !landlordContact))
+        return showErr("As a tenant/boarder, please provide your landlord's name and contact number.");
+
       if (!capturedBlob)
         return showErr('Please capture a photo of your valid ID.');
 
@@ -347,6 +408,10 @@
         fd.append('email',     document.getElementById('email').value.trim());
         fd.append('phone',     phone);
         fd.append('purok_id',  document.getElementById('purok_id').value || '');
+        fd.append('address_line',       address);
+        fd.append('residency_type',     residency);
+        fd.append('landlord_name',      residency === 'Tenant' ? landlordName    : '');
+        fd.append('landlord_contact',   residency === 'Tenant' ? landlordContact : '');
         fd.append('password',  pw);
         fd.append('id_image',  capturedBlob, 'id_image.jpg');
 
@@ -362,6 +427,7 @@
         capturedBlob = null;
         stopCamera();
         showIdle();
+        selectResidency('Owner');
         ['s1','s2','s3','s4'].forEach(id => document.getElementById(id).className = 'h-1 flex-1 rounded bg-gray-200');
         document.getElementById('pw-strength-text').textContent = '';
       } catch (err) {

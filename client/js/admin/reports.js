@@ -131,13 +131,82 @@ async function loadReports() {
   document.getElementById('rpt-total').textContent    = filtered.length;
   document.getElementById('rpt-resolved').textContent = filtered.filter(i => i.status === 'Resolved' || i.status === 'Archived').length;
   document.getElementById('rpt-pending').textContent  = filtered.filter(i => i.status === 'Pending').length;
-  document.getElementById('rpt-ongoing').textContent  = filtered.filter(i => i.status === 'Dispatched' || i.status === 'Ongoing').length;
+  document.getElementById('rpt-ongoing').textContent  = filtered.filter(i => ['Dispatched', 'Initiate', 'Delayed'].includes(i.status)).length;
 
   const label = getPeriodLabel(f) + (f.type ? ` · ${f.type}` : '');
   document.getElementById('incident-period-label').textContent = label;
 
   renderIncidentsTable(filtered);
   renderPerformanceTable(perfData);
+  plotHotspots(filtered);
+  loadTypeMonthChart(f.year);
+}
+
+// ── Type-by-month comparison ──────────────────────────────────────────────────
+let typeMonthChart = null;
+const TYPE_MONTH_COLORS = { Fire: '#ef4444', Rescue: '#3b82f6', Crime: '#f97316', Noise: '#eab308', Garbage: '#22c55e', Other: '#6b7280' };
+
+async function loadTypeMonthChart(year) {
+  const res = await api.get(`/reports/type-by-month?year=${year}`);
+  if (!res || !res.ok) return;
+  const data = await res.json();
+
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const types  = Object.keys(TYPE_MONTH_COLORS);
+  const datasets = types.map(type => ({
+    label: type,
+    backgroundColor: TYPE_MONTH_COLORS[type],
+    data: months.map((_, i) => {
+      const row = data.find(d => d.month === i + 1 && d.incident_type === type);
+      return row ? row.count : 0;
+    }),
+  }));
+
+  if (typeMonthChart) typeMonthChart.destroy();
+  typeMonthChart = new Chart(document.getElementById('type-month-chart'), {
+    type: 'bar',
+    data: { labels: months, datasets },
+    options: {
+      responsive: true,
+      plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } } },
+      scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true, ticks: { stepSize: 1 } } },
+    },
+  });
+}
+
+// ── Incident hotspot map ─────────────────────────────────────────────────────
+let hotspotMap = null;
+let hotspotHeatLayer = null;
+let hotspotMarkers = [];
+
+function plotHotspots(incidents) {
+  if (!hotspotMap) {
+    hotspotMap = L.map('hotspot-map').setView([7.3456, 125.6022], 14);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap contributors',
+    }).addTo(hotspotMap);
+  }
+
+  if (hotspotHeatLayer) hotspotMap.removeLayer(hotspotHeatLayer);
+  hotspotMarkers.forEach(m => hotspotMap.removeLayer(m));
+  hotspotMarkers = [];
+
+  const points = incidents.filter(i => i.latitude && i.longitude);
+  hotspotHeatLayer = L.heatLayer(points.map(i => [i.latitude, i.longitude, 0.6]), { radius: 30, blur: 25 }).addTo(hotspotMap);
+
+  points.forEach(i => {
+    const color = { Red: '#ef4444', Orange: '#f97316', Yellow: '#eab308', Green: '#22c55e' }[i.triage_color] || '#6b7280';
+    const icon = L.divIcon({
+      html: `<div style="background:${color};width:10px;height:10px;border-radius:50%;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.5)"></div>`,
+      className: '', iconSize: [10, 10],
+    });
+    const marker = L.marker([i.latitude, i.longitude], { icon })
+      .addTo(hotspotMap)
+      .bindPopup(`<b>${i.reference_no}</b><br>${i.incident_type} · ${i.purok_name || '—'}`);
+    hotspotMarkers.push(marker);
+  });
+
+  setTimeout(() => hotspotMap.invalidateSize(), 150);
 }
 
 function buildPerfUrl(f) {
@@ -157,7 +226,8 @@ function renderIncidentsTable(data) {
     const statusColor = {
       Pending: 'bg-yellow-100 text-yellow-700',
       Dispatched: 'bg-blue-100 text-blue-700',
-      Ongoing: 'bg-orange-100 text-orange-700',
+      Initiate: 'bg-indigo-100 text-indigo-700',
+      Delayed: 'bg-amber-100 text-amber-800',
       Resolved: 'bg-green-100 text-green-700',
       Archived: 'bg-gray-100 text-gray-600',
     }[i.status] || 'bg-gray-100 text-gray-600';
@@ -226,7 +296,7 @@ async function downloadPDF() {
   const total    = filtered.length;
   const resolved = filtered.filter(i => i.status === 'Resolved' || i.status === 'Archived').length;
   const pending  = filtered.filter(i => i.status === 'Pending').length;
-  const ongoing  = filtered.filter(i => i.status === 'Dispatched' || i.status === 'Ongoing').length;
+  const ongoing  = filtered.filter(i => ['Dispatched', 'Initiate', 'Delayed'].includes(i.status)).length;
 
   // ── Header ──────────────────────────────────────────────
   const logoSize = 22; // mm, square
@@ -269,7 +339,7 @@ async function downloadPDF() {
 
   doc.autoTable({
     startY: summaryStartY + 4,
-    head: [['Total Incidents', 'Resolved', 'Pending', 'Ongoing / Dispatched']],
+    head: [['Total Incidents', 'Resolved', 'Pending', 'Dispatched / Initiate / Delayed']],
     body: [[total, resolved, pending, ongoing]],
     theme: 'grid',
     headStyles: { fillColor: [30, 64, 175], textColor: 255, fontSize: 8, fontStyle: 'bold' },
@@ -358,4 +428,35 @@ async function downloadPDF() {
 
   const safePeriod = periodLabel.replace(/[^a-zA-Z0-9]/g, '-');
   doc.save(`ResQTrack-Report-${safePeriod}.pdf`);
+}
+
+function downloadExcel() {
+  const f = getFilters();
+  const filtered = filterIncidents(_cachedIncidents, f);
+
+  const incidentRows = filtered.map(i => ({
+    'Ref No.':   i.reference_no,
+    'Type':      i.incident_type,
+    'Status':    i.status,
+    'Triage':    i.triage_color,
+    'Purok':     i.purok_name || '',
+    'Reporter':  i.reporter_name || '',
+    'Reported':  new Date(i.reported_at).toLocaleString('en-PH'),
+    'Resolved':  i.resolved_at ? new Date(i.resolved_at).toLocaleString('en-PH') : '',
+  }));
+
+  const performanceRows = _cachedPerformance.map(r => ({
+    'Responder':            r.full_name,
+    'Assigned':             r.total_assigned || 0,
+    'Resolved':             r.resolved || 0,
+    'Avg Response (min)':   r.avg_response_time_minutes ?? '',
+    'Avg Resolution (min)': r.avg_resolution_minutes ?? '',
+  }));
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(incidentRows), 'Incidents');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(performanceRows), 'Responder Performance');
+
+  const safePeriod = getPeriodLabel(f).replace(/[^a-zA-Z0-9]/g, '-');
+  XLSX.writeFile(wb, `ResQTrack-Report-${safePeriod}.xlsx`);
 }

@@ -24,7 +24,8 @@
         Dispatched: responder_name
           ? `Responder assigned: ${responder_name}`
           : 'A responder has been dispatched to your incident.',
-        Ongoing:  'Responders are now actively handling your incident.',
+        Initiate: 'Responders are now actively handling your incident.',
+        Delayed:  'Your assigned responder reported a delay — they are still on their way.',
         Resolved: 'Your incident has been marked as resolved.',
         Archived: 'Your incident has been archived.',
       };
@@ -40,7 +41,8 @@
 function homeShowNotification(title, body, status) {
   const styles = {
     Dispatched: { border: '#3b82f6', bg: '#eff6ff', icon: '🚑' },
-    Ongoing:    { border: '#f97316', bg: '#fff7ed', icon: '🚨' },
+    Initiate:   { border: '#6366f1', bg: '#eef2ff', icon: '🚨' },
+    Delayed:    { border: '#d97706', bg: '#fffbeb', icon: '⏳' },
     Resolved:   { border: '#22c55e', bg: '#f0fdf4', icon: '✅' },
     Archived:   { border: '#9ca3af', bg: '#f9fafb', icon: '📁' },
   };

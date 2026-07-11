@@ -21,6 +21,10 @@
     </div>
   </nav>
 
+  <div id="offline-banner" class="hidden bg-amber-50 border-b border-amber-200 text-amber-800 text-sm text-center py-2 px-4">
+    <i class="fa-solid fa-wifi-slash mr-1.5"></i>You're offline — your report will be saved on this device and sent automatically once you're back online.
+  </div>
+
   <div class="max-w-2xl mx-auto px-4 py-8">
 
     <!-- Step Indicator -->
@@ -56,9 +60,9 @@
           <div class="text-3xl mb-2">🔥</div>
           <span class="font-semibold text-gray-700 text-sm group-hover:text-red-700">Fire</span>
         </button>
-        <button onclick="selectType('Medical')" class="type-card p-4 rounded-xl border-2 border-gray-200 hover:border-blue-400 hover:bg-blue-50 transition-all text-center group">
+        <button onclick="selectType('Rescue')" class="type-card p-4 rounded-xl border-2 border-gray-200 hover:border-blue-400 hover:bg-blue-50 transition-all text-center group">
           <div class="text-3xl mb-2">🚑</div>
-          <span class="font-semibold text-gray-700 text-sm group-hover:text-blue-700">Medical</span>
+          <span class="font-semibold text-gray-700 text-sm group-hover:text-blue-700">Rescue</span>
         </button>
         <button onclick="selectType('Crime')"   class="type-card p-4 rounded-xl border-2 border-gray-200 hover:border-orange-400 hover:bg-orange-50 transition-all text-center group">
           <div class="text-3xl mb-2">🚔</div>
@@ -115,15 +119,23 @@
       </div>
 
       <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1.5">Photo Evidence <span class="text-gray-400 font-normal">(optional)</span></label>
+        <div class="flex items-center justify-between mb-1.5">
+          <label class="block text-sm font-medium text-gray-700">Photo Evidence <span class="text-gray-400 font-normal">(optional, up to 5)</span></label>
+        </div>
 
-        <!-- Idle: prompt to open camera -->
+        <!-- Idle: prompt to open camera or pick from gallery -->
         <div id="camera-idle" class="border-2 border-dashed border-gray-300 rounded-xl p-6 text-center">
           <i class="fa-solid fa-camera text-gray-400 text-2xl mb-2"></i>
-          <p class="text-sm text-gray-600 font-medium">Take a real-time photo as evidence</p>
-          <button type="button" onclick="openCamera()" class="mt-3 btn-primary btn-sm">
-            <i class="fa-solid fa-camera mr-1.5"></i> Open Camera
-          </button>
+          <p class="text-sm text-gray-600 font-medium">Add photos as evidence</p>
+          <div class="flex gap-2 justify-center mt-3">
+            <button type="button" onclick="openCamera()" class="btn-primary btn-sm">
+              <i class="fa-solid fa-camera mr-1.5"></i> Open Camera
+            </button>
+            <button type="button" onclick="document.getElementById('gallery-input').click()" class="btn-secondary btn-sm">
+              <i class="fa-solid fa-images mr-1.5"></i> Choose from Gallery
+            </button>
+          </div>
+          <input type="file" id="gallery-input" accept="image/*" multiple class="hidden" onchange="handleGalleryPick(event)">
         </div>
 
         <!-- Active: live camera feed -->
@@ -142,17 +154,15 @@
           </div>
         </div>
 
-        <!-- Captured: preview + retake -->
-        <div id="camera-captured" class="hidden rounded-xl overflow-hidden border border-gray-300">
-          <img id="photo-preview" class="w-full max-h-64 object-cover block">
-          <div class="bg-gray-50 border-t border-gray-200 px-4 py-2.5 flex items-center justify-between">
-            <span class="text-sm text-green-600 font-medium flex items-center gap-1.5">
-              <i class="fa-solid fa-circle-check"></i> Photo captured
-            </span>
-            <button type="button" onclick="retakePhoto()" class="text-blue-600 text-sm font-medium hover:underline">
-              <i class="fa-solid fa-rotate-right mr-1"></i> Retake
-            </button>
-          </div>
+        <!-- Captured/picked photos strip -->
+        <div id="photo-strip" class="hidden grid grid-cols-3 gap-2"></div>
+        <div id="photo-strip-actions" class="hidden mt-2 flex gap-2">
+          <button type="button" onclick="openCamera()" id="add-more-camera-btn" class="btn-secondary btn-sm flex-1">
+            <i class="fa-solid fa-camera mr-1"></i> Add More
+          </button>
+          <button type="button" onclick="document.getElementById('gallery-input').click()" id="add-more-gallery-btn" class="btn-secondary btn-sm flex-1">
+            <i class="fa-solid fa-images mr-1"></i> Add From Gallery
+          </button>
         </div>
 
         <canvas id="capture-canvas" class="hidden"></canvas>
@@ -199,6 +209,19 @@
         <button onclick="submitReport()" id="submit-btn" class="btn-danger flex-1">
           <i class="fa-solid fa-circle-exclamation mr-1"></i> Submit Report
         </button>
+      </div>
+    </div>
+
+    <!-- Fire fast-path -->
+    <div id="fire-banner" class="hidden fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+      <div class="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 text-center space-y-4">
+        <div class="text-5xl">🔥</div>
+        <h3 class="text-lg font-bold text-gray-800">Reporting a fire?</h3>
+        <p class="text-sm text-gray-600">Don't wait for barangay processing — call the Bureau of Fire Protection directly right now. You can still submit this report at the same time so barangay responders are alerted too.</p>
+        <a id="fire-call-link" href="tel:160" class="btn-danger w-full flex items-center justify-center gap-2 py-3">
+          <i class="fa-solid fa-phone-volume"></i> Call BFP Now
+        </a>
+        <button onclick="dismissFireBanner()" class="btn-secondary w-full">Continue to Report</button>
       </div>
     </div>
 

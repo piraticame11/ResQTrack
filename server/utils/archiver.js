@@ -18,3 +18,20 @@ cron.schedule('0 0 * * *', async () => {
 });
 
 console.log('[Archiver] Nightly auto-archiver scheduled (00:00 daily)');
+
+// Every minute: auto-publish announcements whose scheduled time has arrived
+cron.schedule('* * * * *', async () => {
+  try {
+    const [result] = await db.query(`
+      UPDATE announcements
+      SET is_published = 1, published_at = NOW(), scheduled_at = NULL
+      WHERE is_published = 0 AND scheduled_at IS NOT NULL AND scheduled_at <= NOW()`);
+    if (result.affectedRows > 0) {
+      console.log(`[Scheduler] Auto-published ${result.affectedRows} scheduled announcement(s)`);
+    }
+  } catch (err) {
+    console.error('[Scheduler] Error auto-publishing announcements:', err.message);
+  }
+});
+
+console.log('[Scheduler] Announcement auto-publish scheduled (every minute)');

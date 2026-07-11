@@ -23,8 +23,11 @@
       <a href="/pages/admin/incidents.html"    class="nav-item"><i class="fa-solid fa-triangle-exclamation w-5 text-center"></i> Incidents</a>
       <a href="/pages/admin/users.html"        class="nav-item"><i class="fa-solid fa-users w-5 text-center"></i> Users</a>
       <a href="/pages/admin/logbook.html"      class="nav-item"><i class="fa-solid fa-book w-5 text-center"></i> Logbook</a>
+      <a href="/pages/admin/blotter.html"      class="nav-item"><i class="fa-solid fa-scale-balanced w-5 text-center"></i> Blotter</a>
       <a href="/pages/admin/announcements.html" class="nav-item active"><i class="fa-solid fa-bullhorn w-5 text-center"></i> Announcements</a>
       <a href="/pages/admin/reports.html"      class="nav-item"><i class="fa-solid fa-chart-bar w-5 text-center"></i> Reports</a>
+      <a href="/pages/admin/puroks.html"       class="nav-item"><i class="fa-solid fa-map-location-dot w-5 text-center"></i> Puroks</a>
+      <a href="/pages/admin/audit.html"        class="nav-item"><i class="fa-solid fa-user-shield w-5 text-center"></i> Audit Log</a>
     </nav>
     <div class="border-t border-slate-800 p-4">
       <div class="flex items-center gap-3">
@@ -61,11 +64,22 @@
               <label class="block text-sm font-medium text-gray-700 mb-1.5">Body</label>
               <textarea id="ann-body" required rows="5" class="input-field resize-none" placeholder="Write the announcement content here…"></textarea>
             </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1.5">When should this post?</label>
+              <div class="flex flex-wrap gap-2 mb-2">
+                <label class="flex items-center gap-1.5 text-sm text-gray-600 cursor-pointer">
+                  <input type="radio" name="ann-when" value="draft" checked onchange="updateAnnWhenUI()"> Save as draft
+                </label>
+                <label class="flex items-center gap-1.5 text-sm text-gray-600 cursor-pointer">
+                  <input type="radio" name="ann-when" value="now" onchange="updateAnnWhenUI()"> Publish now
+                </label>
+                <label class="flex items-center gap-1.5 text-sm text-gray-600 cursor-pointer">
+                  <input type="radio" name="ann-when" value="schedule" onchange="updateAnnWhenUI()"> Schedule for later
+                </label>
+              </div>
+              <input type="datetime-local" id="ann-scheduled-at" class="input-field hidden">
+            </div>
             <div class="flex items-center gap-3">
-              <label class="flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" id="ann-published" class="w-4 h-4 rounded text-blue-600">
-                <span class="text-sm text-gray-700">Publish immediately</span>
-              </label>
               <button type="submit" id="ann-submit-btn" class="btn-primary ml-auto">
                 <i class="fa-solid fa-paper-plane mr-1"></i> Post
               </button>

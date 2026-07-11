@@ -16,11 +16,12 @@ exports.getAnnouncements = async (req, res) => {
 
 exports.createAnnouncement = async (req, res) => {
   try {
-    const { title, body, is_published } = req.body;
+    const { title, body, is_published, scheduled_at } = req.body;
     const pub = is_published ? 1 : 0;
+    const schedule = !pub && scheduled_at ? new Date(scheduled_at) : null;
     const [result] = await db.query(
-      'INSERT INTO announcements (admin_id, title, body, is_published, published_at) VALUES (?, ?, ?, ?, ?)',
-      [req.user.id, title, body, pub, pub ? new Date() : null]
+      'INSERT INTO announcements (admin_id, title, body, is_published, scheduled_at, published_at) VALUES (?, ?, ?, ?, ?, ?)',
+      [req.user.id, title, body, pub, schedule, pub ? new Date() : null]
     );
     res.status(201).json({ message: 'Announcement created', id: result.insertId });
   } catch (err) {
@@ -30,13 +31,19 @@ exports.createAnnouncement = async (req, res) => {
 
 exports.updateAnnouncement = async (req, res) => {
   try {
-    const { title, body, is_published } = req.body;
+    const { title, body, is_published, scheduled_at } = req.body;
     const updates = [], params = [];
     if (title       !== undefined) { updates.push('title = ?');        params.push(title); }
     if (body        !== undefined) { updates.push('body = ?');         params.push(body); }
     if (is_published !== undefined) {
       updates.push('is_published = ?'); params.push(is_published ? 1 : 0);
-      if (is_published) { updates.push('published_at = ?'); params.push(new Date()); }
+      if (is_published) {
+        updates.push('published_at = ?'); params.push(new Date());
+        updates.push('scheduled_at = NULL');
+      }
+    }
+    if (scheduled_at !== undefined && !is_published) {
+      updates.push('scheduled_at = ?'); params.push(scheduled_at || null);
     }
     if (!updates.length) return res.status(400).json({ message: 'No fields to update' });
     params.push(req.params.id);

@@ -58,14 +58,18 @@
           <input type="text" id="filter-search" placeholder="Search ref / description…" class="input-field col-span-2 md:col-span-1">
           <select id="filter-status" class="input-field">
             <option value="">All Statuses</option>
-            <option>Dispatched</option><option>Ongoing</option><option>Resolved</option><option>Archived</option>
+            <option>Dispatched</option><option>Initiate</option><option>Delayed</option><option>Resolved</option><option>Archived</option>
           </select>
           <select id="filter-type" class="input-field">
             <option value="">All Types</option>
-            <option>Fire</option><option>Medical</option><option>Crime</option><option>Noise</option><option>Garbage</option><option>Other</option>
+            <option>Fire</option><option>Rescue</option><option>Crime</option><option>Noise</option><option>Garbage</option><option>Other</option>
           </select>
           <button onclick="applyFilter()" class="btn-primary"><i class="fa-solid fa-filter mr-1"></i> Filter</button>
         </div>
+        <button type="button" onclick="toggleLegend('legend-btn','legend-panel')" class="text-xs text-blue-600 hover:underline mt-3">
+          <i class="fa-solid fa-circle-info mr-1"></i>What do these mean?
+        </button>
+        <div id="legend-panel" class="hidden mt-2 border border-gray-100 rounded-lg p-3 bg-gray-50"></div>
       </div>
 
       <!-- Table -->
@@ -80,7 +84,7 @@
                 <th class="px-4 py-3 text-left">Triage</th>
                 <th class="px-4 py-3 text-left">Status</th>
                 <th class="px-4 py-3 text-left">Reported</th>
-                <th class="px-4 py-3 text-left">Resolved</th>
+                <th class="px-4 py-3 text-left">Date &amp; Time Resolved</th>
                 <th class="px-4 py-3 text-left">Actions</th>
               </tr>
             </thead>

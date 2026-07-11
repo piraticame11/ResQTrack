@@ -3,11 +3,7 @@
   if (!user) return;
   setUserUI(user);
 
-  const purokSel = document.getElementById('filter-purok');
-  for (let i = 1; i <= 14; i++) {
-    const o = document.createElement('option'); o.value = i; o.textContent = `Purok ${i}`;
-    purokSel.appendChild(o);
-  }
+  await populatePurokSelect(document.getElementById('filter-purok'), { placeholder: 'All Puroks' });
 
   const searchInput = document.getElementById('search-log');
   let debounceTimer;
@@ -86,7 +82,9 @@ async function openDetailModal(id) {
       <div class="col-span-2"><span class="text-gray-500">Reported at</span><p class="font-semibold">${formatDate(inc.reported_at)}</p></div>
       ${inc.resolved_at ? `<div class="col-span-2"><span class="text-gray-500">Resolved at</span><p class="font-semibold">${formatDate(inc.resolved_at)}</p></div>` : ''}
       <div class="col-span-2"><span class="text-gray-500">Description</span><p class="bg-gray-50 rounded-lg p-3 mt-1">${inc.description}</p></div>
-      ${inc.photo_path ? `<div class="col-span-2"><img src="${inc.photo_path}" class="w-full rounded-lg max-h-48 object-cover"></div>` : ''}
+      ${(inc.attachments?.length ? inc.attachments.map(a => a.file_path) : (inc.photo_path ? [inc.photo_path] : [])).length
+        ? `<div class="col-span-2 grid grid-cols-3 gap-2">${(inc.attachments?.length ? inc.attachments.map(a => a.file_path) : [inc.photo_path]).map(p => `<a href="${p}" target="_blank" rel="noopener"><img src="${p}" class="w-full h-24 object-cover rounded-lg border border-gray-200"></a>`).join('')}</div>`
+        : ''}
     </div>`;
 
   document.getElementById('detail-log').innerHTML = logs.length

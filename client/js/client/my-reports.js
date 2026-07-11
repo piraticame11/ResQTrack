@@ -37,7 +37,8 @@
       Dispatched: responder_name
         ? `Responder assigned: ${responder_name}`
         : 'A responder has been dispatched to your incident.',
-      Ongoing:  'Responders are now actively handling your incident.',
+      Initiate: 'Responders are now actively handling your incident.',
+      Delayed:  'Your assigned responder reported a delay — they are still on their way.',
       Resolved: 'Your incident has been marked as resolved.',
       Pending:  'Your incident is pending response.',
       Archived: 'Your incident has been archived.',
@@ -136,7 +137,9 @@ async function openDetailModal(id) {
         <span class="text-gray-500 text-xs">Description</span>
         <p class="bg-gray-50 rounded-lg p-3 mt-1 text-gray-700">${inc.description}</p>
       </div>
-      ${inc.photo_path ? `<img src="${inc.photo_path}" class="w-full rounded-lg max-h-52 object-cover">` : ''}
+      ${(inc.attachments?.length ? inc.attachments.map(a => a.file_path) : (inc.photo_path ? [inc.photo_path] : [])).length
+        ? `<div class="grid grid-cols-3 gap-2">${(inc.attachments?.length ? inc.attachments.map(a => a.file_path) : [inc.photo_path]).map(p => `<a href="${p}" target="_blank" rel="noopener"><img src="${p}" class="w-full h-24 object-cover rounded-lg border border-gray-200"></a>`).join('')}</div>`
+        : ''}
     </div>`;
 
   // Timeline
@@ -164,7 +167,8 @@ function closeDetailModal() { document.getElementById('detail-modal').classList.
 function showIncidentNotification(title, body, status) {
   const styles = {
     Dispatched: { border: '#3b82f6', bg: '#eff6ff', icon: '🚑' },
-    Ongoing:    { border: '#f97316', bg: '#fff7ed', icon: '🚨' },
+    Initiate:   { border: '#6366f1', bg: '#eef2ff', icon: '🚨' },
+    Delayed:    { border: '#d97706', bg: '#fffbeb', icon: '⏳' },
     Resolved:   { border: '#22c55e', bg: '#f0fdf4', icon: '✅' },
     Archived:   { border: '#9ca3af', bg: '#f9fafb', icon: '📁' },
   };

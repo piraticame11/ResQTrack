@@ -7,12 +7,7 @@ let viewingUserId = null;
   if (!user) return;
   setUserUI(user);
 
-  // Populate purok select in form
-  const purokSel = document.getElementById('u-purok');
-  for (let i = 1; i <= 14; i++) {
-    const o = document.createElement('option'); o.value = i; o.textContent = `Purok ${i}`;
-    purokSel.appendChild(o);
-  }
+  await populatePurokSelect(document.getElementById('u-purok'), { placeholder: 'None' });
 
   document.getElementById('user-form').addEventListener('submit', handleUserSubmit);
   document.getElementById('search-user').addEventListener('input', renderUsers);
@@ -60,14 +55,19 @@ function renderUsers() {
 
   tbody.innerHTML = list.map(u => `
     <tr class="table-row">
-      <td class="px-4 py-3 text-sm font-medium text-gray-800">${u.full_name}</td>
+      <td class="px-4 py-3 text-sm font-medium text-gray-800">
+        ${u.full_name}
+        ${u.fake_report_count > 0 ? `<span class="ml-1 inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700" title="${u.fake_report_count} report(s) flagged as fake"><i class="fa-solid fa-flag mr-1"></i>${u.fake_report_count}</span>` : ''}
+      </td>
       <td class="px-4 py-3 text-sm text-gray-500">${u.email}</td>
       <td class="px-4 py-3">${roleBadge(u.role)}</td>
       <td class="px-4 py-3 text-sm text-gray-500">${u.purok_name || '—'}</td>
       <td class="px-4 py-3">
         ${u.is_verified
           ? `<span class="text-green-600 text-xs"><i class="fa-solid fa-check"></i> Verified</span>`
-          : `<button onclick="openViewModal(${u.id})" class="text-orange-500 text-xs hover:underline"><i class="fa-solid fa-eye"></i> View</button>`}
+          : u.verification_status === 'Rejected'
+            ? `<button onclick="openViewModal(${u.id})" class="text-red-500 text-xs hover:underline"><i class="fa-solid fa-circle-xmark"></i> Rejected</button>`
+            : `<button onclick="openViewModal(${u.id})" class="text-orange-500 text-xs hover:underline"><i class="fa-solid fa-eye"></i> View</button>`}
       </td>
       <td class="px-4 py-3">
         <span class="text-xs ${u.is_active ? 'text-green-600' : 'text-gray-400'}">
@@ -131,6 +131,15 @@ async function openViewModal(id) {
   document.getElementById('view-email').textContent     = u.email;
   document.getElementById('view-phone').textContent     = u.phone || '—';
   document.getElementById('view-purok').textContent     = u.purok_name || '—';
+  document.getElementById('view-address').textContent   = u.address_line || '—';
+
+  // Residency / landlord info
+  const resEl = document.getElementById('view-residency');
+  if (u.residency_type === 'Tenant') {
+    resEl.innerHTML = `Tenant / Boarder — Landlord: <span class="font-medium">${u.landlord_name || '—'}</span> (${u.landlord_contact || '—'})`;
+  } else {
+    resEl.textContent = 'Homeowner';
+  }
 
   // Birthdate formatting
   if (u.birthdate) {
@@ -148,15 +157,57 @@ async function openViewModal(id) {
   const statusEl = document.getElementById('view-status');
   if (u.is_verified) {
     statusEl.innerHTML = `<span class="text-green-600 text-sm font-medium"><i class="fa-solid fa-check-circle mr-1"></i>Verified</span>`;
+  } else if (u.verification_status === 'Rejected') {
+    statusEl.innerHTML = `<span class="text-red-500 text-sm font-medium"><i class="fa-solid fa-circle-xmark mr-1"></i>Rejected</span>` +
+      (u.verification_note ? `<br><span class="text-xs text-gray-500">${u.verification_note}</span>` : '');
   } else {
     statusEl.innerHTML = `<span class="text-orange-500 text-sm font-medium"><i class="fa-solid fa-clock mr-1"></i>Pending Verification</span>`;
   }
 
-  // Show/hide Verify button
-  const verifyBtn = document.getElementById('view-verify-btn');
-  verifyBtn.classList.toggle('hidden', !!u.is_verified);
+  // Duplicate surname warning
+  const dupWrap = document.getElementById('dup-warning');
+  const dupList = document.getElementById('dup-list');
+  if (u.duplicate_matches && u.duplicate_matches.length) {
+    dupList.innerHTML = u.duplicate_matches.map(m => `
+      <li>• ${m.full_name} — ${m.address_line || 'no address on file'} (${m.purok_name || 'no purok'})
+        ${m.is_verified ? '<span class="text-green-700">· verified</span>' : '<span class="text-amber-600">· unverified</span>'}
+      </li>`).join('');
+    dupWrap.classList.remove('hidden');
+  } else {
+    dupWrap.classList.add('hidden');
+  }
+
+  // Show/hide Verify + Reject buttons (only relevant while not already verified)
+  document.getElementById('view-verify-btn').classList.toggle('hidden', !!u.is_verified);
+  document.getElementById('view-reject-btn').classList.toggle('hidden', !!u.is_verified);
+  cancelReject();
 
   document.getElementById('view-modal').classList.remove('hidden');
+}
+
+function showRejectPanel() {
+  document.getElementById('reject-panel').classList.remove('hidden');
+  document.getElementById('reject-reason').value = '';
+}
+
+function cancelReject() {
+  document.getElementById('reject-panel').classList.add('hidden');
+}
+
+async function confirmReject() {
+  if (!viewingUserId) return;
+  const reason = document.getElementById('reject-reason').value.trim();
+  if (!reason) { showToast('Please explain why this registration is being rejected', 'error'); return; }
+
+  const res = await api.patch(`/admin/users/${viewingUserId}/reject`, { reason });
+  if (res && res.ok) {
+    showToast('Registration rejected');
+    closeViewModal();
+    await loadUsers();
+  } else {
+    const err = res ? await res.json() : {};
+    showToast(err.message || 'Error rejecting user', 'error');
+  }
 }
 
 async function verifyFromModal() {

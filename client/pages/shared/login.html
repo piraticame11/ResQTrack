@@ -8,48 +8,6 @@
   <link rel="stylesheet" href="/public/css/output.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" crossorigin="anonymous">
   <style>
-    .role-tab { transition: all 0.2s ease; }
-    /* Default per-role colors — always visible */
-    #tab-resident  { background: #eff6ff; border-color: #93c5fd; color: #3b82f6; }
-    #tab-responder { background: #fff7ed; border-color: #fdba74; color: #f97316; }
-    #tab-admin     { background: #f0fdf4; border-color: #86efac; color: #22c55e; }
-    #tab-resident:hover  { background: #dbeafe; border-color: #60a5fa; }
-    #tab-responder:hover { background: #ffedd5; border-color: #fb923c; }
-    #tab-admin:hover     { background: #dcfce7; border-color: #4ade80; }
-    /* Active (selected) — more vivid */
-    .role-tab.active-resident  { background: #dbeafe; border-color: #3b82f6; color: #1d4ed8; }
-    .role-tab.active-responder { background: #ffedd5; border-color: #f97316; color: #c2410c; }
-    .role-tab.active-admin     { background: #dcfce7; border-color: #22c55e; color: #15803d; }
-    .portal-badge-resident  { background: #dbeafe; color: #1d4ed8; }
-    .portal-badge-responder { background: #ffedd5; color: #c2410c; }
-    .portal-badge-admin     { background: #dcfce7; color: #15803d; }
-    .btn-resident  { background: #3b82f6; }
-    .btn-resident:hover  { background: #2563eb; }
-    .btn-responder { background: #f97316; }
-    .btn-responder:hover { background: #ea580c; }
-    .btn-admin     { background: #22c55e; }
-    .btn-admin:hover     { background: #16a34a; }
-    .btn-role { color: white; width: 100%; display: flex; align-items: center; justify-content: center; gap: 0.5rem; padding: 0.625rem 1rem; border-radius: 0.5rem; font-weight: 600; cursor: pointer; border: none; transition: background 0.2s; }
-    .btn-role:disabled { opacity: 0.6; cursor: not-allowed; }
-    #login-section {
-      overflow: hidden;
-      max-height: 0;
-      opacity: 0;
-      transition: max-height 0.4s ease, opacity 0.3s ease;
-    }
-    #login-section.visible {
-      max-height: 500px;
-      opacity: 1;
-    }
-    .role-tab-desc { font-size: 0.65rem; margin-top: 2px; line-height: 1.2; }
-    #tab-resident  .role-tab-desc { color: #93c5fd; }
-    #tab-responder .role-tab-desc { color: #fdba74; }
-    #tab-admin     .role-tab-desc { color: #86efac; }
-    @keyframes bounce-subtle {
-      0%, 100% { transform: translateY(0); }
-      50%       { transform: translateY(-4px); }
-    }
-    #role-prompt-arrow { animation: bounce-subtle 1.6s ease-in-out infinite; display: inline-block; }
     .card-header-stripe {
       background: white;
       margin: -2rem -2rem 1.5rem -2rem;
@@ -67,6 +25,9 @@
       background: #eff6ff;
       box-shadow: 0 4px 16px rgba(59,130,246,0.15), 0 1px 4px rgba(59,130,246,0.10);
     }
+    .btn-role { background: #3b82f6; color: white; width: 100%; display: flex; align-items: center; justify-content: center; gap: 0.5rem; padding: 0.625rem 1rem; border-radius: 0.5rem; font-weight: 600; cursor: pointer; border: none; transition: background 0.2s; }
+    .btn-role:hover:not(:disabled) { background: #2563eb; }
+    .btn-role:disabled { opacity: 0.6; cursor: not-allowed; }
   </style>
 </head>
 <body class="min-h-screen bg-gray-50 flex items-center justify-center p-4">
@@ -77,91 +38,42 @@
 
       <!-- Header stripe -->
       <div class="card-header-stripe">
-        <img src="/public/images/favicon.png" alt="ResQTrack" class=" object-contain drop-shadow-lg">
+        <img src="/public/images/favicon.png" alt="ResQTrack" class="object-contain drop-shadow-lg">
       </div>
 
-      <!-- Role Selector -->
-      <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Who are you?</p>
-      <div class="grid grid-cols-3 gap-2 mb-4">
-        <button type="button" onclick="selectRole('resident')"
-          id="tab-resident"
-          class="role-tab border-2 rounded-xl py-4 px-2 flex flex-col items-center gap-1 cursor-pointer">
-          <i class="fa-solid fa-house text-2xl"></i>
-          <span class="text-xs font-bold mt-1">Resident</span>
-          <span class="role-tab-desc text-center">Community<br>member</span>
-        </button>
-        <button type="button" onclick="selectRole('responder')"
-          id="tab-responder"
-          class="role-tab border-2 rounded-xl py-4 px-2 flex flex-col items-center gap-1 cursor-pointer">
-          <i class="fa-solid fa-truck-medical text-2xl"></i>
-          <span class="text-xs font-bold mt-1">Responder</span>
-          <span class="role-tab-desc text-center">Emergency<br>team</span>
-        </button>
-        <button type="button" onclick="selectRole('admin')"
-          id="tab-admin"
-          class="role-tab border-2 rounded-xl py-4 px-2 flex flex-col items-center gap-1 cursor-pointer">
-          <i class="fa-solid fa-user-shield text-2xl"></i>
-          <span class="text-xs font-bold mt-1">Official</span>
-          <span class="role-tab-desc text-center">Barangay<br>official</span>
-        </button>
+      <div class="mb-5 text-center">
+        <h2 class="text-base font-bold text-gray-800">Sign in to ResQTrack</h2>
+        <p class="text-xs text-gray-400 mt-0.5">Residents, responders, and barangay officials all sign in here — we'll take you to the right place.</p>
       </div>
 
-      <!-- Prompt shown before role is selected -->
-      <div id="role-prompt" class="flex flex-col items-center gap-1 py-3">
-        <span id="role-prompt-arrow" class="text-blue-400 text-lg"><i class="fa-solid fa-hand-pointer"></i></span>
-        <p class="text-sm font-medium text-gray-500">Select a portal to continue</p>
-        <p class="text-xs text-gray-400">Tap one of the options above</p>
-      </div>
+      <div id="error-msg" class="hidden mb-4 bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-3 text-sm"></div>
 
-      <!-- Login section — hidden until a role is selected -->
-      <div id="login-section">
-        <!-- Portal Label -->
-        <div class="flex items-center gap-2 mb-5 mt-5">
-          <span id="portal-badge" class="portal-badge-resident text-xs font-bold px-2.5 py-1 rounded-full">Resident Portal</span>
-          <h2 id="portal-title" class="text-base font-bold text-gray-800">Sign in to your account</h2>
-        </div>
-
-        <div id="error-msg" class="hidden mb-4 bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-3 text-sm"></div>
-
-        <form id="login-form" class="space-y-5">
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1.5">Email address</label>
-            <div class="relative">
-              <i class="fa-solid fa-envelope absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
-              <input type="email" id="email" required
-                class="input-field pl-9"
-                placeholder="you@example.com">
-            </div>
+      <form id="login-form" class="space-y-5">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1.5">Email address</label>
+          <div class="relative">
+            <i class="fa-solid fa-envelope absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
+            <input type="email" id="email" required class="input-field pl-9" placeholder="you@example.com">
           </div>
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1.5">Password</label>
-            <div class="relative">
-              <i class="fa-solid fa-lock absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
-              <input type="password" id="password" required
-                class="input-field pl-9"
-                placeholder="••••••••">
-            </div>
-          </div>
-          <button type="submit" id="login-btn" class="btn-role btn-resident">
-            <i class="fa-solid fa-right-to-bracket"></i>
-            <span id="btn-label">Sign In as Resident</span>
-          </button>
-        </form>
-
-        <!-- Role-specific footer -->
-        <div class="mt-6 pt-5 border-t border-gray-100 text-center">
-          <p id="footer-resident" class="hidden text-sm text-gray-500">New resident?
-            <a href="/pages/shared/register.html" class="text-blue-600 font-medium hover:underline">Create an account</a>
-          </p>
-          <p id="footer-responder" class="hidden text-sm text-gray-500">
-            <i class="fa-solid fa-circle-info mr-1 text-orange-400"></i>
-            Responder accounts are managed by the admin.
-          </p>
-          <p id="footer-admin" class="hidden text-sm text-gray-500">
-            <i class="fa-solid fa-circle-info mr-1 text-green-500"></i>
-            Official accounts are issued by the barangay.
-          </p>
         </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1.5">Password</label>
+          <div class="relative">
+            <i class="fa-solid fa-lock absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
+            <input type="password" id="password" required class="input-field pl-9" placeholder="••••••••">
+          </div>
+        </div>
+        <button type="submit" id="login-btn" class="btn-role">
+          <i class="fa-solid fa-right-to-bracket"></i>
+          <span id="btn-label">Sign In</span>
+        </button>
+      </form>
+
+      <div class="mt-6 pt-5 border-t border-gray-100 text-center">
+        <p class="text-sm text-gray-500">New resident?
+          <a href="/pages/shared/register.html" class="text-blue-600 font-medium hover:underline">Create an account</a>
+        </p>
+        <p class="text-xs text-gray-400 mt-1.5">Responder and official accounts are issued by the barangay.</p>
       </div>
     </div>
 
@@ -169,90 +81,23 @@
   </div>
 
   <script>
-    let selectedRole = null;
-
-    const roleConfig = {
-      resident: {
-        tabClass:    'active-resident',
-        badgeClass:  'portal-badge-resident',
-        badgeText:   'Resident Portal',
-        btnClass:    'btn-resident',
-        btnLabel:    'Sign In as Resident',
-        footers:     ['footer-resident'],
-        redirect:    '/pages/client/home.html',
-      },
-      responder: {
-        tabClass:    'active-responder',
-        badgeClass:  'portal-badge-responder',
-        badgeText:   'Responder Portal',
-        btnClass:    'btn-responder',
-        btnLabel:    'Sign In as Responder',
-        footers:     ['footer-responder'],
-        redirect:    '/pages/responder/dashboard.html',
-      },
-      admin: {
-        tabClass:    'active-admin',
-        badgeClass:  'portal-badge-admin',
-        badgeText:   'Official Portal',
-        btnClass:    'btn-admin',
-        btnLabel:    'Sign In as Official',
-        footers:     ['footer-admin'],
-        redirect:    '/pages/admin/dashboard.html',
-      },
+    const REDIRECTS = {
+      admin:     '/pages/admin/dashboard.html',
+      responder: '/pages/responder/dashboard.html',
+      resident:  '/pages/client/home.html',
     };
-
-    function selectRole(role) {
-      selectedRole = role;
-      const cfg = roleConfig[role];
-
-      // Update tabs
-      ['resident', 'responder', 'admin'].forEach(r => {
-        const tab = document.getElementById('tab-' + r);
-        tab.className = 'role-tab border-2 rounded-xl py-3 px-2 flex flex-col items-center gap-1 cursor-pointer';
-        if (r === role) tab.classList.add(roleConfig[r].tabClass);
-      });
-
-      // Reveal login section on first selection
-      const section = document.getElementById('login-section');
-      const prompt = document.getElementById('role-prompt');
-      if (!section.classList.contains('visible')) {
-        section.classList.add('visible');
-        prompt.classList.add('hidden');
-      }
-
-      // Update badge
-      const badge = document.getElementById('portal-badge');
-      badge.className = cfg.badgeClass + ' text-xs font-bold px-2.5 py-1 rounded-full';
-      badge.textContent = cfg.badgeText;
-
-      // Update button
-      const btn = document.getElementById('login-btn');
-      btn.className = 'btn-role ' + cfg.btnClass;
-      document.getElementById('btn-label').textContent = cfg.btnLabel;
-
-      // Update footers
-      ['footer-resident', 'footer-responder', 'footer-admin'].forEach(id => {
-        document.getElementById(id).classList.add('hidden');
-      });
-      cfg.footers.forEach(id => document.getElementById(id).classList.remove('hidden'));
-
-      document.getElementById('error-msg').classList.add('hidden');
-    }
 
     // Redirect if already logged in
     const token = localStorage.getItem('accessToken');
     const user  = (() => { try { return JSON.parse(localStorage.getItem('user')); } catch { return null; } })();
     if (token && user) {
-      if (user.role === 'admin')          window.location.href = '/pages/admin/dashboard.html';
-      else if (user.role === 'responder') window.location.href = '/pages/responder/dashboard.html';
-      else                                window.location.href = '/pages/client/home.html';
+      window.location.href = REDIRECTS[user.role] || REDIRECTS.resident;
     }
 
     document.getElementById('login-form').addEventListener('submit', async (e) => {
       e.preventDefault();
-      if (!selectedRole) return;
-      const btn    = document.getElementById('login-btn');
-      const errEl  = document.getElementById('error-msg');
+      const btn   = document.getElementById('login-btn');
+      const errEl = document.getElementById('error-msg');
       errEl.classList.add('hidden');
       btn.disabled = true;
       btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Signing in…';
@@ -269,28 +114,16 @@
         const data = await res.json();
         if (!res.ok) throw new Error(data.message || 'Login failed');
 
-        // Check that the user's actual role matches the selected portal
-        const actualRole = data.user.role;
-        const expectedRole = selectedRole === 'admin' ? 'admin' : selectedRole;
-        if (actualRole !== expectedRole) {
-          const label = roleConfig[actualRole]?.badgeText || actualRole;
-          throw new Error(`This account belongs to the ${label}. Please select the correct portal.`);
-        }
-
         localStorage.setItem('accessToken',  data.accessToken);
         localStorage.setItem('refreshToken', data.refreshToken);
         localStorage.setItem('user',         JSON.stringify(data.user));
 
-        if (data.user.role === 'admin')          window.location.href = '/pages/admin/dashboard.html';
-        else if (data.user.role === 'responder') window.location.href = '/pages/responder/dashboard.html';
-        else                                     window.location.href = '/pages/client/home.html';
+        window.location.href = REDIRECTS[data.user.role] || REDIRECTS.resident;
       } catch (err) {
         errEl.textContent = err.message;
         errEl.classList.remove('hidden');
         btn.disabled = false;
-        const cfg = roleConfig[selectedRole];
-        btn.className = 'btn-role ' + cfg.btnClass;
-        btn.innerHTML = '<i class="fa-solid fa-right-to-bracket"></i> <span>' + cfg.btnLabel + '</span>';
+        btn.innerHTML = '<i class="fa-solid fa-right-to-bracket"></i> <span id="btn-label">Sign In</span>';
       }
     });
   </script>

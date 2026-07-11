@@ -82,19 +82,24 @@ async function openModal(id) {
   const actions = document.getElementById('modal-actions');
   const btnHtml = [];
   if (isMyIncident) {
-    const validNext = { Dispatched: ['Ongoing', 'Resolved'], Ongoing: ['Resolved'] };
-    (validNext[inc.status] || []).forEach(s => {
-      const icon = s === 'Ongoing' ? 'fa-spinner' : 'fa-circle-check';
+    (INCIDENT_TRANSITIONS[inc.status] || []).forEach(s => {
+      const icon = s === 'Resolved' ? 'fa-circle-check' : 'fa-spinner';
       btnHtml.push(`<button onclick="changeStatus(${id},'${s}')" class="btn-primary btn-sm">
                       <i class="fa-solid ${icon} mr-1"></i> Mark ${s}
                     </button>`);
     });
   }
+  if (!inc.is_fake) {
+    btnHtml.push(`<button onclick="promptFlagFake(${id})" class="text-xs text-red-500 hover:underline self-center">
+                     <i class="fa-solid fa-flag mr-1"></i> Flag as Fake
+                   </button>`);
+  }
   btnHtml.push(`<button onclick="closeModal()" class="btn-secondary btn-sm ml-auto">Close</button>`);
   actions.innerHTML = btnHtml.join('');
 
-  const photoHtml = inc.photo_path
-    ? `<img src="${inc.photo_path}" class="w-full rounded-lg max-h-48 object-cover">`
+  const photos = inc.attachments?.length ? inc.attachments.map(a => a.file_path) : (inc.photo_path ? [inc.photo_path] : []);
+  const photoHtml = photos.length
+    ? `<div class="grid grid-cols-3 gap-2">${photos.map(p => `<a href="${p}" target="_blank" rel="noopener"><img src="${p}" class="w-full h-24 object-cover rounded-lg border border-gray-200"></a>`).join('')}</div>`
     : `<p class="text-gray-400 text-sm italic">No photo uploaded</p>`;
 
   const mapsLink = inc.latitude
@@ -158,6 +163,29 @@ async function openModal(id) {
       .bindPopup(`<b>${inc.reference_no}</b><br>${inc.incident_type}`)
       .openPopup();
     setTimeout(() => modalMap.invalidateSize(), 150);
+  }
+}
+
+function promptFlagFake(id) {
+  const reason = prompt('Why is this being flagged as a fake report?');
+  if (!reason || !reason.trim()) return;
+  flagFake(id, reason.trim());
+}
+
+async function flagFake(id, reason) {
+  const res = await api.patch(`/incidents/${id}/flag-fake`, { reason });
+  if (res && res.ok) {
+    showToast('Incident flagged as fake');
+    closeModal();
+    const r = await api.get('/incidents');
+    if (r && r.ok) {
+      const all = await r.json();
+      allIncidents = all.filter(i => i.assigned_responder_id === currentUser.id);
+      renderTable(allIncidents);
+    }
+  } else {
+    const data = res ? await res.json() : null;
+    showToast(data?.message || 'Failed to flag incident', 'error');
   }
 }
 

@@ -1,4 +1,5 @@
-const report = { incident_type: null, description: '', purok_id: null, latitude: null, longitude: null, photo: null };
+const report = { incident_type: null, description: '', purok_id: null, latitude: null, longitude: null, photos: [] };
+const MAX_PHOTOS = 5;
 let currentStep    = 1;
 let locationMap    = null;
 let locationMarker = null;
@@ -9,16 +10,38 @@ let facingMode     = 'environment'; // prefer rear camera for evidence
   const user = requireRole('resident', 'admin', 'responder');
   if (!user) return;
 
-  const purokSel = document.getElementById('purok-select');
-  for (let i = 1; i <= 14; i++) {
-    const o = document.createElement('option'); o.value = i; o.textContent = `Purok ${i}`;
-    purokSel.appendChild(o);
-  }
+  await populatePurokSelect(document.getElementById('purok-select'), { placeholder: '-- Select Purok --' });
+
+  updateOfflineBanner();
+  window.addEventListener('online',  updateOfflineBanner);
+  window.addEventListener('offline', updateOfflineBanner);
 })();
+
+function updateOfflineBanner() {
+  document.getElementById('offline-banner').classList.toggle('hidden', navigator.onLine);
+}
+
+// ── Fire fast-path ──────────────────────────────────────────────────────────
+
+async function showFireBanner() {
+  const res = await fetch('/api/announcements/emergency-contacts').catch(() => null);
+  const contacts = res && res.ok ? await res.json() : [];
+  const bfp = contacts.find(c => /fire/i.test(c.label));
+  if (bfp) document.getElementById('fire-call-link').href = `tel:${bfp.phone}`;
+  document.getElementById('fire-banner').classList.remove('hidden');
+}
+
+function dismissFireBanner() {
+  document.getElementById('fire-banner').classList.add('hidden');
+}
 
 // ── Camera ──────────────────────────────────────────────────────────────────
 
 async function openCamera() {
+  if (report.photos.length >= MAX_PHOTOS) {
+    showToast(`You can attach up to ${MAX_PHOTOS} photos.`, 'error');
+    return;
+  }
   if (!navigator.mediaDevices?.getUserMedia) {
     showToast('Camera is not available on this device or browser.', 'error');
     return;
@@ -54,24 +77,17 @@ function capturePhoto() {
 
   canvas.toBlob(blob => {
     if (!blob) { showToast('Capture failed, try again.', 'error'); return; }
-    report.photo = new File([blob], `evidence-${Date.now()}.jpg`, { type: 'image/jpeg' });
-    document.getElementById('photo-preview').src = URL.createObjectURL(blob);
+    addPhoto(new File([blob], `evidence-${Date.now()}.jpg`, { type: 'image/jpeg' }));
     stopCameraStream();
     document.getElementById('camera-active').classList.add('hidden');
-    document.getElementById('camera-captured').classList.remove('hidden');
+    renderPhotoStrip();
   }, 'image/jpeg', 0.92);
-}
-
-function retakePhoto() {
-  report.photo = null;
-  document.getElementById('camera-captured').classList.add('hidden');
-  document.getElementById('camera-idle').classList.remove('hidden');
 }
 
 function closeCamera() {
   stopCameraStream();
   document.getElementById('camera-active').classList.add('hidden');
-  document.getElementById('camera-idle').classList.remove('hidden');
+  renderPhotoStrip();
 }
 
 function stopCameraStream() {
@@ -81,6 +97,58 @@ function stopCameraStream() {
   }
   const feed = document.getElementById('camera-feed');
   if (feed) feed.srcObject = null;
+}
+
+// ── Gallery picker ───────────────────────────────────────────────────────────
+
+function handleGalleryPick(event) {
+  const files = Array.from(event.target.files || []);
+  const room  = MAX_PHOTOS - report.photos.length;
+  if (files.length > room) {
+    showToast(`Only ${room} more photo(s) can be added (max ${MAX_PHOTOS}).`, 'error');
+  }
+  files.slice(0, room).forEach(f => addPhoto(f));
+  event.target.value = '';
+  renderPhotoStrip();
+}
+
+function addPhoto(file) {
+  report.photos.push({ file, url: URL.createObjectURL(file) });
+}
+
+function removePhoto(index) {
+  URL.revokeObjectURL(report.photos[index].url);
+  report.photos.splice(index, 1);
+  renderPhotoStrip();
+}
+
+function renderPhotoStrip() {
+  const strip   = document.getElementById('photo-strip');
+  const actions = document.getElementById('photo-strip-actions');
+  const idle    = document.getElementById('camera-idle');
+
+  if (!report.photos.length) {
+    strip.classList.add('hidden');
+    actions.classList.add('hidden');
+    idle.classList.remove('hidden');
+    return;
+  }
+
+  idle.classList.add('hidden');
+  strip.classList.remove('hidden');
+  actions.classList.remove('hidden');
+  strip.innerHTML = report.photos.map((p, i) => `
+    <div class="relative rounded-lg overflow-hidden border border-gray-300 aspect-square">
+      <img src="${p.url}" class="w-full h-full object-cover">
+      <button type="button" onclick="removePhoto(${i})"
+        class="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/60 text-white flex items-center justify-center text-xs hover:bg-black/80">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>`).join('');
+
+  const room = report.photos.length >= MAX_PHOTOS;
+  document.getElementById('add-more-camera-btn').classList.toggle('hidden', room);
+  document.getElementById('add-more-gallery-btn').classList.toggle('hidden', room);
 }
 
 // ── Map ──────────────────────────────────────────────────────────────────────
@@ -126,6 +194,7 @@ function selectType(type) {
   report.incident_type = type;
   document.querySelectorAll('.type-card').forEach(c => c.classList.remove('border-blue-500', 'bg-blue-50'));
   event.currentTarget.classList.add('border-blue-500', 'bg-blue-50');
+  if (type === 'Fire') { showFireBanner(); return; }
   setTimeout(() => goToStep(2), 300);
 }
 
@@ -180,17 +249,28 @@ function goToStep(step) {
 }
 
 function fillReview() {
-  const purokText = report.purok_id ? `Purok ${report.purok_id}` : 'Not selected';
+  const purokText = report.purok_id ? document.getElementById('purok-select').selectedOptions[0]?.textContent : 'Not selected';
   document.getElementById('review-type').textContent        = report.incident_type;
   document.getElementById('review-purok').textContent       = purokText;
   document.getElementById('review-description').textContent = report.description;
   document.getElementById('review-gps').textContent         = report.latitude
     ? `${parseFloat(report.latitude).toFixed(6)}, ${parseFloat(report.longitude).toFixed(6)}`
     : 'Not set';
-  document.getElementById('review-photo').textContent       = report.photo ? 'Photo captured ✓' : 'None';
+  document.getElementById('review-photo').textContent       = report.photos.length ? `${report.photos.length} photo(s) attached ✓` : 'None';
 }
 
 // ── Submit ────────────────────────────────────────────────────────────────────
+
+function buildFormData() {
+  const fd = new FormData();
+  fd.append('incident_type', report.incident_type);
+  fd.append('description',   report.description);
+  if (report.purok_id)  fd.append('purok_id',  report.purok_id);
+  if (report.latitude)  fd.append('latitude',  report.latitude);
+  if (report.longitude) fd.append('longitude', report.longitude);
+  report.photos.forEach(p => fd.append('photos', p.file));
+  return fd;
+}
 
 async function submitReport() {
   const btn   = document.getElementById('submit-btn');
@@ -199,26 +279,64 @@ async function submitReport() {
   btn.disabled  = true;
   btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i> Submitting…';
 
-  try {
-    const fd = new FormData();
-    fd.append('incident_type', report.incident_type);
-    fd.append('description',   report.description);
-    if (report.purok_id)  fd.append('purok_id',  report.purok_id);
-    if (report.latitude)  fd.append('latitude',  report.latitude);
-    if (report.longitude) fd.append('longitude', report.longitude);
-    if (report.photo)     fd.append('photo',     report.photo);
+  if (!navigator.onLine) {
+    await queueOffline();
+    return;
+  }
 
-    const res  = await api.postForm('/incidents', fd);
+  try {
+    const res  = await api.postForm('/incidents', buildFormData());
     const data = res ? await res.json() : null;
     if (!res || !res.ok) throw new Error(data?.message || 'Submission failed');
-
-    [1, 2, 3, 4].forEach(s => document.getElementById(`step-${s}`).classList.add('hidden'));
-    document.getElementById('step-success').classList.remove('hidden');
-    document.getElementById('success-ref').textContent = data.incident.reference_no;
+    showSuccess(data.incident.reference_no);
   } catch (err) {
+    // Network failure (not a validation error) — fall back to the offline queue
+    if (err instanceof TypeError) {
+      await queueOffline();
+      return;
+    }
     errEl.textContent = err.message;
     errEl.classList.remove('hidden');
     btn.disabled  = false;
     btn.innerHTML = '<i class="fa-solid fa-circle-exclamation mr-1"></i> Submit Report';
   }
+}
+
+async function queueOffline() {
+  const photos = await Promise.all(report.photos.map(p => fileToDataUrl(p.file)));
+  const entry = {
+    id: `local-${Date.now()}`,
+    incident_type: report.incident_type,
+    description:   report.description,
+    purok_id:      report.purok_id,
+    latitude:      report.latitude,
+    longitude:     report.longitude,
+    photos,
+    queued_at: new Date().toISOString(),
+  };
+  const queue = JSON.parse(localStorage.getItem('resqtrack_offline_queue') || '[]');
+  queue.push(entry);
+  localStorage.setItem('resqtrack_offline_queue', JSON.stringify(queue));
+
+  [1, 2, 3, 4].forEach(s => document.getElementById(`step-${s}`).classList.add('hidden'));
+  document.getElementById('step-success').classList.remove('hidden');
+  document.querySelector('#step-success h2').textContent = 'Saved Offline';
+  document.querySelector('#step-success p').textContent =
+    "You're offline. This report is saved on your device and will be submitted automatically as soon as you're back online.";
+  document.getElementById('success-ref').textContent = '(pending — no reference number yet)';
+}
+
+function fileToDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload  = () => resolve({ name: file.name, type: file.type, dataUrl: reader.result });
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+function showSuccess(refNo) {
+  [1, 2, 3, 4].forEach(s => document.getElementById(`step-${s}`).classList.add('hidden'));
+  document.getElementById('step-success').classList.remove('hidden');
+  document.getElementById('success-ref').textContent = refNo;
 }

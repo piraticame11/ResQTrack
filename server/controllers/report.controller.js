@@ -77,6 +77,21 @@ exports.getByType = async (req, res) => {
   }
 };
 
+exports.getTypeByMonth = async (req, res) => {
+  try {
+    const { year } = req.query;
+    const [rows] = await db.query(`
+      SELECT MONTH(reported_at) AS month, incident_type, COUNT(*) AS count
+      FROM incidents
+      WHERE YEAR(reported_at) = ?
+      GROUP BY MONTH(reported_at), incident_type
+      ORDER BY month`, [year]);
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+};
+
 exports.getResponderPerformance = async (req, res) => {
   try {
     const { period, year, month, week } = req.query;

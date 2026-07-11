@@ -48,7 +48,7 @@ function playAlertSound() {
 function showAdminNotification(inc) {
   const typeColors = {
     Fire:    '#ef4444',
-    Medical: '#ef4444',
+    Rescue:  '#ef4444',
     Crime:   '#f97316',
     Noise:   '#eab308',
     Garbage: '#22c55e',
