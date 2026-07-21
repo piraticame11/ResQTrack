@@ -1,36 +1,53 @@
-// Pluggable outbound SMS notifier. Ships as a safe no-op until a real
-// gateway is configured — this app has no SMS provider account, so this
-// wires up the integration point without pretending to send real texts.
+// Outbound SMS via PhilSMS (https://philsms.com). Safe no-op if
+// PHILSMS_API_TOKEN isn't set — callers never need to check whether SMS is
+// configured before calling sendSMS().
 //
-// To activate: sign up with a PH SMS gateway (e.g. Semaphore, Movider) and
-// set SMS_API_KEY + SMS_SENDER_ID in .env. This function's shape (to, message)
-// -> {sent, reason} is provider-agnostic; swap the fetch() call below for
-// your provider's API.
+// Docs: https://app.philsms.com/developers/documentation
+
+// Resident phone numbers are stored as 09XXXXXXXXX (see the registration
+// validator in auth.controller.js); PhilSMS expects 63XXXXXXXXXX.
+function toPhilSmsRecipient(phone) {
+  const digits = phone.replace(/\D/g, '');
+  if (digits.startsWith('63')) return digits;
+  if (digits.startsWith('0'))  return `63${digits.slice(1)}`;
+  return `63${digits}`;
+}
 
 async function sendSMS(to, message) {
-  const apiKey = process.env.SMS_API_KEY;
-  if (!apiKey) {
+  const token = process.env.PHILSMS_API_TOKEN;
+  if (!token) {
     console.log(`[SMS] Not configured — would have sent to ${to}: "${message}"`);
     return { sent: false, reason: 'not_configured' };
   }
 
+  const baseUrl   = (process.env.PHILSMS_BASE_URL || 'https://app.philsms.com/api/v3').replace(/\/+$/, '');
+  const senderId  = process.env.PHILSMS_SENDER_ID || 'PhilSMS';
+  const recipient = toPhilSmsRecipient(to);
+
   try {
-    // Example shape for Semaphore-style gateways — adjust to your provider.
-    const res = await fetch('https://api.semaphore.co/api/v4/messages', {
+    const res = await fetch(`${baseUrl}/sms/send`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
       body: JSON.stringify({
-        apikey: apiKey,
-        number: to,
+        recipient,
+        sender_id: senderId,
+        type: 'plain',
         message,
-        sendername: process.env.SMS_SENDER_ID || 'ResQTrack',
       }),
     });
-    if (!res.ok) {
-      console.error(`[SMS] Provider error ${res.status} sending to ${to}`);
-      return { sent: false, reason: 'provider_error' };
+
+    const data = await res.json().catch(() => null);
+    if (!res.ok || data?.status === 'error') {
+      console.error(`[SMS] PhilSMS error sending to ${to}:`, data?.message || res.status);
+      return { sent: false, reason: 'provider_error', detail: data?.message };
     }
-    return { sent: true };
+
+    console.log(`[SMS] Sent to ${to}`);
+    return { sent: true, data: data?.data };
   } catch (err) {
     console.error('[SMS] Send failed:', err.message);
     return { sent: false, reason: 'network_error' };
