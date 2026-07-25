@@ -20,10 +20,10 @@
   .badge-mediation  { @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700; }
   .badge-endorsed   { @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700; }
   .badge-voided     { @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700; }
-  .triage-red    { @apply inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-red-500 text-white; }
-  .triage-orange { @apply inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-orange-500 text-white; }
-  .triage-yellow { @apply inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-yellow-400 text-gray-800; }
-  .triage-green  { @apply inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-green-500 text-white; }
+  .triage-red    { @apply inline-block w-3.5 h-3.5 rounded-full bg-red-500; }
+  .triage-orange { @apply inline-block w-3.5 h-3.5 rounded-full bg-orange-500; }
+  .triage-yellow { @apply inline-block w-3.5 h-3.5 rounded-full bg-yellow-400; }
+  .triage-green  { @apply inline-block w-3.5 h-3.5 rounded-full bg-green-500; }
   .nav-item         { @apply flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 hover:bg-slate-700 hover:text-white transition-colors text-sm font-medium; }
   .nav-item.active  { @apply bg-blue-600 text-white; }
   .modal-overlay    { @apply fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999] p-4; }

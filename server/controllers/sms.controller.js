@@ -1,4 +1,5 @@
 const db = require('../config/db');
+const { sendSMS } = require('../utils/sms');
 
 function generateRefNo() {
   const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
@@ -58,6 +59,16 @@ exports.inbound = async (req, res) => {
 
     const io = req.app.get('io');
     if (io) io.emit('incident:new', inc[0]);
+
+    // This report came in over plain SMS, i.e. the reporter has cell signal
+    // but no data connection — it's live in the DB now, but no one is
+    // watching a dashboard for it yet. Notify barangay admins and active
+    // responders directly by SMS so it doesn't sit unnoticed.
+    const [notifyTargets] = await db.query(
+      "SELECT phone FROM users WHERE phone IS NOT NULL AND is_active = 1 AND (role = 'admin' OR role = 'responder')"
+    );
+    const alertMsg = `ResQTrack: New report ${reference_no} came in via SMS (offline reporter) and needs review — not yet verified in the system.`;
+    notifyTargets.forEach(u => { if (u.phone) sendSMS(u.phone, alertMsg); });
 
     res.status(201).json({ message: 'Incident created from SMS', reference_no });
   } catch (err) {

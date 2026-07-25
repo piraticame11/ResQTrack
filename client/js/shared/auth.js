@@ -66,7 +66,7 @@ function statusBadge(status) {
 
 function triageBadge(color) {
   const map = { Red: 'triage-red', Orange: 'triage-orange', Yellow: 'triage-yellow', Green: 'triage-green' };
-  return `<span class="${map[color] || 'triage-yellow'}">${color}</span>`;
+  return `<span class="${map[color] || 'triage-yellow'}" title="${color}"></span>`;
 }
 
 // Which status buttons make sense to offer next, given the current one.

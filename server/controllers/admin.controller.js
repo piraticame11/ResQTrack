@@ -1,6 +1,6 @@
 const bcrypt = require('bcrypt');
 const db     = require('../config/db');
-const { sendVerificationEmail } = require('../utils/mailer');
+const { sendVerificationEmail, sendRejectionEmail } = require('../utils/mailer');
 const { logAudit } = require('../utils/audit');
 
 async function isLastActiveAdmin(userId) {
@@ -180,7 +180,7 @@ exports.rejectUser = async (req, res) => {
     if (!reason || !reason.trim()) {
       return res.status(400).json({ message: 'A reason is required so the resident knows what to correct.' });
     }
-    const [[user]] = await db.query('SELECT id FROM users WHERE id = ?', [req.params.id]);
+    const [[user]] = await db.query('SELECT id, email, full_name FROM users WHERE id = ?', [req.params.id]);
     if (!user) return res.status(404).json({ message: 'User not found' });
 
     await db.query(
@@ -192,6 +192,12 @@ exports.rejectUser = async (req, res) => {
       actor_id: req.user.id, actor_name: req.user.name, action: 'Rejected resident registration',
       details: `user #${req.params.id}: ${reason.trim()}`, ip_address: req.ip,
     });
+
+    try {
+      await sendRejectionEmail(user.email, user.full_name, reason.trim());
+    } catch (mailErr) {
+      console.error('Rejection email failed:', mailErr.message);
+    }
 
     res.json({ message: 'Registration rejected' });
   } catch (err) {

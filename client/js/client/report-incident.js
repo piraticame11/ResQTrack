@@ -33,6 +33,19 @@ async function showFireBanner() {
 
 function dismissFireBanner() {
   document.getElementById('fire-banner').classList.add('hidden');
+  goToStep(2);
+}
+
+// ── Others sub-choice ────────────────────────────────────────────────────────
+
+function showOthersModal() {
+  document.getElementById('others-modal').classList.remove('hidden');
+}
+
+function chooseOthersType(actualType) {
+  report.incident_type = actualType;
+  document.getElementById('others-modal').classList.add('hidden');
+  goToStep(2);
 }
 
 // ── Camera ──────────────────────────────────────────────────────────────────
@@ -206,6 +219,7 @@ function selectType(type) {
   document.querySelectorAll('.type-card').forEach(c => c.classList.remove('border-blue-500', 'bg-blue-50'));
   event.currentTarget.classList.add('border-blue-500', 'bg-blue-50');
   if (type === 'Fire') { showFireBanner(); return; }
+  if (type === 'Others') { showOthersModal(); return; }
   setTimeout(() => goToStep(2), 300);
 }
 

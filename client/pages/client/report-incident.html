@@ -72,13 +72,9 @@
           <div class="text-3xl mb-2">📢</div>
           <span class="font-semibold text-gray-700 text-sm group-hover:text-yellow-700">Noise</span>
         </button>
-        <button onclick="selectType('Garbage')" class="type-card p-4 rounded-xl border-2 border-gray-200 hover:border-green-400 hover:bg-green-50 transition-all text-center group">
-          <div class="text-3xl mb-2">🗑️</div>
-          <span class="font-semibold text-gray-700 text-sm group-hover:text-green-700">Garbage</span>
-        </button>
-        <button onclick="selectType('Other')"   class="type-card p-4 rounded-xl border-2 border-gray-200 hover:border-gray-400 hover:bg-gray-50 transition-all text-center group">
+        <button onclick="selectType('Others')"  class="type-card p-4 rounded-xl border-2 border-gray-200 hover:border-gray-400 hover:bg-gray-50 transition-all text-center group">
           <div class="text-3xl mb-2">❗</div>
-          <span class="font-semibold text-gray-700 text-sm">Other</span>
+          <span class="font-semibold text-gray-700 text-sm">Others</span>
         </button>
       </div>
     </div>
@@ -222,6 +218,21 @@
           <i class="fa-solid fa-phone-volume"></i> Call BFP Now
         </a>
         <button onclick="dismissFireBanner()" class="btn-secondary w-full">Continue to Report</button>
+      </div>
+    </div>
+
+    <!-- Others sub-choice -->
+    <div id="others-modal" class="hidden fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+      <div class="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 text-center space-y-4">
+        <div class="text-5xl">❗</div>
+        <h3 class="text-lg font-bold text-gray-800">What kind of issue is this?</h3>
+        <p class="text-sm text-gray-600">Choose the option that best describes your report.</p>
+        <button onclick="chooseOthersType('Garbage')" class="btn-secondary w-full flex items-center justify-center gap-2 py-3">
+          🗑️ Garbage / Sanitation
+        </button>
+        <button onclick="chooseOthersType('Other')" class="btn-secondary w-full flex items-center justify-center gap-2 py-3">
+          ❗ Other concern
+        </button>
       </div>
     </div>
 
