@@ -2,6 +2,7 @@ const bcrypt = require('bcrypt');
 const jwt    = require('jsonwebtoken');
 const db     = require('../config/db');
 const { logAudit } = require('../utils/audit');
+const { geocodeAddress } = require('../utils/geocode');
 
 function generateTokens(user) {
   const payload = { id: user.id, role: user.role, name: user.full_name };
@@ -14,7 +15,7 @@ exports.register = async (req, res) => {
   try {
     const {
       full_name, email, password, phone, purok_id, birthdate,
-      address_line, residency_type, landlord_name, landlord_contact,
+      address_line, residency_type, landlord_name, landlord_contact, landlord_address,
     } = req.body;
     if (!full_name || !email || !password) {
       return res.status(400).json({ message: 'full_name, email and password are required' });
@@ -42,27 +43,52 @@ exports.register = async (req, res) => {
     }
 
     const residency = residency_type === 'Tenant' ? 'Tenant' : 'Owner';
-    if (residency === 'Tenant' && (!landlord_name || !landlord_name.trim() || !landlord_contact || !landlord_contact.trim())) {
-      return res.status(400).json({ message: 'Tenants/boarders must provide their landlord\'s name and contact number as proof of residency.' });
+    if (residency === 'Tenant' && (
+      !landlord_name || !landlord_name.trim() ||
+      !landlord_contact || !landlord_contact.trim() ||
+      !landlord_address || !landlord_address.trim()
+    )) {
+      return res.status(400).json({ message: 'Tenants/boarders must provide their landlord\'s name, contact number, and address as proof of residency.' });
     }
 
     const [existing] = await db.query('SELECT id FROM users WHERE email = ?', [email]);
     if (existing.length) return res.status(409).json({ message: 'Email already registered' });
 
-    const id_image = req.file ? req.file.filename : null;
+    const id_image = req.files?.id_image?.[0]?.filename || null;
+    const proof_of_residency_image = req.files?.proof_of_residency?.[0]?.filename || null;
+    if (!id_image) {
+      return res.status(400).json({ message: 'Please capture a photo of your valid ID.' });
+    }
+    if (!proof_of_residency_image) {
+      return res.status(400).json({ message: 'Please capture a photo of a proof-of-residency document (barangay certificate, utility bill, or lease contract).' });
+    }
+
+    // Address matching: verify the typed address resolves to a real place
+    // within the selected Purok's barangay. Purely advisory for the admin —
+    // never blocks registration on its own, since geocoding a hand-typed
+    // Philippine address is imprecise.
+    let purokBarangay = null;
+    if (purok_id) {
+      const [[purok]] = await db.query('SELECT barangay FROM puroks WHERE id = ?', [purok_id]);
+      purokBarangay = purok?.barangay || null;
+    }
+    const geo = await geocodeAddress(address_line.trim(), purokBarangay);
+
     const hash = await bcrypt.hash(password, 10);
     await db.query(
       `INSERT INTO users
          (full_name, email, password_hash, phone, birthdate, role, purok_id,
-          address_line, residency_type, landlord_name, landlord_contact,
-          id_image, is_verified, verification_status, is_active)
-       VALUES (?, ?, ?, ?, ?, "resident", ?, ?, ?, ?, ?, ?, 0, 'Pending', 1)`,
+          address_line, address_lat, address_lng, address_match_status,
+          residency_type, landlord_name, landlord_contact, landlord_address,
+          id_image, proof_of_residency_image, is_verified, verification_status, is_active)
+       VALUES (?, ?, ?, ?, ?, "resident", ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 'Pending', 1)`,
       [
         full_name, email, hash, phone || null, birthdate || null, purok_id || null,
-        address_line.trim(), residency,
+        address_line.trim(), geo.lat, geo.lng, geo.status, residency,
         residency === 'Tenant' ? landlord_name.trim() : null,
         residency === 'Tenant' ? landlord_contact.trim() : null,
-        id_image,
+        residency === 'Tenant' ? landlord_address.trim() : null,
+        id_image, proof_of_residency_image,
       ]
     );
     res.status(201).json({ message: 'Registration submitted successfully. Your account is under review and will be activated once verified by the Barangay Administrator.' });

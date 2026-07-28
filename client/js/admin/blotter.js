@@ -9,7 +9,7 @@ let currentEntryStatus = null;
 let pendingStatus = null;
 
 (async function () {
-  const user = requireRole('admin');
+  const user = requireRole('admin', 'super_admin');
   if (!user) return;
   setUserUI(user);
 

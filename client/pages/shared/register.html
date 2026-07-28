@@ -134,6 +134,10 @@
                 <label class="block text-xs font-medium text-gray-600 mb-1">Landlord's Contact No. <span class="text-blue-500">*</span></label>
                 <input type="tel" id="landlord_contact" inputmode="numeric" maxlength="11" class="input-field" placeholder="09XXXXXXXXX">
               </div>
+              <div class="col-span-2">
+                <label class="block text-xs font-medium text-gray-600 mb-1">Landlord's Address <span class="text-blue-500">*</span></label>
+                <input type="text" id="landlord_address" class="input-field" placeholder="House No., Street, Purok/Barangay">
+              </div>
             </div>
           </fieldset>
 
@@ -212,6 +216,52 @@
             <canvas id="cam-canvas" class="hidden"></canvas>
           </fieldset>
 
+          <!-- ── Proof of Residency ── -->
+          <fieldset>
+            <legend class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
+              <i class="fa-solid fa-file-shield text-blue-400"></i> Proof of Residency <span class="text-blue-500">*</span>
+            </legend>
+            <p class="text-xs text-gray-400 -mt-1 mb-3">A document showing you live at the address above — barangay certificate, utility bill, or lease contract.</p>
+
+            <!-- Idle state: open camera button -->
+            <div id="cam-idle-por" class="flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-xl p-5">
+              <i class="fa-solid fa-file-image text-3xl text-gray-300 mb-2"></i>
+              <span class="text-sm font-medium text-gray-500 mb-3">Take a photo of the document</span>
+              <button type="button" id="btn-open-cam-por"
+                      class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2 rounded-lg flex items-center gap-2 transition-colors">
+                <i class="fa-solid fa-camera"></i> Open Camera
+              </button>
+            </div>
+
+            <!-- Live camera viewfinder -->
+            <div id="cam-live-por" class="hidden flex-col items-center gap-3">
+              <video id="cam-video-por" autoplay playsinline
+                     class="w-full rounded-xl border border-gray-200 bg-black max-h-56 object-cover"></video>
+              <div class="flex gap-2 w-full">
+                <button type="button" id="btn-capture-por"
+                        class="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold py-2 rounded-lg flex items-center justify-center gap-2 transition-colors">
+                  <i class="fa-solid fa-circle-dot"></i> Capture
+                </button>
+                <button type="button" id="btn-cancel-cam-por"
+                        class="px-4 bg-gray-100 hover:bg-gray-200 text-gray-600 text-sm font-semibold py-2 rounded-lg transition-colors">
+                  Cancel
+                </button>
+              </div>
+            </div>
+
+            <!-- Captured preview -->
+            <div id="cam-captured-por" class="hidden flex-col items-center gap-3">
+              <img id="id-preview-por" class="w-full rounded-xl max-h-56 object-cover border border-gray-200" alt="Proof of Residency Preview">
+              <button type="button" id="btn-retake-por"
+                      class="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-semibold py-2 rounded-lg flex items-center justify-center gap-2 transition-colors">
+                <i class="fa-solid fa-rotate-left"></i> Retake
+              </button>
+            </div>
+
+            <!-- Hidden canvas used to grab the frame -->
+            <canvas id="cam-canvas-por" class="hidden"></canvas>
+          </fieldset>
+
           <button type="submit" id="reg-btn"
                   class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl flex items-center justify-center gap-2 transition-colors">
             <i class="fa-solid fa-user-plus"></i> Create Account
@@ -250,6 +300,7 @@
       landlordFields.classList.toggle('hidden', type !== 'Tenant');
       document.getElementById('landlord_name').required    = type === 'Tenant';
       document.getElementById('landlord_contact').required = type === 'Tenant';
+      document.getElementById('landlord_address').required = type === 'Tenant';
     }
     selectResidency('Owner');
 
@@ -303,55 +354,63 @@
     });
 
     // ── Camera capture ──────────────────────────────────────────────────────
-    let cameraStream = null;
-    let capturedBlob = null;
+    // Shared by the Valid ID and Proof of Residency fieldsets — each gets its
+    // own independent stream/blob via a distinct set of element ids.
+    function setupCameraCapture(ids) {
+      let stream = null;
+      let blob   = null;
 
-    function stopCamera() {
-      if (cameraStream) { cameraStream.getTracks().forEach(t => t.stop()); cameraStream = null; }
+      function stopCamera() {
+        if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+      }
+      function showIdle()     { document.getElementById(ids.idle).classList.remove('hidden');  document.getElementById(ids.live).classList.add('hidden');     document.getElementById(ids.captured).classList.add('hidden'); }
+      function showLive()     { document.getElementById(ids.idle).classList.add('hidden');     document.getElementById(ids.live).classList.remove('hidden');   document.getElementById(ids.captured).classList.add('hidden'); }
+      function showCaptured() { document.getElementById(ids.idle).classList.add('hidden');     document.getElementById(ids.live).classList.add('hidden');     document.getElementById(ids.captured).classList.remove('hidden'); }
+
+      async function openCamera() {
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
+          document.getElementById(ids.video).srcObject = stream;
+          showLive();
+        } catch {
+          alert('Could not access camera. Please allow camera permission and try again.');
+        }
+      }
+
+      document.getElementById(ids.btnOpen).addEventListener('click', openCamera);
+      document.getElementById(ids.btnCancel).addEventListener('click', () => { stopCamera(); showIdle(); });
+      document.getElementById(ids.btnCapture).addEventListener('click', () => {
+        const video  = document.getElementById(ids.video);
+        const canvas = document.getElementById(ids.canvas);
+        canvas.width  = video.videoWidth;
+        canvas.height = video.videoHeight;
+        canvas.getContext('2d').drawImage(video, 0, 0);
+        canvas.toBlob(b => {
+          blob = b;
+          document.getElementById(ids.preview).src = canvas.toDataURL('image/jpeg');
+          showCaptured();
+          stopCamera();
+        }, 'image/jpeg', 0.92);
+      });
+      document.getElementById(ids.btnRetake).addEventListener('click', async () => {
+        blob = null;
+        await openCamera();
+      });
+
+      return {
+        getBlob: () => blob,
+        reset:   () => { blob = null; stopCamera(); showIdle(); },
+        stop:    stopCamera,
+      };
     }
 
-    function showIdle()     { document.getElementById('cam-idle').classList.remove('hidden');  document.getElementById('cam-live').classList.add('hidden');     document.getElementById('cam-captured').classList.add('hidden'); }
-    function showLive()     { document.getElementById('cam-idle').classList.add('hidden');     document.getElementById('cam-live').classList.remove('hidden');   document.getElementById('cam-captured').classList.add('hidden'); }
-    function showCaptured() { document.getElementById('cam-idle').classList.add('hidden');     document.getElementById('cam-live').classList.add('hidden');     document.getElementById('cam-captured').classList.remove('hidden'); }
-
-    document.getElementById('btn-open-cam').addEventListener('click', async () => {
-      try {
-        cameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
-        document.getElementById('cam-video').srcObject = cameraStream;
-        showLive();
-      } catch {
-        alert('Could not access camera. Please allow camera permission and try again.');
-      }
+    const idCapture = setupCameraCapture({
+      idle: 'cam-idle', live: 'cam-live', captured: 'cam-captured', video: 'cam-video', canvas: 'cam-canvas',
+      preview: 'id-preview', btnOpen: 'btn-open-cam', btnCancel: 'btn-cancel-cam', btnCapture: 'btn-capture', btnRetake: 'btn-retake',
     });
-
-    document.getElementById('btn-cancel-cam').addEventListener('click', () => {
-      stopCamera();
-      showIdle();
-    });
-
-    document.getElementById('btn-capture').addEventListener('click', () => {
-      const video  = document.getElementById('cam-video');
-      const canvas = document.getElementById('cam-canvas');
-      canvas.width  = video.videoWidth;
-      canvas.height = video.videoHeight;
-      canvas.getContext('2d').drawImage(video, 0, 0);
-      canvas.toBlob(blob => {
-        capturedBlob = blob;
-        document.getElementById('id-preview').src = canvas.toDataURL('image/jpeg');
-        showCaptured();
-        stopCamera();
-      }, 'image/jpeg', 0.92);
-    });
-
-    document.getElementById('btn-retake').addEventListener('click', async () => {
-      capturedBlob = null;
-      try {
-        cameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
-        document.getElementById('cam-video').srcObject = cameraStream;
-        showLive();
-      } catch {
-        showIdle();
-      }
+    const porCapture = setupCameraCapture({
+      idle: 'cam-idle-por', live: 'cam-live-por', captured: 'cam-captured-por', video: 'cam-video-por', canvas: 'cam-canvas-por',
+      preview: 'id-preview-por', btnOpen: 'btn-open-cam-por', btnCancel: 'btn-cancel-cam-por', btnCapture: 'btn-capture-por', btnRetake: 'btn-retake-por',
     });
 
     // Form submit
@@ -384,11 +443,15 @@
       const residency = document.getElementById('residency_type').value;
       const landlordName    = document.getElementById('landlord_name').value.trim();
       const landlordContact = document.getElementById('landlord_contact').value.trim();
-      if (residency === 'Tenant' && (!landlordName || !landlordContact))
-        return showErr("As a tenant/boarder, please provide your landlord's name and contact number.");
+      const landlordAddress = document.getElementById('landlord_address').value.trim();
+      if (residency === 'Tenant' && (!landlordName || !landlordContact || !landlordAddress))
+        return showErr("As a tenant/boarder, please provide your landlord's name, contact number, and address.");
 
-      if (!capturedBlob)
+      if (!idCapture.getBlob())
         return showErr('Please capture a photo of your valid ID.');
+
+      if (!porCapture.getBlob())
+        return showErr('Please capture a photo of a proof-of-residency document (barangay certificate, utility bill, or lease contract).');
 
       // Build full_name: LASTNAME, Firstname M.I.
       const lastName  = document.getElementById('last_name').value.trim().toUpperCase();
@@ -412,8 +475,10 @@
         fd.append('residency_type',     residency);
         fd.append('landlord_name',      residency === 'Tenant' ? landlordName    : '');
         fd.append('landlord_contact',   residency === 'Tenant' ? landlordContact : '');
+        fd.append('landlord_address',   residency === 'Tenant' ? landlordAddress : '');
         fd.append('password',  pw);
-        fd.append('id_image',  capturedBlob, 'id_image.jpg');
+        fd.append('id_image',  idCapture.getBlob(),  'id_image.jpg');
+        fd.append('proof_of_residency', porCapture.getBlob(), 'proof_of_residency.jpg');
 
         const res  = await fetch('/api/auth/register', { method: 'POST', body: fd });
         const data = await res.json();
@@ -424,9 +489,8 @@
         succEl.classList.remove('hidden');
 
         document.getElementById('reg-form').reset();
-        capturedBlob = null;
-        stopCamera();
-        showIdle();
+        idCapture.reset();
+        porCapture.reset();
         selectResidency('Owner');
         ['s1','s2','s3','s4'].forEach(id => document.getElementById(id).className = 'h-1 flex-1 rounded bg-gray-200');
         document.getElementById('pw-strength-text').textContent = '';

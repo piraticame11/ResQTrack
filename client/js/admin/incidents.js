@@ -2,7 +2,7 @@ let currentIncidentId      = null;
 let currentIncidentPurokId = null;
 
 (async function () {
-  const user = requireRole('admin', 'responder');
+  const user = requireRole('admin', 'super_admin', 'responder');
   if (!user) return;
   setUserUI(user);
 
@@ -87,7 +87,7 @@ async function openIncidentModal(id) {
     : `<p class="text-gray-400 text-sm italic">No photo uploaded</p>`;
 
   const respondersDisplay = inc.all_responder_names || inc.responder_name || 'Not assigned';
-  const isAdmin = getUser()?.role === 'admin';
+  const isAdmin = ['admin', 'super_admin'].includes(getUser()?.role);
 
   const fakeBanner = inc.is_fake
     ? `<div class="col-span-2 bg-red-50 border border-red-200 text-red-700 rounded-lg px-3 py-2 text-xs">

@@ -5,7 +5,7 @@ const {
   getUsers, getUserById, createUser, updateUser, deleteUser, verifyUser, rejectUser,
 } = require('../controllers/admin.controller');
 
-router.use(auth, requireRole('admin'));
+router.use(auth, requireRole('admin', 'super_admin'));
 
 router.get('/users',             getUsers);
 router.get('/users/:id',         getUserById);

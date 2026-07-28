@@ -6,7 +6,7 @@ const {
   getByType, getTypeByMonth, getResponderPerformance,
 } = require('../controllers/report.controller');
 
-router.use(auth, requireRole('admin'));
+router.use(auth, requireRole('admin', 'super_admin'));
 
 router.get('/monthly',              getMonthlyReport);
 router.get('/annual',               getAnnualReport);

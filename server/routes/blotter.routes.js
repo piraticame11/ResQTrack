@@ -8,7 +8,7 @@ const {
 // Blotter entries are formal barangay complaint records filed by staff —
 // admin-only, and intentionally no delete route (see updateStatus's
 // "Voided" status for retracting an entry without erasing its history).
-router.use(auth, requireRole('admin'));
+router.use(auth, requireRole('admin', 'super_admin'));
 
 router.get('/',             getEntries);
 router.get('/:id',          getEntryById);

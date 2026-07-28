@@ -1,11 +1,20 @@
 let currentTab = 'all';
 let allUsers   = [];
 let viewingUserId = null;
+let isSuperAdmin  = false;
 
 (async function () {
-  const user = requireRole('admin');
+  const user = requireRole('admin', 'super_admin');
   if (!user) return;
   setUserUI(user);
+  isSuperAdmin = user.role === 'super_admin';
+
+  if (isSuperAdmin) {
+    document.getElementById('u-role-admin').classList.remove('hidden');
+    document.getElementById('u-role-super-admin').classList.remove('hidden');
+  } else {
+    document.getElementById('u-role-note').classList.remove('hidden');
+  }
 
   await populatePurokSelect(document.getElementById('u-purok'), { placeholder: 'None' });
 
@@ -49,8 +58,9 @@ function renderUsers() {
   }
 
   const roleBadge = r => {
-    const map = { admin: 'bg-purple-100 text-purple-700', responder: 'bg-blue-100 text-blue-700', resident: 'bg-gray-100 text-gray-700' };
-    return `<span class="inline-flex px-2 py-0.5 rounded text-xs font-medium ${map[r] || ''}">${r}</span>`;
+    const map   = { super_admin: 'bg-indigo-100 text-indigo-700', admin: 'bg-purple-100 text-purple-700', responder: 'bg-blue-100 text-blue-700', resident: 'bg-gray-100 text-gray-700' };
+    const label = { super_admin: 'Super Admin' }[r] || r;
+    return `<span class="inline-flex px-2 py-0.5 rounded text-xs font-medium ${map[r] || ''}">${label}</span>`;
   };
 
   tbody.innerHTML = list.map(u => `
@@ -75,10 +85,12 @@ function renderUsers() {
         </span>
       </td>
       <td class="px-4 py-3 flex gap-2">
-        <button onclick="openEditModal(${u.id})" class="text-blue-600 hover:text-blue-800 text-xs"><i class="fa-solid fa-pen"></i> Edit</button>
-        <button onclick="toggleActive(${u.id}, ${u.is_active})" class="text-xs ${u.is_active ? 'text-red-500 hover:text-red-700' : 'text-green-500 hover:text-green-700'}">
-          ${u.is_active ? '<i class="fa-solid fa-ban"></i> Deactivate' : '<i class="fa-solid fa-check"></i> Activate'}
-        </button>
+        ${['admin', 'super_admin'].includes(u.role) && !isSuperAdmin
+          ? `<span class="text-xs text-gray-300" title="Only a Super Admin can manage admin-level accounts"><i class="fa-solid fa-lock"></i> Locked</span>`
+          : `<button onclick="openEditModal(${u.id})" class="text-blue-600 hover:text-blue-800 text-xs"><i class="fa-solid fa-pen"></i> Edit</button>
+             <button onclick="toggleActive(${u.id}, ${u.is_active})" class="text-xs ${u.is_active ? 'text-red-500 hover:text-red-700' : 'text-green-500 hover:text-green-700'}">
+               ${u.is_active ? '<i class="fa-solid fa-ban"></i> Deactivate' : '<i class="fa-solid fa-check"></i> Activate'}
+             </button>`}
       </td>
     </tr>`).join('');
 }
@@ -126,6 +138,18 @@ async function openViewModal(id) {
     none.classList.remove('hidden');
   }
 
+  // Proof of residency image
+  const porImg  = document.getElementById('view-por-img');
+  const porNone = document.getElementById('view-por-none');
+  if (u.proof_of_residency_image) {
+    porImg.src = `/uploads/${u.proof_of_residency_image}`;
+    porImg.classList.remove('hidden');
+    porNone.classList.add('hidden');
+  } else {
+    porImg.classList.add('hidden');
+    porNone.classList.remove('hidden');
+  }
+
   // Details
   document.getElementById('view-name').textContent      = u.full_name;
   document.getElementById('view-email').textContent     = u.email;
@@ -133,10 +157,19 @@ async function openViewModal(id) {
   document.getElementById('view-purok').textContent     = u.purok_name || '—';
   document.getElementById('view-address').textContent   = u.address_line || '—';
 
+  // Address match status (from Google Geocoding — advisory only, never a hard gate)
+  const matchMap = {
+    Matched:   '<span class="text-green-600"><i class="fa-solid fa-check-circle mr-0.5"></i>Address matched</span>',
+    Unmatched: '<span class="text-amber-600"><i class="fa-solid fa-triangle-exclamation mr-0.5"></i>Could not confirm — review manually</span>',
+    Unchecked: '<span class="text-gray-400"><i class="fa-solid fa-circle-question mr-0.5"></i>Not checked</span>',
+  };
+  document.getElementById('view-address-match').innerHTML =
+    `<span class="text-xs font-normal">${matchMap[u.address_match_status] || matchMap.Unchecked}</span>`;
+
   // Residency / landlord info
   const resEl = document.getElementById('view-residency');
   if (u.residency_type === 'Tenant') {
-    resEl.innerHTML = `Tenant / Boarder — Landlord: <span class="font-medium">${u.landlord_name || '—'}</span> (${u.landlord_contact || '—'})`;
+    resEl.innerHTML = `Tenant / Boarder — Landlord: <span class="font-medium">${u.landlord_name || '—'}</span> (${u.landlord_contact || '—'}), ${u.landlord_address || 'no address on file'}`;
   } else {
     resEl.textContent = 'Homeowner';
   }

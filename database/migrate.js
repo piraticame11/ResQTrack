@@ -22,6 +22,11 @@ const requiredColumns = [
   { table: 'incidents', column: 'flagged_by',  definition: 'INT DEFAULT NULL',              after: 'fake_reason' },
   { table: 'incidents', column: 'flagged_at',  definition: 'TIMESTAMP NULL DEFAULT NULL',   after: 'flagged_by' },
   { table: 'announcements', column: 'scheduled_at', definition: 'TIMESTAMP NULL DEFAULT NULL', after: 'is_published' },
+  { table: 'users', column: 'address_lat',          definition: 'DECIMAL(10,8) DEFAULT NULL',                                          after: 'address_line' },
+  { table: 'users', column: 'address_lng',          definition: 'DECIMAL(11,8) DEFAULT NULL',                                          after: 'address_lat' },
+  { table: 'users', column: 'address_match_status', definition: "ENUM('Matched','Unmatched','Unchecked') NOT NULL DEFAULT 'Unchecked'", after: 'address_lng' },
+  { table: 'users', column: 'landlord_address',     definition: 'VARCHAR(255) DEFAULT NULL',                                           after: 'landlord_contact' },
+  { table: 'users', column: 'proof_of_residency_image', definition: 'VARCHAR(255) DEFAULT NULL',                                      after: 'id_image' },
 ];
 
 async function migrate() {
@@ -99,6 +104,40 @@ async function migrate() {
       console.log('  ✅ Migrated incidents.incident_type: Medical -> Rescue');
     } else {
       console.log('  ⏭  incidents.incident_type already migrated');
+    }
+
+    console.log('Checking users.role enum…');
+    const [roleColRows] = await conn.query(
+      `SELECT COLUMN_TYPE FROM information_schema.COLUMNS
+       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'role'`
+    );
+    const roleCol = roleColRows[0];
+    if (roleCol && !roleCol.COLUMN_TYPE.includes("'super_admin'")) {
+      await conn.query(`ALTER TABLE users MODIFY COLUMN role
+        ENUM('super_admin','admin','responder','resident') NOT NULL DEFAULT 'resident'`);
+      console.log('  ✅ Widened users.role to include super_admin');
+    } else {
+      console.log('  ⏭  users.role already includes super_admin');
+    }
+
+    // Account management needs an owner — if this install has no super_admin
+    // yet, promote its earliest-created active admin instead of leaving the
+    // system with nobody able to manage admin-level accounts.
+    const [[{ count: superAdminCount }]] = await conn.query(
+      "SELECT COUNT(*) AS count FROM users WHERE role = 'super_admin' AND is_active = 1"
+    );
+    if (superAdminCount === 0) {
+      const [[earliestAdmin]] = await conn.query(
+        "SELECT id, full_name FROM users WHERE role = 'admin' AND is_active = 1 ORDER BY created_at ASC LIMIT 1"
+      );
+      if (earliestAdmin) {
+        await conn.query("UPDATE users SET role = 'super_admin' WHERE id = ?", [earliestAdmin.id]);
+        console.log(`  ✅ Promoted ${earliestAdmin.full_name} (#${earliestAdmin.id}) to super_admin`);
+      } else {
+        console.log('  ⚠️  No admin account found to promote — create one, then re-run migrate to get a super_admin.');
+      }
+    } else {
+      console.log('  ⏭  A super_admin already exists');
     }
 
     console.log('\n🎉 Migration complete. You can now run: npm run dev');

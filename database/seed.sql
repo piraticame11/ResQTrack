@@ -12,7 +12,7 @@ INSERT IGNORE INTO puroks (id, name) VALUES
 
 -- Admin accounts
 INSERT IGNORE INTO users (full_name, email, password_hash, phone, role, purok_id, is_verified, is_active) VALUES
-  ('Barangay Admin',    'admin@resqtrack.ph',       '$2b$10$erNRnBDFQ1iCraiqZNB7OuB0xSbQ2FbaRc8U5mLtKnS3/4T7njJ6.', '09100000001', 'admin',     NULL, 1, 1),
+  ('Barangay Admin',    'admin@resqtrack.ph',       '$2b$10$erNRnBDFQ1iCraiqZNB7OuB0xSbQ2FbaRc8U5mLtKnS3/4T7njJ6.', '09100000001', 'super_admin', NULL, 1, 1),
   ('Captain Juan Reyes','captain@resqtrack.ph',     '$2b$10$erNRnBDFQ1iCraiqZNB7OuB0xSbQ2FbaRc8U5mLtKnS3/4T7njJ6.', '09100000002', 'admin',     NULL, 1, 1);
 
 -- Responder / Tanod accounts

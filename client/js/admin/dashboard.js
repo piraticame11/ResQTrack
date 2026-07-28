@@ -1,5 +1,5 @@
 (async function () {
-  const user = requireRole('admin', 'responder');
+  const user = requireRole('admin', 'super_admin', 'responder');
   if (!user) return;
   setUserUI(user);
 

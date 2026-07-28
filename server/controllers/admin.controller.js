@@ -3,11 +3,13 @@ const db     = require('../config/db');
 const { sendVerificationEmail, sendRejectionEmail } = require('../utils/mailer');
 const { logAudit } = require('../utils/audit');
 
+const ADMIN_TIER = ['admin', 'super_admin'];
+
 async function isLastActiveAdmin(userId) {
   const [[target]] = await db.query('SELECT role, is_active FROM users WHERE id = ?', [userId]);
-  if (!target || target.role !== 'admin' || !target.is_active) return false;
+  if (!target || !ADMIN_TIER.includes(target.role) || !target.is_active) return false;
   const [[{ count }]] = await db.query(
-    "SELECT COUNT(*) AS count FROM users WHERE role = 'admin' AND is_active = 1"
+    "SELECT COUNT(*) AS count FROM users WHERE role IN ('admin', 'super_admin') AND is_active = 1"
   );
   return count <= 1;
 }
@@ -16,8 +18,9 @@ exports.getUsers = async (req, res) => {
   try {
     const { role, purok_id } = req.query;
     let q = `SELECT u.id, u.full_name, u.email, u.phone, u.birthdate, u.role, u.purok_id,
-                    u.address_line, u.residency_type, u.landlord_name, u.landlord_contact,
-                    u.id_image, u.is_verified, u.verification_status, u.verification_note,
+                    u.address_line, u.address_lat, u.address_lng, u.address_match_status,
+                    u.residency_type, u.landlord_name, u.landlord_contact, u.landlord_address,
+                    u.id_image, u.proof_of_residency_image, u.is_verified, u.verification_status, u.verification_note,
                     u.is_active, u.fake_report_count, u.created_at, p.name AS purok_name
              FROM users u
              LEFT JOIN puroks p ON u.purok_id = p.id
@@ -52,8 +55,9 @@ exports.getUserById = async (req, res) => {
   try {
     const [rows] = await db.query(
       `SELECT u.id, u.full_name, u.email, u.phone, u.birthdate, u.role, u.purok_id,
-              u.address_line, u.residency_type, u.landlord_name, u.landlord_contact,
-              u.id_image, u.is_verified, u.verification_status, u.verification_note,
+              u.address_line, u.address_lat, u.address_lng, u.address_match_status,
+              u.residency_type, u.landlord_name, u.landlord_contact, u.landlord_address,
+              u.id_image, u.proof_of_residency_image, u.is_verified, u.verification_status, u.verification_note,
               u.is_active, u.fake_report_count, u.created_at, p.name AS purok_name
        FROM users u LEFT JOIN puroks p ON u.purok_id = p.id WHERE u.id = ?`,
       [req.params.id]
@@ -74,8 +78,11 @@ exports.getUserById = async (req, res) => {
 exports.createUser = async (req, res) => {
   try {
     const { full_name, email, password, phone, role, purok_id } = req.body;
-    if (!['responder', 'admin'].includes(role)) {
-      return res.status(400).json({ message: 'Role must be responder or admin' });
+    if (!['responder', 'admin', 'super_admin'].includes(role)) {
+      return res.status(400).json({ message: 'Role must be responder, admin, or super_admin' });
+    }
+    if (ADMIN_TIER.includes(role) && req.user.role !== 'super_admin') {
+      return res.status(403).json({ message: 'Only a Super Admin can create admin-level accounts.' });
     }
     const hash = await bcrypt.hash(password, 10);
     const [result] = await db.query(
@@ -99,7 +106,22 @@ exports.updateUser = async (req, res) => {
   try {
     const { full_name, email, phone, role, purok_id, is_active, password } = req.body;
 
-    const demotingAdmin  = role !== undefined && role !== 'admin';
+    if (role !== undefined && !['responder', 'admin', 'super_admin'].includes(role)) {
+      return res.status(400).json({ message: 'Role must be responder, admin, or super_admin' });
+    }
+
+    // Only a Super Admin may touch admin-tier accounts — whether that's the
+    // account being edited right now, or promoting someone into that tier.
+    if (req.user.role !== 'super_admin') {
+      const [[target]] = await db.query('SELECT role FROM users WHERE id = ?', [req.params.id]);
+      const targetIsAdminTier = target && ADMIN_TIER.includes(target.role);
+      const promotingToAdminTier = role !== undefined && ADMIN_TIER.includes(role);
+      if (targetIsAdminTier || promotingToAdminTier) {
+        return res.status(403).json({ message: 'Only a Super Admin can manage admin-level accounts.' });
+      }
+    }
+
+    const demotingAdmin  = role !== undefined && !ADMIN_TIER.includes(role);
     const deactivating   = is_active !== undefined && !is_active;
     if (demotingAdmin || deactivating) {
       if (await isLastActiveAdmin(req.params.id)) {
@@ -133,6 +155,12 @@ exports.updateUser = async (req, res) => {
 
 exports.deleteUser = async (req, res) => {
   try {
+    if (req.user.role !== 'super_admin') {
+      const [[target]] = await db.query('SELECT role FROM users WHERE id = ?', [req.params.id]);
+      if (target && ADMIN_TIER.includes(target.role)) {
+        return res.status(403).json({ message: 'Only a Super Admin can deactivate admin-level accounts.' });
+      }
+    }
     if (await isLastActiveAdmin(req.params.id)) {
       return res.status(400).json({ message: 'Cannot deactivate the only remaining admin account.' });
     }

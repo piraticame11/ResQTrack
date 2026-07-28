@@ -5,7 +5,7 @@ const { getLocations, updateLocation, getHistory } = require('../controllers/res
 
 router.use(auth);
 
-router.get('/locations', requireRole('admin'), getLocations);
+router.get('/locations', requireRole('admin', 'super_admin'), getLocations);
 router.post('/location',  requireRole('responder'), updateLocation);
 router.get('/:id/history', getHistory);
 
