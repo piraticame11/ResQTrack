@@ -194,7 +194,18 @@ function plotHotspots(incidents) {
   hotspotMarkers = [];
 
   const points = incidents.filter(i => i.latitude && i.longitude);
-  hotspotHeatLayer = L.heatLayer(points.map(i => [i.latitude, i.longitude, 0.6]), { radius: 30, blur: 25 }).addTo(hotspotMap);
+
+  // Leaflet.heat's defaults (minOpacity 0.05, max 1.0) are tuned for
+  // thousands of points — with the handful a barangay actually reports,
+  // the result was barely-visible pale blue smudges. Raising minOpacity and
+  // capping `max` low means even a single report reads as a clear warm
+  // blob, and a real cluster still saturates to red.
+  hotspotHeatLayer = L.heatLayer(points.map(i => [i.latitude, i.longitude, 1]), {
+    radius: 35,
+    blur: 22,
+    minOpacity: 0.45,
+    max: Math.max(2, Math.ceil(points.length / 4)),
+  }).addTo(hotspotMap);
   if (points.length) hotspotMap.fitBounds(points.map(i => [i.latitude, i.longitude]), { padding: [30, 30], maxZoom: 15 });
 
   points.forEach(i => {
