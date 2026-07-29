@@ -24,6 +24,8 @@ CREATE TABLE IF NOT EXISTS users (
   landlord_name       VARCHAR(150) DEFAULT NULL,
   landlord_contact    VARCHAR(20)  DEFAULT NULL,
   landlord_address    VARCHAR(255) DEFAULT NULL,
+  id_type       VARCHAR(50)  DEFAULT NULL,
+  id_number     VARCHAR(50)  DEFAULT NULL,
   profile_photo VARCHAR(255) DEFAULT NULL,
   id_image      VARCHAR(255) DEFAULT NULL,
   proof_of_residency_image VARCHAR(255) DEFAULT NULL,

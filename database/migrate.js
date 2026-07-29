@@ -27,6 +27,8 @@ const requiredColumns = [
   { table: 'users', column: 'address_match_status', definition: "ENUM('Matched','Unmatched','Unchecked') NOT NULL DEFAULT 'Unchecked'", after: 'address_lng' },
   { table: 'users', column: 'landlord_address',     definition: 'VARCHAR(255) DEFAULT NULL',                                           after: 'landlord_contact' },
   { table: 'users', column: 'proof_of_residency_image', definition: 'VARCHAR(255) DEFAULT NULL',                                      after: 'id_image' },
+  { table: 'users', column: 'id_type',   definition: 'VARCHAR(50) DEFAULT NULL', after: 'landlord_address' },
+  { table: 'users', column: 'id_number', definition: 'VARCHAR(50) DEFAULT NULL', after: 'id_type' },
 ];
 
 async function migrate() {

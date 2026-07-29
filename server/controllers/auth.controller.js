@@ -1,8 +1,10 @@
 const bcrypt = require('bcrypt');
 const jwt    = require('jsonwebtoken');
+const fs     = require('fs');
 const db     = require('../config/db');
 const { logAudit } = require('../utils/audit');
 const { geocodeAddress } = require('../utils/geocode');
+const { extractIdText, parseIdFields } = require('../utils/ocr');
 
 function generateTokens(user) {
   const payload = { id: user.id, role: user.role, name: user.full_name };
@@ -11,14 +13,37 @@ function generateTokens(user) {
   return { accessToken, refreshToken };
 }
 
+// Pre-registration helper: OCR the captured ID photo and return best-guess
+// field values so the client can pre-fill the form. This is scan-and-discard —
+// the photo the resident actually registers with is uploaded separately by
+// /register and stored there; nothing from this scan is persisted.
+exports.scanId = async (req, res) => {
+  if (!req.file) return res.status(400).json({ message: 'No ID image provided' });
+  try {
+    const buffer    = fs.readFileSync(req.file.path);
+    const text      = await extractIdText(buffer);
+    const extracted = parseIdFields(text);
+    res.json({ extracted });
+  } catch (err) {
+    res.status(500).json({ message: 'Could not read ID', error: err.message });
+  } finally {
+    fs.unlink(req.file.path, () => {});
+  }
+};
+
 exports.register = async (req, res) => {
   try {
     const {
       full_name, email, password, phone, purok_id, birthdate,
       address_line, residency_type, landlord_name, landlord_contact, landlord_address,
+      id_type, id_number,
     } = req.body;
     if (!full_name || !email || !password) {
       return res.status(400).json({ message: 'full_name, email and password are required' });
+    }
+
+    if (!id_type || !id_type.trim() || !id_number || !id_number.trim()) {
+      return res.status(400).json({ message: 'Please select your ID type and enter its ID number.' });
     }
 
     // Phone: exactly 11 digits, must start with 09
@@ -80,14 +105,16 @@ exports.register = async (req, res) => {
          (full_name, email, password_hash, phone, birthdate, role, purok_id,
           address_line, address_lat, address_lng, address_match_status,
           residency_type, landlord_name, landlord_contact, landlord_address,
+          id_type, id_number,
           id_image, proof_of_residency_image, is_verified, verification_status, is_active)
-       VALUES (?, ?, ?, ?, ?, "resident", ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 'Pending', 1)`,
+       VALUES (?, ?, ?, ?, ?, "resident", ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 'Pending', 1)`,
       [
         full_name, email, hash, phone || null, birthdate || null, purok_id || null,
         address_line.trim(), geo.lat, geo.lng, geo.status, residency,
         residency === 'Tenant' ? landlord_name.trim() : null,
         residency === 'Tenant' ? landlord_contact.trim() : null,
         residency === 'Tenant' ? landlord_address.trim() : null,
+        id_type.trim(), id_number.trim(),
         id_image, proof_of_residency_image,
       ]
     );

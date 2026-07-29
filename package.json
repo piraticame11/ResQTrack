@@ -19,7 +19,8 @@
     "mysql2": "^3.9.7",
     "node-cron": "^3.0.3",
     "nodemailer": "^8.0.10",
-    "socket.io": "^4.7.5"
+    "socket.io": "^4.7.5",
+    "tesseract.js": "^7.0.0"
   },
   "devDependencies": {
     "autoprefixer": "^10.4.19",

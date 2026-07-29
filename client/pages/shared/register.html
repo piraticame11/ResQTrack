@@ -177,6 +177,31 @@
               <i class="fa-solid fa-id-card text-blue-400"></i> Valid ID for Verification <span class="text-blue-500">*</span>
             </legend>
 
+            <div class="grid grid-cols-2 gap-3 mb-3">
+              <div>
+                <label class="block text-xs font-medium text-gray-600 mb-1">ID Type <span class="text-blue-500">*</span></label>
+                <select id="id_type" required class="input-field">
+                  <option value="">— Select ID Type —</option>
+                  <option>PhilSys National ID</option>
+                  <option>UMID</option>
+                  <option>Driver's License</option>
+                  <option>Passport</option>
+                  <option>Voter's ID</option>
+                  <option>PWD ID</option>
+                  <option>Senior Citizen ID</option>
+                  <option>Postal ID</option>
+                  <option>TIN ID</option>
+                  <option>SSS ID</option>
+                  <option>PhilHealth ID</option>
+                  <option>Other</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-600 mb-1">ID Number <span class="text-blue-500">*</span></label>
+                <input type="text" id="id_number" required class="input-field" placeholder="ID number">
+              </div>
+            </div>
+
             <!-- Idle state: open camera button -->
             <div id="cam-idle" class="flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-xl p-5">
               <i class="fa-solid fa-camera text-3xl text-gray-300 mb-2"></i>
@@ -206,6 +231,9 @@
             <!-- Captured preview -->
             <div id="cam-captured" class="hidden flex-col items-center gap-3">
               <img id="id-preview" class="w-full rounded-xl max-h-56 object-cover border border-gray-200" alt="ID Preview">
+              <p id="ocr-banner" class="hidden w-full text-xs bg-blue-50 text-blue-700 rounded-lg px-3 py-2 flex items-center gap-1.5">
+                <i id="ocr-banner-icon" class="fa-solid fa-circle-notch fa-spin"></i> <span id="ocr-banner-text">Reading your ID…</span>
+              </p>
               <button type="button" id="btn-retake"
                       class="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-semibold py-2 rounded-lg flex items-center justify-center gap-2 transition-colors">
                 <i class="fa-solid fa-rotate-left"></i> Retake
@@ -356,7 +384,7 @@
     // ── Camera capture ──────────────────────────────────────────────────────
     // Shared by the Valid ID and Proof of Residency fieldsets — each gets its
     // own independent stream/blob via a distinct set of element ids.
-    function setupCameraCapture(ids) {
+    function setupCameraCapture(ids, onCapture) {
       let stream = null;
       let blob   = null;
 
@@ -390,6 +418,7 @@
           document.getElementById(ids.preview).src = canvas.toDataURL('image/jpeg');
           showCaptured();
           stopCamera();
+          if (onCapture) onCapture(b);
         }, 'image/jpeg', 0.92);
       });
       document.getElementById(ids.btnRetake).addEventListener('click', async () => {
@@ -399,15 +428,61 @@
 
       return {
         getBlob: () => blob,
-        reset:   () => { blob = null; stopCamera(); showIdle(); },
+        reset:   () => { blob = null; stopCamera(); showIdle(); document.getElementById('ocr-banner')?.classList.add('hidden'); },
         stop:    stopCamera,
       };
+    }
+
+    // ── OCR auto-fill ─────────────────────────────────────────────────────
+    // Best-effort text extraction from the captured ID photo. Only fills
+    // fields that are still empty (never clobbers what the resident already
+    // typed) and always leaves them editable — this is a convenience, not a
+    // verification; the admin still checks the photo manually.
+    async function scanIdAndAutofill(blob) {
+      const banner     = document.getElementById('ocr-banner');
+      const bannerIcon = document.getElementById('ocr-banner-icon');
+      const bannerText = document.getElementById('ocr-banner-text');
+      banner.classList.remove('hidden');
+      bannerIcon.className = 'fa-solid fa-circle-notch fa-spin';
+      bannerText.textContent = 'Reading your ID…';
+
+      const fillIfEmpty = (id, val) => {
+        const el = document.getElementById(id);
+        if (val && el && !el.value.trim()) el.value = val;
+      };
+
+      try {
+        const fd = new FormData();
+        fd.append('id_image', blob, 'id_image.jpg');
+        const res  = await fetch('/api/auth/ocr-id', { method: 'POST', body: fd });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || 'Could not read ID');
+
+        const ex = data.extracted || {};
+        fillIfEmpty('last_name',   ex.last_name?.toUpperCase());
+        fillIfEmpty('first_name',  ex.first_name);
+        fillIfEmpty('middle_name', ex.middle_name);
+        fillIfEmpty('birthdate',   ex.birthdate);
+        fillIfEmpty('id_number',   ex.id_number);
+        const idTypeSel = document.getElementById('id_type');
+        if (ex.id_type && idTypeSel && !idTypeSel.value) idTypeSel.value = ex.id_type;
+
+        const anyFilled = ex.last_name || ex.first_name || ex.birthdate || ex.id_number || ex.id_type;
+        bannerIcon.className = anyFilled ? 'fa-solid fa-wand-magic-sparkles' : 'fa-solid fa-circle-info';
+        bannerText.textContent = anyFilled
+          ? 'Auto-filled from your ID — please check the details below are correct.'
+          : "Couldn't automatically read your ID — please fill in the fields manually.";
+      } catch {
+        bannerIcon.className = 'fa-solid fa-circle-info';
+        bannerText.textContent = "Couldn't automatically read your ID — please fill in the fields manually.";
+      }
+      setTimeout(() => banner.classList.add('hidden'), 7000);
     }
 
     const idCapture = setupCameraCapture({
       idle: 'cam-idle', live: 'cam-live', captured: 'cam-captured', video: 'cam-video', canvas: 'cam-canvas',
       preview: 'id-preview', btnOpen: 'btn-open-cam', btnCancel: 'btn-cancel-cam', btnCapture: 'btn-capture', btnRetake: 'btn-retake',
-    });
+    }, scanIdAndAutofill);
     const porCapture = setupCameraCapture({
       idle: 'cam-idle-por', live: 'cam-live-por', captured: 'cam-captured-por', video: 'cam-video-por', canvas: 'cam-canvas-por',
       preview: 'id-preview-por', btnOpen: 'btn-open-cam-por', btnCancel: 'btn-cancel-cam-por', btnCapture: 'btn-capture-por', btnRetake: 'btn-retake-por',
@@ -447,6 +522,11 @@
       if (residency === 'Tenant' && (!landlordName || !landlordContact || !landlordAddress))
         return showErr("As a tenant/boarder, please provide your landlord's name, contact number, and address.");
 
+      const idType   = document.getElementById('id_type').value;
+      const idNumber = document.getElementById('id_number').value.trim();
+      if (!idType || !idNumber)
+        return showErr('Please select your ID type and enter its ID number.');
+
       if (!idCapture.getBlob())
         return showErr('Please capture a photo of your valid ID.');
 
@@ -477,6 +557,8 @@
         fd.append('landlord_contact',   residency === 'Tenant' ? landlordContact : '');
         fd.append('landlord_address',   residency === 'Tenant' ? landlordAddress : '');
         fd.append('password',  pw);
+        fd.append('id_type',   idType);
+        fd.append('id_number', idNumber);
         fd.append('id_image',  idCapture.getBlob(),  'id_image.jpg');
         fd.append('proof_of_residency', porCapture.getBlob(), 'proof_of_residency.jpg');
 

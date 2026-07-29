@@ -138,6 +138,9 @@ async function openViewModal(id) {
     none.classList.remove('hidden');
   }
 
+  document.getElementById('view-id-type').textContent   = u.id_type   || '—';
+  document.getElementById('view-id-number').textContent = u.id_number || '—';
+
   // Proof of residency image
   const porImg  = document.getElementById('view-por-img');
   const porNone = document.getElementById('view-por-none');

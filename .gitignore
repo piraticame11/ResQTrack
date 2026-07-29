@@ -3,3 +3,6 @@ node_modules/
 server/uploads/*
 !server/uploads/.gitkeep
 client/public/css/output.css
+
+# Tesseract.js downloads its language model to cwd on first OCR run
+*.traineddata

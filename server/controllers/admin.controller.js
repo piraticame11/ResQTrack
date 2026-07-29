@@ -20,6 +20,7 @@ exports.getUsers = async (req, res) => {
     let q = `SELECT u.id, u.full_name, u.email, u.phone, u.birthdate, u.role, u.purok_id,
                     u.address_line, u.address_lat, u.address_lng, u.address_match_status,
                     u.residency_type, u.landlord_name, u.landlord_contact, u.landlord_address,
+                    u.id_type, u.id_number,
                     u.id_image, u.proof_of_residency_image, u.is_verified, u.verification_status, u.verification_note,
                     u.is_active, u.fake_report_count, u.created_at, p.name AS purok_name
              FROM users u
@@ -57,6 +58,7 @@ exports.getUserById = async (req, res) => {
       `SELECT u.id, u.full_name, u.email, u.phone, u.birthdate, u.role, u.purok_id,
               u.address_line, u.address_lat, u.address_lng, u.address_match_status,
               u.residency_type, u.landlord_name, u.landlord_contact, u.landlord_address,
+              u.id_type, u.id_number,
               u.id_image, u.proof_of_residency_image, u.is_verified, u.verification_status, u.verification_note,
               u.is_active, u.fake_report_count, u.created_at, p.name AS purok_name
        FROM users u LEFT JOIN puroks p ON u.purok_id = p.id WHERE u.id = ?`,
