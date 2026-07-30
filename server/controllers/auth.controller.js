@@ -176,6 +176,27 @@ exports.refreshToken = async (req, res) => {
   }
 };
 
+// Step-up re-authentication for sensitive sections (e.g. the Blotter) —
+// confirms the already-logged-in user still knows their own password before
+// letting them past a client-side gate. Checked against the same
+// password_hash as login, never a separate/weaker scheme.
+exports.verifyPassword = async (req, res) => {
+  try {
+    const { password } = req.body;
+    if (!password) return res.status(400).json({ message: 'Password is required' });
+
+    const [[user]] = await db.query('SELECT password_hash FROM users WHERE id = ?', [req.user.id]);
+    if (!user) return res.status(401).json({ message: 'Not authenticated' });
+
+    const valid = await bcrypt.compare(password, user.password_hash);
+    if (!valid) return res.status(401).json({ message: 'Incorrect password' });
+
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+};
+
 exports.logout = (req, res) => {
   if (req.user) {
     logAudit({ actor_id: req.user.id, actor_name: req.user.name, action: 'Logout', ip_address: req.ip });

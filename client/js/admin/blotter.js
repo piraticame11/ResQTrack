@@ -8,11 +8,43 @@ let currentEntryId = null;
 let currentEntryStatus = null;
 let pendingStatus = null;
 
-(async function () {
+(function () {
   const user = requireRole('admin', 'super_admin');
   if (!user) return;
   setUserUI(user);
 
+  document.getElementById('reauth-form').addEventListener('submit', handleReauthSubmit);
+})();
+
+// Runs once per page load, before any blotter data is fetched — see the
+// reauth-overlay markup in blotter.html for why.
+async function handleReauthSubmit(e) {
+  e.preventDefault();
+  const password = document.getElementById('reauth-password').value;
+  const errEl    = document.getElementById('reauth-error');
+  const btn      = document.getElementById('reauth-submit');
+  errEl.classList.add('hidden');
+  btn.disabled = true;
+  btn.textContent = 'Checking…';
+
+  try {
+    const res = await api.post('/auth/verify-password', { password });
+    if (res && res.ok) {
+      document.getElementById('reauth-overlay').remove();
+      await initBlotterPage();
+    } else {
+      const data = res ? await res.json() : {};
+      errEl.textContent = data.message || 'Incorrect password.';
+      errEl.classList.remove('hidden');
+      document.getElementById('reauth-password').select();
+    }
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Continue';
+  }
+}
+
+async function initBlotterPage() {
   await populatePurokSelect(document.getElementById('filter-purok'), { placeholder: 'All Puroks' });
   await populatePurokSelect(document.getElementById('e-purok'),      { placeholder: '— Select —' });
 
@@ -28,7 +60,7 @@ let pendingStatus = null;
   document.getElementById('entry-form').addEventListener('submit', handleEntrySubmit);
 
   await loadEntries();
-})();
+}
 
 async function loadEntries() {
   const status = document.getElementById('filter-status').value;
@@ -57,11 +89,11 @@ async function loadEntries() {
 
   tbody.innerHTML = entries.map(b => `
     <tr class="table-row">
-      <td class="px-4 py-3 font-mono text-xs text-blue-600 font-medium">${b.entry_no}</td>
-      <td class="px-4 py-3 text-sm text-gray-700">${b.nature}</td>
-      <td class="px-4 py-3 text-sm text-gray-700">${b.complainant_name}</td>
-      <td class="px-4 py-3 text-sm text-gray-700">${b.respondent_name}</td>
-      <td class="px-4 py-3 text-sm text-gray-500">${b.purok_name || '—'}</td>
+      <td class="px-4 py-3 font-mono text-xs text-blue-600 font-medium">${escapeHtml(b.entry_no)}</td>
+      <td class="px-4 py-3 text-sm text-gray-700">${escapeHtml(b.nature)}</td>
+      <td class="px-4 py-3 text-sm text-gray-700">${escapeHtml(b.complainant_name)}</td>
+      <td class="px-4 py-3 text-sm text-gray-700">${escapeHtml(b.respondent_name)}</td>
+      <td class="px-4 py-3 text-sm text-gray-500">${escapeHtml(b.purok_name) || '—'}</td>
       <td class="px-4 py-3">${blotterStatusBadge(b.status)}</td>
       <td class="px-4 py-3 text-xs text-gray-500">${formatDate(b.filed_at)}</td>
       <td class="px-4 py-3">
@@ -123,22 +155,22 @@ async function openDetailModal(id) {
 
   document.getElementById('detail-content').innerHTML = `
     <div class="grid grid-cols-2 gap-3 text-sm">
-      <div><span class="text-gray-500">Nature</span><p class="font-semibold">${entry.nature}</p></div>
+      <div><span class="text-gray-500">Nature</span><p class="font-semibold">${escapeHtml(entry.nature)}</p></div>
       <div><span class="text-gray-500">Status</span><p>${blotterStatusBadge(entry.status)}</p></div>
-      <div><span class="text-gray-500">Purok</span><p class="font-semibold">${entry.purok_name || '—'}</p></div>
-      <div><span class="text-gray-500">Filed by</span><p class="font-semibold">${entry.filed_by_name || '—'}</p></div>
+      <div><span class="text-gray-500">Purok</span><p class="font-semibold">${escapeHtml(entry.purok_name) || '—'}</p></div>
+      <div><span class="text-gray-500">Filed by</span><p class="font-semibold">${escapeHtml(entry.filed_by_name) || '—'}</p></div>
 
       <div class="col-span-2 border-t border-gray-100 pt-3"><span class="text-gray-500 text-xs uppercase font-semibold">Complainant</span>
-        <p class="font-semibold">${entry.complainant_name}</p>
-        <p class="text-xs text-gray-500">${entry.complainant_address || 'No address on file'} ${entry.complainant_contact ? '· ' + entry.complainant_contact : ''}</p>
+        <p class="font-semibold">${escapeHtml(entry.complainant_name)}</p>
+        <p class="text-xs text-gray-500">${escapeHtml(entry.complainant_address) || 'No address on file'} ${entry.complainant_contact ? '· ' + escapeHtml(entry.complainant_contact) : ''}</p>
       </div>
       <div class="col-span-2"><span class="text-gray-500 text-xs uppercase font-semibold">Respondent</span>
-        <p class="font-semibold">${entry.respondent_name}</p>
-        <p class="text-xs text-gray-500">${entry.respondent_address || 'No address on file'} ${entry.respondent_contact ? '· ' + entry.respondent_contact : ''}</p>
+        <p class="font-semibold">${escapeHtml(entry.respondent_name)}</p>
+        <p class="text-xs text-gray-500">${escapeHtml(entry.respondent_address) || 'No address on file'} ${entry.respondent_contact ? '· ' + escapeHtml(entry.respondent_contact) : ''}</p>
       </div>
 
-      <div class="col-span-2"><span class="text-gray-500">Narrative</span><p class="bg-gray-50 rounded-lg p-3 mt-1">${entry.narrative}</p></div>
-      ${entry.action_taken ? `<div class="col-span-2"><span class="text-gray-500">Action Taken / Closing Note</span><p class="bg-gray-50 rounded-lg p-3 mt-1">${entry.action_taken}</p></div>` : ''}
+      <div class="col-span-2"><span class="text-gray-500">Narrative</span><p class="bg-gray-50 rounded-lg p-3 mt-1">${escapeHtml(entry.narrative)}</p></div>
+      ${entry.action_taken ? `<div class="col-span-2"><span class="text-gray-500">Action Taken / Closing Note</span><p class="bg-gray-50 rounded-lg p-3 mt-1">${escapeHtml(entry.action_taken)}</p></div>` : ''}
 
       <div class="col-span-2"><span class="text-gray-500">Filed at</span><p class="font-semibold">${formatDate(entry.filed_at)}</p></div>
       ${entry.resolved_at ? `<div class="col-span-2"><span class="text-gray-500">Resolved at</span><p class="font-semibold">${formatDate(entry.resolved_at)}</p></div>` : ''}
@@ -164,9 +196,9 @@ async function openDetailModal(id) {
         <div class="flex gap-3 text-xs">
           <div class="w-1.5 h-1.5 rounded-full bg-blue-400 mt-1.5 shrink-0"></div>
           <div>
-            <span class="font-medium text-gray-700">${l.action}</span>
-            ${l.note ? `<span class="text-gray-500"> — ${l.note}</span>` : ''}
-            <span class="text-gray-400 block">${l.actor_name || 'System'} · ${formatDate(l.logged_at)}</span>
+            <span class="font-medium text-gray-700">${escapeHtml(l.action)}</span>
+            ${l.note ? `<span class="text-gray-500"> — ${escapeHtml(l.note)}</span>` : ''}
+            <span class="text-gray-400 block">${escapeHtml(l.actor_name) || 'System'} · ${formatDate(l.logged_at)}</span>
           </div>
         </div>`).join('')
     : `<p class="text-gray-400 text-xs">No activity logged.</p>`;

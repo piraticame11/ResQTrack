@@ -2,6 +2,16 @@ function getUser() {
   try { return JSON.parse(localStorage.getItem('user')); } catch { return null; }
 }
 
+// Escape user-supplied text before interpolating it into innerHTML — without
+// this, anything a resident/admin typed into a name, narrative, etc. field
+// renders as live HTML for whoever views it next.
+function escapeHtml(str) {
+  if (str === null || str === undefined) return '';
+  return String(str).replace(/[&<>"']/g, ch => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  }[ch]));
+}
+
 function requireAuth() {
   const token = localStorage.getItem('accessToken');
   const user  = getUser();
