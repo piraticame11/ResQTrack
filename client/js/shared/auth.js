@@ -156,6 +156,63 @@ function typeColor(type) {
   return map[type] || 'bg-gray-100 text-gray-700';
 }
 
+// ── Shared "reason" modal ────────────────────────────────────────────────
+// Replaces the native prompt() dialog for short required text input
+// (flag-as-fake, mark-as-delayed) with a styled modal consistent with the
+// rest of the app. Injected lazily into whatever page calls it, so callers
+// don't need to duplicate the markup in every HTML file.
+let _reasonModalCallback = null;
+
+function _ensureReasonModal() {
+  if (document.getElementById('reason-modal')) return;
+  const div = document.createElement('div');
+  div.id = 'reason-modal';
+  div.className = 'modal-overlay hidden';
+  div.innerHTML = `
+    <div class="modal-box max-w-sm">
+      <div class="flex items-center justify-between p-5 border-b border-gray-100">
+        <h3 class="font-bold text-gray-800 text-sm" id="reason-modal-title">Reason</h3>
+        <button type="button" onclick="closeReasonModal()" class="text-gray-400 hover:text-gray-600"><i class="fa-solid fa-xmark text-xl"></i></button>
+      </div>
+      <div class="p-5 space-y-3">
+        <textarea id="reason-modal-input" rows="3" class="input-field text-sm" placeholder="Type your reason…"></textarea>
+        <p id="reason-modal-error" class="hidden text-xs text-red-500">A reason is required.</p>
+        <div class="flex gap-2">
+          <button type="button" onclick="confirmReasonModal()" class="btn-primary flex-1">Confirm</button>
+          <button type="button" onclick="closeReasonModal()" class="btn-secondary flex-1">Cancel</button>
+        </div>
+      </div>
+    </div>`;
+  document.body.appendChild(div);
+}
+
+function openReasonModal(title, onConfirm) {
+  _ensureReasonModal();
+  document.getElementById('reason-modal-title').textContent = title;
+  document.getElementById('reason-modal-input').value = '';
+  document.getElementById('reason-modal-error').classList.add('hidden');
+  document.getElementById('reason-modal').classList.remove('hidden');
+  _reasonModalCallback = onConfirm;
+  setTimeout(() => document.getElementById('reason-modal-input').focus(), 50);
+}
+
+function closeReasonModal() {
+  const modal = document.getElementById('reason-modal');
+  if (modal) modal.classList.add('hidden');
+  _reasonModalCallback = null;
+}
+
+function confirmReasonModal() {
+  const reason = document.getElementById('reason-modal-input').value.trim();
+  if (!reason) {
+    document.getElementById('reason-modal-error').classList.remove('hidden');
+    return;
+  }
+  const cb = _reasonModalCallback;
+  closeReasonModal();
+  if (cb) cb(reason);
+}
+
 // Offline incident-report queue — flushes automatically once connectivity
 // returns, from whichever page the user happens to be on.
 async function flushOfflineQueue() {

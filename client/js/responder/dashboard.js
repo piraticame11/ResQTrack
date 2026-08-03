@@ -290,9 +290,7 @@ async function openModal(id) {
 }
 
 function promptFlagFake(id) {
-  const reason = prompt('Why is this being flagged as a fake report?');
-  if (!reason || !reason.trim()) return;
-  flagFake(id, reason.trim());
+  openReasonModal('Why is this being flagged as a fake report?', reason => flagFake(id, reason));
 }
 
 async function flagFake(id, reason) {
@@ -308,9 +306,7 @@ async function flagFake(id, reason) {
 }
 
 function promptDelayReason(id) {
-  const reason = prompt('Why is this incident delayed?');
-  if (!reason || !reason.trim()) return;
-  changeStatus(id, 'Delayed', reason.trim());
+  openReasonModal('Why is this incident delayed?', reason => changeStatus(id, 'Delayed', reason));
 }
 
 async function changeStatus(id, status, note) {
