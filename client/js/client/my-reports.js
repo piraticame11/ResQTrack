@@ -34,9 +34,9 @@
     // Prominent slide-in notification
     const ref = reference_no ? ` [${reference_no}]` : '';
     const messages = {
-      Dispatched: responder_name
+      Assigned: responder_name
         ? `Responder assigned: ${responder_name}`
-        : 'A responder has been dispatched to your incident.',
+        : 'A responder has been assigned to your incident.',
       Initiate: 'Responders are now actively handling your incident.',
       Delayed:  'Your assigned responder reported a delay — they are still on their way.',
       Resolved: 'Your incident has been marked as resolved.',
@@ -166,7 +166,7 @@ function closeDetailModal() { document.getElementById('detail-modal').classList.
 
 function showIncidentNotification(title, body, status) {
   const styles = {
-    Dispatched: { border: '#3b82f6', bg: '#eff6ff', icon: '🚑' },
+    Assigned:   { border: '#3b82f6', bg: '#eff6ff', icon: '🚑' },
     Initiate:   { border: '#6366f1', bg: '#eef2ff', icon: '🚨' },
     Delayed:    { border: '#d97706', bg: '#fffbeb', icon: '⏳' },
     Resolved:   { border: '#22c55e', bg: '#f0fdf4', icon: '✅' },

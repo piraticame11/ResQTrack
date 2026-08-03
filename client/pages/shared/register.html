@@ -94,14 +94,28 @@
                        class="input-field" placeholder="09XXXXXXXXX">
                 <p id="phone-hint" class="hidden text-xs text-red-500 mt-1">Must be 11 digits starting with 09</p>
               </div>
-              <div>
-                <label class="block text-xs font-medium text-gray-600 mb-1">Purok</label>
-                <select id="purok_id" class="input-field">
-                  <option value="">— Select Purok —</option>
-                </select>
+              <div class="col-span-2 grid grid-cols-3 gap-3">
+                <div>
+                  <label class="block text-xs font-medium text-gray-600 mb-1">Purok</label>
+                  <select id="purok_id" class="input-field">
+                    <option value="">— Select Purok —</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-gray-600 mb-1">Province</label>
+                  <select id="province" class="input-field">
+                    <option>Davao del Norte</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-gray-600 mb-1">City</label>
+                  <select id="city" class="input-field">
+                    <option>Panabo City</option>
+                  </select>
+                </div>
               </div>
               <div class="col-span-2">
-                <label class="block text-xs font-medium text-gray-600 mb-1">Complete Address <span class="text-blue-500">*</span></label>
+                <label class="block text-xs font-medium text-gray-600 mb-1">Exact Address <span class="text-blue-500">*</span></label>
                 <input type="text" id="address_line" required class="input-field" placeholder="House No., Street, Landmark">
                 <p class="text-xs text-gray-400 mt-1">A Purok alone isn't enough for responders to find you — please be specific.</p>
               </div>
@@ -134,9 +148,29 @@
                 <label class="block text-xs font-medium text-gray-600 mb-1">Landlord's Contact No. <span class="text-blue-500">*</span></label>
                 <input type="tel" id="landlord_contact" inputmode="numeric" maxlength="11" class="input-field" placeholder="09XXXXXXXXX">
               </div>
+              <div class="col-span-2 grid grid-cols-3 gap-3">
+                <div>
+                  <label class="block text-xs font-medium text-gray-600 mb-1">Purok</label>
+                  <select id="landlord_purok" class="input-field">
+                    <option value="">— Select Purok —</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-gray-600 mb-1">Province</label>
+                  <select id="landlord_province" class="input-field">
+                    <option>Davao del Norte</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-gray-600 mb-1">City</label>
+                  <select id="landlord_city" class="input-field">
+                    <option>Panabo City</option>
+                  </select>
+                </div>
+              </div>
               <div class="col-span-2">
                 <label class="block text-xs font-medium text-gray-600 mb-1">Landlord's Address <span class="text-blue-500">*</span></label>
-                <input type="text" id="landlord_address" class="input-field" placeholder="House No., Street, Purok/Barangay">
+                <input type="text" id="landlord_address" class="input-field" placeholder="House No., Street, Landmark">
               </div>
             </div>
           </fieldset>
@@ -202,14 +236,21 @@
               </div>
             </div>
 
-            <!-- Idle state: open camera button -->
+            <!-- Idle state: open camera or upload -->
             <div id="cam-idle" class="flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-xl p-5">
               <i class="fa-solid fa-camera text-3xl text-gray-300 mb-2"></i>
               <span class="text-sm font-medium text-gray-500 mb-3">Take a photo of your valid ID</span>
-              <button type="button" id="btn-open-cam"
-                      class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2 rounded-lg flex items-center gap-2 transition-colors">
-                <i class="fa-solid fa-camera"></i> Open Camera
-              </button>
+              <div class="flex gap-2">
+                <button type="button" id="btn-open-cam"
+                        class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2 rounded-lg flex items-center gap-2 transition-colors">
+                  <i class="fa-solid fa-camera"></i> Open Camera
+                </button>
+                <button type="button" id="btn-upload"
+                        class="bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-semibold px-4 py-2 rounded-lg flex items-center gap-2 transition-colors">
+                  <i class="fa-solid fa-upload"></i> Upload Photo
+                </button>
+                <input type="file" id="file-input" accept="image/*" class="hidden">
+              </div>
             </div>
 
             <!-- Live camera viewfinder -->
@@ -251,14 +292,21 @@
             </legend>
             <p class="text-xs text-gray-400 -mt-1 mb-3">A document showing you live at the address above — barangay certificate, utility bill, or lease contract.</p>
 
-            <!-- Idle state: open camera button -->
+            <!-- Idle state: open camera or upload -->
             <div id="cam-idle-por" class="flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-xl p-5">
               <i class="fa-solid fa-file-image text-3xl text-gray-300 mb-2"></i>
               <span class="text-sm font-medium text-gray-500 mb-3">Take a photo of the document</span>
-              <button type="button" id="btn-open-cam-por"
-                      class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2 rounded-lg flex items-center gap-2 transition-colors">
-                <i class="fa-solid fa-camera"></i> Open Camera
-              </button>
+              <div class="flex gap-2">
+                <button type="button" id="btn-open-cam-por"
+                        class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2 rounded-lg flex items-center gap-2 transition-colors">
+                  <i class="fa-solid fa-camera"></i> Open Camera
+                </button>
+                <button type="button" id="btn-upload-por"
+                        class="bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-semibold px-4 py-2 rounded-lg flex items-center gap-2 transition-colors">
+                  <i class="fa-solid fa-upload"></i> Upload Photo
+                </button>
+                <input type="file" id="file-input-por" accept="image/*" class="hidden">
+              </div>
             </div>
 
             <!-- Live camera viewfinder -->
@@ -307,16 +355,18 @@
   <script>
     // Populate puroks
     (async () => {
-      const sel = document.getElementById('purok_id');
+      const sels = [document.getElementById('purok_id'), document.getElementById('landlord_purok')];
       try {
         const res = await fetch('/api/puroks');
         const puroks = res.ok ? await res.json() : [];
-        puroks.forEach(p => {
-          const o = document.createElement('option');
-          o.value = p.id; o.textContent = p.name;
-          sel.appendChild(o);
+        sels.forEach(sel => {
+          puroks.forEach(p => {
+            const o = document.createElement('option');
+            o.value = p.id; o.textContent = p.name;
+            sel.appendChild(o);
+          });
         });
-      } catch { /* leave the placeholder-only select if this fails */ }
+      } catch { /* leave the placeholder-only selects if this fails */ }
     })();
 
     // Homeowner / Tenant toggle
@@ -405,6 +455,18 @@
         }
       }
 
+      function useFile(file) {
+        if (!file) return;
+        blob = file;
+        const reader = new FileReader();
+        reader.onload = () => {
+          document.getElementById(ids.preview).src = reader.result;
+          showCaptured();
+        };
+        reader.readAsDataURL(file);
+        if (onCapture) onCapture(file);
+      }
+
       document.getElementById(ids.btnOpen).addEventListener('click', openCamera);
       document.getElementById(ids.btnCancel).addEventListener('click', () => { stopCamera(); showIdle(); });
       document.getElementById(ids.btnCapture).addEventListener('click', () => {
@@ -421,14 +483,19 @@
           if (onCapture) onCapture(b);
         }, 'image/jpeg', 0.92);
       });
-      document.getElementById(ids.btnRetake).addEventListener('click', async () => {
+      if (ids.btnUpload && ids.fileInput) {
+        document.getElementById(ids.btnUpload).addEventListener('click', () => document.getElementById(ids.fileInput).click());
+        document.getElementById(ids.fileInput).addEventListener('change', e => useFile(e.target.files[0]));
+      }
+      document.getElementById(ids.btnRetake).addEventListener('click', () => {
         blob = null;
-        await openCamera();
+        if (ids.fileInput) document.getElementById(ids.fileInput).value = '';
+        showIdle();
       });
 
       return {
         getBlob: () => blob,
-        reset:   () => { blob = null; stopCamera(); showIdle(); document.getElementById('ocr-banner')?.classList.add('hidden'); },
+        reset:   () => { blob = null; stopCamera(); showIdle(); if (ids.fileInput) document.getElementById(ids.fileInput).value = ''; document.getElementById('ocr-banner')?.classList.add('hidden'); },
         stop:    stopCamera,
       };
     }
@@ -482,10 +549,12 @@
     const idCapture = setupCameraCapture({
       idle: 'cam-idle', live: 'cam-live', captured: 'cam-captured', video: 'cam-video', canvas: 'cam-canvas',
       preview: 'id-preview', btnOpen: 'btn-open-cam', btnCancel: 'btn-cancel-cam', btnCapture: 'btn-capture', btnRetake: 'btn-retake',
+      btnUpload: 'btn-upload', fileInput: 'file-input',
     }, scanIdAndAutofill);
     const porCapture = setupCameraCapture({
       idle: 'cam-idle-por', live: 'cam-live-por', captured: 'cam-captured-por', video: 'cam-video-por', canvas: 'cam-canvas-por',
       preview: 'id-preview-por', btnOpen: 'btn-open-cam-por', btnCancel: 'btn-cancel-cam-por', btnCapture: 'btn-capture-por', btnRetake: 'btn-retake-por',
+      btnUpload: 'btn-upload-por', fileInput: 'file-input-por',
     });
 
     // Form submit
@@ -518,8 +587,16 @@
       const residency = document.getElementById('residency_type').value;
       const landlordName    = document.getElementById('landlord_name').value.trim();
       const landlordContact = document.getElementById('landlord_contact').value.trim();
-      const landlordAddress = document.getElementById('landlord_address').value.trim();
-      if (residency === 'Tenant' && (!landlordName || !landlordContact || !landlordAddress))
+      const landlordStreet  = document.getElementById('landlord_address').value.trim();
+      const landlordPurokSel = document.getElementById('landlord_purok');
+      const landlordPurokName = landlordPurokSel.options[landlordPurokSel.selectedIndex]?.textContent || '';
+      const landlordAddress = [
+        landlordStreet,
+        landlordPurokSel.value ? landlordPurokName : '',
+        document.getElementById('landlord_city').value,
+        document.getElementById('landlord_province').value,
+      ].filter(Boolean).join(', ');
+      if (residency === 'Tenant' && (!landlordName || !landlordContact || !landlordStreet))
         return showErr("As a tenant/boarder, please provide your landlord's name, contact number, and address.");
 
       const idType   = document.getElementById('id_type').value;

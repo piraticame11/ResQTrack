@@ -64,12 +64,12 @@ function formatDate(ts) {
 
 function statusBadge(status) {
   const map = {
-    Pending:    'badge-pending',
-    Dispatched: 'badge-dispatched',
-    Initiate:   'badge-initiate',
-    Delayed:    'badge-delayed',
-    Resolved:   'badge-resolved',
-    Archived:   'badge-archived',
+    Pending:  'badge-pending',
+    Assigned: 'badge-assigned',
+    Initiate: 'badge-initiate',
+    Delayed:  'badge-delayed',
+    Resolved: 'badge-resolved',
+    Archived: 'badge-archived',
   };
   return `<span class="${map[status] || 'badge-pending'}">${status}</span>`;
 }
@@ -82,18 +82,27 @@ function triageBadge(color) {
 // Which status buttons make sense to offer next, given the current one.
 // Shared by admin + responder incident views so the workflow stays consistent.
 const INCIDENT_TRANSITIONS = {
-  Dispatched: ['Initiate', 'Delayed', 'Resolved'],
-  Initiate:   ['Delayed', 'Resolved'],
-  Delayed:    ['Initiate', 'Resolved'],
+  Assigned: ['Initiate', 'Delayed', 'Resolved'],
+  Initiate: ['Delayed', 'Resolved'],
+  Delayed:  ['Initiate', 'Resolved'],
+};
+
+// Icon shown on each status-transition button — Delayed gets its own
+// look (and a required reason prompt) so it doesn't blend in with the
+// other, no-explanation-needed transitions.
+const STATUS_ACTION_ICON = {
+  Initiate: 'fa-play',
+  Delayed:  'fa-clock',
+  Resolved: 'fa-circle-check',
 };
 
 const STATUS_LEGEND = [
-  ['Pending',    'Reported, not yet assigned to a responder.'],
-  ['Dispatched', 'A responder has been assigned and is on the way.'],
-  ['Initiate',   'The responder has arrived and started handling it.'],
-  ['Delayed',    'The responder is behind schedule — held up en route or on scene.'],
-  ['Resolved',   'The incident has been fully handled.'],
-  ['Archived',   'Resolved and auto-archived after 30 days.'],
+  ['Pending',  'Reported, not yet assigned to a responder.'],
+  ['Assigned', 'A responder has been assigned and is on the way.'],
+  ['Initiate', 'The responder has arrived and started handling it.'],
+  ['Delayed',  'The responder is behind schedule — held up en route or on scene.'],
+  ['Resolved', 'The incident has been fully handled.'],
+  ['Archived', 'Resolved and auto-archived after 30 days.'],
 ];
 const TRIAGE_LEGEND = [
   ['Red',    'Life-threatening — Fire or Rescue.'],

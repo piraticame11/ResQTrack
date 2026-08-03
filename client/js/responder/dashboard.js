@@ -31,7 +31,7 @@ async function loadActive() {
   }
   const all = await res.json();
 
-  const active   = all.filter(i => ['Pending', 'Dispatched', 'Initiate', 'Delayed'].includes(i.status));
+  const active   = all.filter(i => ['Pending', 'Assigned', 'Initiate', 'Delayed'].includes(i.status));
   const today    = new Date().toISOString().slice(0, 10);
   const myActive = active.filter(i => i.assigned_responder_id === currentUser.id);
   const resolved = all.filter(i => i.status === 'Resolved' && i.resolved_at?.slice(0, 10) === today);
@@ -60,12 +60,12 @@ function renderTable(list) {
     const mineBadge   = isMine ? `<span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-bold bg-blue-600 text-white ml-1">Mine</span>` : '';
     return `
     <tr class="table-row ${isMine ? 'bg-blue-50' : ''}">
-      <td class="px-4 py-3 font-mono text-xs text-blue-600 font-medium">${i.reference_no}${mineBadge}</td>
-      <td class="px-4 py-3"><span class="inline-flex px-2 py-0.5 rounded text-xs font-medium ${typeColor(i.incident_type)}">${i.incident_type}</span></td>
-      <td class="px-4 py-3 text-sm text-gray-600">${i.purok_name || '—'}</td>
       <td class="px-4 py-3">${triageBadge(i.triage_color)}</td>
-      <td class="px-4 py-3">${statusBadge(i.status)}</td>
+      <td class="px-4 py-3"><span class="inline-flex px-2 py-0.5 rounded text-xs font-medium ${typeColor(i.incident_type)}">${i.incident_type}</span></td>
+      <td class="px-4 py-3 font-mono text-xs text-blue-600 font-medium">${i.reference_no}${mineBadge}</td>
+      <td class="px-4 py-3 text-sm text-gray-600">${i.purok_name || '—'}</td>
       <td class="px-4 py-3 text-xs text-gray-500">${formatDate(i.reported_at)}</td>
+      <td class="px-4 py-3">${statusBadge(i.status)}</td>
       <td class="px-4 py-3">
         <button onclick="openModal(${i.id})" class="text-blue-600 hover:text-blue-800 text-xs font-medium">
           <i class="fa-solid fa-eye"></i> View
@@ -123,10 +123,10 @@ function renderCards(list) {
     <div class="border-l-4 ${cardColor} rounded-r-xl shadow-sm p-4">
       <div class="flex items-start justify-between gap-2 mb-1">
         <div class="flex items-center gap-2 flex-wrap">
+          ${triageBadge(i.triage_color)}
           <span class="font-bold text-gray-800 text-sm flex items-center gap-1.5">
             <i class="fa-solid ${icon}"></i>${i.incident_type}
           </span>
-          ${triageBadge(i.triage_color)}
           ${statusBadge(i.status)}
         </div>
         ${mineBadge}
@@ -217,13 +217,13 @@ async function openModal(id) {
   document.getElementById('modal-content').innerHTML = `
     ${isMyIncident ? `<div class="bg-blue-50 border border-blue-200 text-blue-700 rounded-lg px-3 py-2 text-xs font-medium"><i class="fa-solid fa-user-check mr-1"></i>This incident is assigned to you</div>` : ''}
     <div class="grid grid-cols-2 gap-3 text-sm">
-      <div><span class="text-gray-500">Type</span><p class="font-semibold mt-0.5"><span class="inline-flex px-2 py-0.5 rounded text-xs ${typeColor(inc.incident_type)}">${inc.incident_type}</span></p></div>
       <div><span class="text-gray-500">Triage</span><p class="mt-0.5">${triageBadge(inc.triage_color)}</p></div>
-      <div><span class="text-gray-500">Status</span><p class="mt-0.5">${statusBadge(inc.status)}</p></div>
+      <div><span class="text-gray-500">Type</span><p class="font-semibold mt-0.5"><span class="inline-flex px-2 py-0.5 rounded text-xs ${typeColor(inc.incident_type)}">${inc.incident_type}</span></p></div>
       <div><span class="text-gray-500">Purok</span><p class="font-semibold">${inc.purok_name || '—'}</p></div>
       <div><span class="text-gray-500">Reporter</span><p class="font-semibold">${inc.reporter_name}</p></div>
       <div><span class="text-gray-500">Phone</span><p class="font-semibold">${inc.reporter_phone || '—'}</p></div>
       <div class="col-span-2"><span class="text-gray-500">Reported</span><p class="font-semibold">${formatDate(inc.reported_at)}</p></div>
+      <div><span class="text-gray-500">Status</span><p class="mt-0.5">${statusBadge(inc.status)}</p></div>
       <div class="col-span-2"><span class="text-gray-500">Description</span><p class="bg-gray-50 rounded-lg p-3 mt-1 text-gray-700 text-sm">${inc.description}</p></div>
       ${inc.latitude ? `
       <div class="col-span-2">
@@ -274,7 +274,10 @@ async function openModal(id) {
   const actionsHtml = [];
   if (isMyIncident) {
     (INCIDENT_TRANSITIONS[inc.status] || []).forEach(s => {
-      actionsHtml.push(`<button onclick="changeStatus(${id},'${s}')" class="btn-primary btn-sm">Mark ${s}</button>`);
+      const icon = STATUS_ACTION_ICON[s] || 'fa-arrow-right';
+      actionsHtml.push(s === 'Delayed'
+        ? `<button onclick="promptDelayReason(${id})" class="btn-warning btn-sm"><i class="fa-solid ${icon} mr-1"></i>Mark Delayed</button>`
+        : `<button onclick="changeStatus(${id},'${s}')" class="btn-primary btn-sm"><i class="fa-solid ${icon} mr-1"></i>Mark ${s}</button>`);
     });
   }
   if (!inc.is_fake) {
@@ -304,8 +307,14 @@ async function flagFake(id, reason) {
   }
 }
 
-async function changeStatus(id, status) {
-  const res = await api.patch(`/incidents/${id}/status`, { status });
+function promptDelayReason(id) {
+  const reason = prompt('Why is this incident delayed?');
+  if (!reason || !reason.trim()) return;
+  changeStatus(id, 'Delayed', reason.trim());
+}
+
+async function changeStatus(id, status, note) {
+  const res = await api.patch(`/incidents/${id}/status`, note ? { status, note } : { status });
   if (res && res.ok) {
     showToast(`Incident marked as ${status}`);
     closeModal();

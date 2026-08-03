@@ -131,7 +131,7 @@ async function loadReports() {
   document.getElementById('rpt-total').textContent    = filtered.length;
   document.getElementById('rpt-resolved').textContent = filtered.filter(i => i.status === 'Resolved' || i.status === 'Archived').length;
   document.getElementById('rpt-pending').textContent  = filtered.filter(i => i.status === 'Pending').length;
-  document.getElementById('rpt-ongoing').textContent  = filtered.filter(i => ['Dispatched', 'Initiate', 'Delayed'].includes(i.status)).length;
+  document.getElementById('rpt-ongoing').textContent  = filtered.filter(i => ['Assigned', 'Initiate', 'Delayed'].includes(i.status)).length;
 
   const label = getPeriodLabel(f) + (f.type ? ` · ${f.type}` : '');
   document.getElementById('incident-period-label').textContent = label;
@@ -239,7 +239,7 @@ function renderIncidentsTable(data) {
     const date = new Date(i.reported_at).toLocaleString('en-PH', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
     const statusColor = {
       Pending: 'bg-yellow-100 text-yellow-700',
-      Dispatched: 'bg-blue-100 text-blue-700',
+      Assigned: 'bg-blue-100 text-blue-700',
       Initiate: 'bg-indigo-100 text-indigo-700',
       Delayed: 'bg-amber-100 text-amber-800',
       Resolved: 'bg-green-100 text-green-700',
@@ -310,7 +310,7 @@ async function downloadPDF() {
   const total    = filtered.length;
   const resolved = filtered.filter(i => i.status === 'Resolved' || i.status === 'Archived').length;
   const pending  = filtered.filter(i => i.status === 'Pending').length;
-  const ongoing  = filtered.filter(i => ['Dispatched', 'Initiate', 'Delayed'].includes(i.status)).length;
+  const ongoing  = filtered.filter(i => ['Assigned', 'Initiate', 'Delayed'].includes(i.status)).length;
 
   // ── Header ──────────────────────────────────────────────
   const logoSize = 22; // mm, square
@@ -353,7 +353,7 @@ async function downloadPDF() {
 
   doc.autoTable({
     startY: summaryStartY + 4,
-    head: [['Total Incidents', 'Resolved', 'Pending', 'Dispatched / Initiate / Delayed']],
+    head: [['Total Incidents', 'Resolved', 'Pending', 'Assigned / Initiate / Delayed']],
     body: [[total, resolved, pending, ongoing]],
     theme: 'grid',
     headStyles: { fillColor: [30, 64, 175], textColor: 255, fontSize: 8, fontStyle: 'bold' },

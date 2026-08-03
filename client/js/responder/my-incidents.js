@@ -47,13 +47,13 @@ function renderTable(list) {
 
   tbody.innerHTML = list.map(i => `
     <tr class="table-row">
-      <td class="px-4 py-3 font-mono text-xs text-blue-600 font-medium">${i.reference_no}</td>
-      <td class="px-4 py-3"><span class="inline-flex px-2 py-0.5 rounded text-xs font-medium ${typeColor(i.incident_type)}">${i.incident_type}</span></td>
-      <td class="px-4 py-3 text-sm text-gray-600">${i.purok_name || '—'}</td>
       <td class="px-4 py-3">${triageBadge(i.triage_color)}</td>
-      <td class="px-4 py-3">${statusBadge(i.status)}</td>
+      <td class="px-4 py-3"><span class="inline-flex px-2 py-0.5 rounded text-xs font-medium ${typeColor(i.incident_type)}">${i.incident_type}</span></td>
+      <td class="px-4 py-3 font-mono text-xs text-blue-600 font-medium">${i.reference_no}</td>
+      <td class="px-4 py-3 text-sm text-gray-600">${i.purok_name || '—'}</td>
       <td class="px-4 py-3 text-xs text-gray-500">${formatDate(i.reported_at)}</td>
       <td class="px-4 py-3 text-xs text-gray-500">${i.resolved_at ? formatDate(i.resolved_at) : '—'}</td>
+      <td class="px-4 py-3">${statusBadge(i.status)}</td>
       <td class="px-4 py-3">
         <button onclick="openModal(${i.id})" class="text-blue-600 hover:text-blue-800 text-xs font-medium">
           <i class="fa-solid fa-eye"></i> View
@@ -83,10 +83,10 @@ async function openModal(id) {
   const btnHtml = [];
   if (isMyIncident) {
     (INCIDENT_TRANSITIONS[inc.status] || []).forEach(s => {
-      const icon = s === 'Resolved' ? 'fa-circle-check' : 'fa-spinner';
-      btnHtml.push(`<button onclick="changeStatus(${id},'${s}')" class="btn-primary btn-sm">
-                      <i class="fa-solid ${icon} mr-1"></i> Mark ${s}
-                    </button>`);
+      const icon = STATUS_ACTION_ICON[s] || 'fa-arrow-right';
+      btnHtml.push(s === 'Delayed'
+        ? `<button onclick="promptDelayReason(${id})" class="btn-warning btn-sm"><i class="fa-solid ${icon} mr-1"></i> Mark Delayed</button>`
+        : `<button onclick="changeStatus(${id},'${s}')" class="btn-primary btn-sm"><i class="fa-solid ${icon} mr-1"></i> Mark ${s}</button>`);
     });
   }
   if (!inc.is_fake) {
@@ -111,14 +111,14 @@ async function openModal(id) {
 
   document.getElementById('modal-content').innerHTML = `
     <div class="grid grid-cols-2 gap-3 text-sm">
-      <div><span class="text-gray-500">Type</span><p class="font-semibold mt-0.5"><span class="inline-flex px-2 py-0.5 rounded text-xs ${typeColor(inc.incident_type)}">${inc.incident_type}</span></p></div>
       <div><span class="text-gray-500">Triage</span><p class="mt-0.5">${triageBadge(inc.triage_color)}</p></div>
-      <div><span class="text-gray-500">Status</span><p class="mt-0.5">${statusBadge(inc.status)}</p></div>
+      <div><span class="text-gray-500">Type</span><p class="font-semibold mt-0.5"><span class="inline-flex px-2 py-0.5 rounded text-xs ${typeColor(inc.incident_type)}">${inc.incident_type}</span></p></div>
       <div><span class="text-gray-500">Purok</span><p class="font-semibold">${inc.purok_name || '—'}</p></div>
       <div><span class="text-gray-500">Reporter</span><p class="font-semibold">${inc.reporter_name}</p></div>
       <div><span class="text-gray-500">Reporter Phone</span><p class="font-semibold">${inc.reporter_phone || '—'}</p></div>
       <div><span class="text-gray-500">Reported</span><p class="font-semibold">${formatDate(inc.reported_at)}</p></div>
       <div><span class="text-gray-500">Resolved</span><p class="font-semibold">${inc.resolved_at ? formatDate(inc.resolved_at) : '—'}</p></div>
+      <div><span class="text-gray-500">Status</span><p class="mt-0.5">${statusBadge(inc.status)}</p></div>
       <div class="col-span-2"><span class="text-gray-500">Description</span><p class="bg-gray-50 rounded-lg p-3 mt-1 text-gray-700">${inc.description}</p></div>
       ${inc.latitude ? `
       <div class="col-span-2">
@@ -189,8 +189,14 @@ async function flagFake(id, reason) {
   }
 }
 
-async function changeStatus(id, status) {
-  const res = await api.patch(`/incidents/${id}/status`, { status });
+function promptDelayReason(id) {
+  const reason = prompt('Why is this incident delayed?');
+  if (!reason || !reason.trim()) return;
+  changeStatus(id, 'Delayed', reason.trim());
+}
+
+async function changeStatus(id, status, note) {
+  const res = await api.patch(`/incidents/${id}/status`, note ? { status, note } : { status });
   if (res && res.ok) {
     showToast(`Marked as ${status}`);
     closeModal();

@@ -48,7 +48,7 @@ CREATE TABLE IF NOT EXISTS incidents (
   latitude              DECIMAL(10,8) DEFAULT NULL,
   longitude             DECIMAL(11,8) DEFAULT NULL,
   photo_path            VARCHAR(255)  DEFAULT NULL,
-  status                ENUM('Pending','Dispatched','Initiate','Delayed','Resolved','Archived') NOT NULL DEFAULT 'Pending',
+  status                ENUM('Pending','Assigned','Initiate','Delayed','Resolved','Archived') NOT NULL DEFAULT 'Pending',
   triage_color          ENUM('Red','Orange','Yellow','Green') NOT NULL DEFAULT 'Yellow',
   assigned_responder_id INT           DEFAULT NULL,
   is_fake               TINYINT(1)    NOT NULL DEFAULT 0,

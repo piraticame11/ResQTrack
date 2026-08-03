@@ -92,6 +92,22 @@ async function migrate() {
       console.log('  ⏭  incidents.status already migrated');
     }
 
+    const [statusColRows2] = await conn.query(
+      `SELECT COLUMN_TYPE FROM information_schema.COLUMNS
+       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'incidents' AND COLUMN_NAME = 'status'`
+    );
+    const statusCol2 = statusColRows2[0];
+    if (statusCol2 && statusCol2.COLUMN_TYPE.includes("'Dispatched'")) {
+      await conn.query(`ALTER TABLE incidents MODIFY COLUMN status
+        ENUM('Pending','Dispatched','Assigned','Initiate','Delayed','Resolved','Archived') NOT NULL DEFAULT 'Pending'`);
+      await conn.query(`UPDATE incidents SET status = 'Assigned' WHERE status = 'Dispatched'`);
+      await conn.query(`ALTER TABLE incidents MODIFY COLUMN status
+        ENUM('Pending','Assigned','Initiate','Delayed','Resolved','Archived') NOT NULL DEFAULT 'Pending'`);
+      console.log('  ✅ Migrated incidents.status: Dispatched -> Assigned');
+    } else {
+      console.log('  ⏭  incidents.status already renamed to Assigned');
+    }
+
     const [typeColRows] = await conn.query(
       `SELECT COLUMN_TYPE FROM information_schema.COLUMNS
        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'incidents' AND COLUMN_NAME = 'incident_type'`

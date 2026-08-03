@@ -46,14 +46,14 @@ async function loadLogbook() {
 
   tbody.innerHTML = incidents.map(i => `
     <tr class="table-row">
-      <td class="px-4 py-3 font-mono text-xs text-blue-600 font-medium">${i.reference_no}</td>
+      <td class="px-4 py-3">${triageBadge(i.triage_color)}</td>
       <td class="px-4 py-3"><span class="inline-flex px-2 py-0.5 rounded text-xs font-medium ${typeColor(i.incident_type)}">${i.incident_type}</span></td>
+      <td class="px-4 py-3 font-mono text-xs text-blue-600 font-medium">${i.reference_no}</td>
       <td class="px-4 py-3 text-xs text-gray-600 max-w-xs truncate">${i.description}</td>
       <td class="px-4 py-3 text-sm text-gray-600">${i.purok_name || '—'}</td>
       <td class="px-4 py-3 text-sm text-gray-700">${i.reporter_name || '—'}</td>
-      <td class="px-4 py-3">${triageBadge(i.triage_color)}</td>
-      <td class="px-4 py-3">${statusBadge(i.status)}</td>
       <td class="px-4 py-3 text-xs text-gray-500">${formatDate(i.reported_at)}</td>
+      <td class="px-4 py-3">${statusBadge(i.status)}</td>
       <td class="px-4 py-3">
         <button onclick="openDetailModal(${i.id})" class="text-blue-600 hover:text-blue-800 text-xs font-medium">
           <i class="fa-solid fa-eye"></i>
@@ -73,14 +73,14 @@ async function openDetailModal(id) {
 
   document.getElementById('detail-content').innerHTML = `
     <div class="grid grid-cols-2 gap-3 text-sm">
-      <div><span class="text-gray-500">Type</span><p><span class="inline-flex px-2 py-0.5 rounded text-xs ${typeColor(inc.incident_type)}">${inc.incident_type}</span></p></div>
-      <div><span class="text-gray-500">Status</span><p>${statusBadge(inc.status)}</p></div>
       <div><span class="text-gray-500">Triage</span><p>${triageBadge(inc.triage_color)}</p></div>
+      <div><span class="text-gray-500">Type</span><p><span class="inline-flex px-2 py-0.5 rounded text-xs ${typeColor(inc.incident_type)}">${inc.incident_type}</span></p></div>
       <div><span class="text-gray-500">Purok</span><p class="font-semibold">${inc.purok_name || '—'}</p></div>
       <div><span class="text-gray-500">Reporter</span><p class="font-semibold">${inc.reporter_name || '—'}</p></div>
       <div><span class="text-gray-500">Responder</span><p class="font-semibold">${inc.responder_name || '—'}</p></div>
       <div class="col-span-2"><span class="text-gray-500">Reported at</span><p class="font-semibold">${formatDate(inc.reported_at)}</p></div>
       ${inc.resolved_at ? `<div class="col-span-2"><span class="text-gray-500">Resolved at</span><p class="font-semibold">${formatDate(inc.resolved_at)}</p></div>` : ''}
+      <div><span class="text-gray-500">Status</span><p>${statusBadge(inc.status)}</p></div>
       <div class="col-span-2"><span class="text-gray-500">Description</span><p class="bg-gray-50 rounded-lg p-3 mt-1">${inc.description}</p></div>
       ${(inc.attachments?.length ? inc.attachments.map(a => a.file_path) : (inc.photo_path ? [inc.photo_path] : [])).length
         ? `<div class="col-span-2 grid grid-cols-3 gap-2">${(inc.attachments?.length ? inc.attachments.map(a => a.file_path) : [inc.photo_path]).map(p => `<a href="${p}" target="_blank" rel="noopener"><img src="${p}" class="w-full h-24 object-cover rounded-lg border border-gray-200"></a>`).join('')}</div>`

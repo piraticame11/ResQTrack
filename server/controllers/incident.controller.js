@@ -12,7 +12,7 @@ const TRIAGE_MAP = {
 
 const VALID_TYPES   = ['Fire', 'Rescue', 'Crime', 'Noise', 'Garbage', 'Other'];
 const VALID_TRIAGE   = ['Red', 'Orange', 'Yellow', 'Green'];
-const VALID_STATUSES = ['Pending', 'Dispatched', 'Initiate', 'Delayed', 'Resolved', 'Archived'];
+const VALID_STATUSES = ['Pending', 'Assigned', 'Initiate', 'Delayed', 'Resolved', 'Archived'];
 
 function generateRefNo() {
   const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
@@ -168,11 +168,11 @@ exports.updateStatus = async (req, res) => {
       updated_by: req.user.name,
     });
 
-    if (status === 'Dispatched' || status === 'Resolved') {
+    if (status === 'Assigned' || status === 'Resolved') {
       const [[reporter]] = await db.query('SELECT phone FROM users WHERE id = ?', [incInfo.reporter_id]);
       if (reporter?.phone) {
-        const msg = status === 'Dispatched'
-          ? `ResQTrack: A responder has been dispatched for your report ${incInfo.reference_no}.`
+        const msg = status === 'Assigned'
+          ? `ResQTrack: A responder has been assigned to your report ${incInfo.reference_no}.`
           : `ResQTrack: Your report ${incInfo.reference_no} has been marked resolved.`;
         sendSMS(reporter.phone, msg);
       }
@@ -282,7 +282,7 @@ exports.assignResponder = async (req, res) => {
 
     // Keep assigned_responder_id pointing to the first (lead) responder
     await db.query(
-      'UPDATE incidents SET assigned_responder_id = ?, status = "Dispatched" WHERE id = ?',
+      'UPDATE incidents SET assigned_responder_id = ?, status = "Assigned" WHERE id = ?',
       [responder_ids[0], req.params.id]
     );
 
@@ -304,7 +304,7 @@ exports.assignResponder = async (req, res) => {
     const io = req.app.get('io');
     if (io) io.emit('incident:status_update', {
       id: parseInt(req.params.id),
-      status: 'Dispatched',
+      status: 'Assigned',
       reporter_id: incData.reporter_id,
       reference_no: incData.reference_no,
       responder_name: nameList,
@@ -312,7 +312,7 @@ exports.assignResponder = async (req, res) => {
 
     const [[reporter]] = await db.query('SELECT phone FROM users WHERE id = ?', [incData.reporter_id]);
     if (reporter?.phone) {
-      sendSMS(reporter.phone, `ResQTrack: A responder has been dispatched for your report ${incData.reference_no}.`);
+      sendSMS(reporter.phone, `ResQTrack: A responder has been assigned to your report ${incData.reference_no}.`);
     }
 
     res.json({ message: 'Responder(s) assigned' });

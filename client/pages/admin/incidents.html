@@ -58,7 +58,7 @@
           <input type="text" id="filter-search" placeholder="Search ref / reporter…" class="input-field col-span-2 sm:col-span-1">
           <select id="filter-status" class="input-field">
             <option value="">All Statuses</option>
-            <option>Pending</option><option>Dispatched</option><option>Initiate</option><option>Delayed</option><option>Resolved</option><option>Archived</option>
+            <option>Pending</option><option>Assigned</option><option>Initiate</option><option>Delayed</option><option>Resolved</option><option>Archived</option>
           </select>
           <select id="filter-type" class="input-field">
             <option value="">All Types</option>
@@ -81,13 +81,13 @@
           <table class="w-full text-sm">
             <thead class="bg-gray-50 text-gray-500 text-xs uppercase border-b border-gray-200">
               <tr>
-                <th class="px-4 py-3 text-left">Ref #</th>
+                <th class="px-4 py-3 text-left">Triage</th>
                 <th class="px-4 py-3 text-left">Type</th>
+                <th class="px-4 py-3 text-left">Reference #</th>
                 <th class="px-4 py-3 text-left">Purok</th>
                 <th class="px-4 py-3 text-left">Reporter</th>
-                <th class="px-4 py-3 text-left">Triage</th>
-                <th class="px-4 py-3 text-left">Status</th>
                 <th class="px-4 py-3 text-left">Reported</th>
+                <th class="px-4 py-3 text-left">Status</th>
                 <th class="px-4 py-3 text-left">Actions</th>
               </tr>
             </thead>
@@ -133,7 +133,7 @@
         <button type="button" onclick="clearResponderSelection()" class="text-red-500 hover:underline">Clear all</button>
       </div>
       <button onclick="submitAssign()" class="btn-primary w-full">
-        <i class="fa-solid fa-user-check mr-1.5"></i> Assign & Dispatch
+        <i class="fa-solid fa-user-check mr-1.5"></i> Assign Responder(s)
       </button>
     </div>
   </div>
