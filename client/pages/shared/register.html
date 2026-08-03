@@ -102,15 +102,15 @@
                   </select>
                 </div>
                 <div>
-                  <label class="block text-xs font-medium text-gray-600 mb-1">Province</label>
-                  <select id="province" class="input-field">
-                    <option>Davao del Norte</option>
+                  <label class="block text-xs font-medium text-gray-600 mb-1">Province <span class="text-blue-500">*</span></label>
+                  <select id="province" required class="input-field">
+                    <option value="">— Select Province —</option>
                   </select>
                 </div>
                 <div>
-                  <label class="block text-xs font-medium text-gray-600 mb-1">City</label>
-                  <select id="city" class="input-field">
-                    <option>Panabo City</option>
+                  <label class="block text-xs font-medium text-gray-600 mb-1">City <span class="text-blue-500">*</span></label>
+                  <select id="city" required class="input-field" disabled>
+                    <option value="">— Select Province First —</option>
                   </select>
                 </div>
               </div>
@@ -158,13 +158,13 @@
                 <div>
                   <label class="block text-xs font-medium text-gray-600 mb-1">Province</label>
                   <select id="landlord_province" class="input-field">
-                    <option>Davao del Norte</option>
+                    <option value="">— Select Province —</option>
                   </select>
                 </div>
                 <div>
                   <label class="block text-xs font-medium text-gray-600 mb-1">City</label>
-                  <select id="landlord_city" class="input-field">
-                    <option>Panabo City</option>
+                  <select id="landlord_city" class="input-field" disabled>
+                    <option value="">— Select Province First —</option>
                   </select>
                 </div>
               </div>
@@ -367,6 +367,46 @@
           });
         });
       } catch { /* leave the placeholder-only selects if this fails */ }
+    })();
+
+    // Province -> City cascade, shared by the main address and the
+    // landlord's address. Fed by a static PSGC-derived dataset since PH
+    // provinces/cities don't change often enough to warrant an API call.
+    (async () => {
+      const provincePairs = [
+        [document.getElementById('province'), document.getElementById('city')],
+        [document.getElementById('landlord_province'), document.getElementById('landlord_city')],
+      ];
+
+      let locations = {};
+      try {
+        const res = await fetch('/public/data/ph-locations.json');
+        if (res.ok) locations = await res.json();
+      } catch { /* leave province/city as placeholder-only selects if this fails */ }
+
+      const provinceNames = Object.keys(locations).sort();
+
+      function fillCities(provinceSel, citySel) {
+        const cities = locations[provinceSel.value] || [];
+        citySel.innerHTML = cities.length
+          ? '<option value="">— Select City/Municipality —</option>'
+          : '<option value="">— Select Province First —</option>';
+        cities.forEach(c => {
+          const o = document.createElement('option');
+          o.value = c; o.textContent = c;
+          citySel.appendChild(o);
+        });
+        citySel.disabled = !cities.length;
+      }
+
+      provincePairs.forEach(([provinceSel, citySel]) => {
+        provinceNames.forEach(name => {
+          const o = document.createElement('option');
+          o.value = name; o.textContent = name;
+          provinceSel.appendChild(o);
+        });
+        provinceSel.addEventListener('change', () => fillCities(provinceSel, citySel));
+      });
     })();
 
     // Homeowner / Tenant toggle
@@ -581,8 +621,14 @@
       if (!/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/.test(pw))
         return showErr('Password must be at least 8 characters with uppercase, lowercase, and a number.');
 
-      const address = document.getElementById('address_line').value.trim();
-      if (address.length < 5) return showErr('Please provide a complete address (house number, street, and landmark).');
+      const addressStreet = document.getElementById('address_line').value.trim();
+      if (addressStreet.length < 5) return showErr('Please provide a complete address (house number, street, and landmark).');
+
+      const provinceVal = document.getElementById('province').value;
+      const cityVal     = document.getElementById('city').value;
+      if (!provinceVal || !cityVal) return showErr('Please select your Province and City/Municipality.');
+
+      const address = [addressStreet, cityVal, provinceVal].filter(Boolean).join(', ');
 
       const residency = document.getElementById('residency_type').value;
       const landlordName    = document.getElementById('landlord_name').value.trim();
@@ -651,6 +697,13 @@
         idCapture.reset();
         porCapture.reset();
         selectResidency('Owner');
+        // form.reset() restores select values but not the `disabled` state
+        // the province->city cascade set dynamically — clear both city
+        // dropdowns back to their placeholder-only, disabled default.
+        [document.getElementById('city'), document.getElementById('landlord_city')].forEach(sel => {
+          sel.innerHTML = '<option value="">— Select Province First —</option>';
+          sel.disabled = true;
+        });
         ['s1','s2','s3','s4'].forEach(id => document.getElementById(id).className = 'h-1 flex-1 rounded bg-gray-200');
         document.getElementById('pw-strength-text').textContent = '';
       } catch (err) {
