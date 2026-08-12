@@ -16,16 +16,7 @@ async function extractIdText(buffer) {
 
 const ID_TYPE_PATTERNS = [
   [/PHILIPPINE\s*IDENTIFICATION|PHILSYS|PhilID/i, 'PhilSys National ID'],
-  [/UNIFIED\s*MULTI-?\s*PURPOSE|\bUMID\b/i,        'UMID'],
   [/DRIVER'?S?\s*LICENSE/i,                        "Driver's License"],
-  [/PASSPORT/i,                                    'Passport'],
-  [/VOTER'?S?\s*(ID|CERTIFICATION)|COMELEC/i,      "Voter's ID"],
-  [/PERSON\s*WITH\s*DISABILITY|\bPWD\b/i,          'PWD ID'],
-  [/SENIOR\s*CITIZEN/i,                            'Senior Citizen ID'],
-  [/POSTAL\s*ID/i,                                 'Postal ID'],
-  [/TAX\s*IDENTIFICATION|\bTIN\b/i,                'TIN ID'],
-  [/\bSSS\b/i,                                     'SSS ID'],
-  [/PHILHEALTH/i,                                  'PhilHealth ID'],
 ];
 
 const NAME_LABELS = {
@@ -87,14 +78,47 @@ function parseIdFields(rawText) {
 
   const idType = ID_TYPE_PATTERNS.find(([re]) => re.test(joined))?.[1] || null;
 
-  return {
+  const result = {
     id_type:     idType,
     id_number:   parseIdNumber(lines),
-    last_name:   grabAfterLabel(lines, NAME_LABELS.last_name),
-    first_name:  grabAfterLabel(lines, NAME_LABELS.first_name),
-    middle_name: grabAfterLabel(lines, NAME_LABELS.middle_name),
+    last_name:   null,
+    first_name:  null,
+    middle_name: null,
     birthdate:   parseBirthdate(joined),
   };
+
+  if (idType === "Driver's License") {
+    // Usually Name is right below "Last Name. First Name. Middle Name"
+    const nameLabelIdx = lines.findIndex(l => /Last Name\.?\s*First Name\.?\s*Middle Name/i.test(l));
+    if (nameLabelIdx !== -1 && nameLabelIdx + 1 < lines.length) {
+      const nameParts = lines[nameLabelIdx + 1].split(',').map(s => s.trim());
+      if (nameParts.length >= 2) {
+        result.last_name = nameParts[0];
+        const firstMiddle = nameParts.slice(1).join(' ').trim().split(/\s+/);
+        if (firstMiddle.length >= 2) {
+           result.middle_name = firstMiddle.pop();
+           result.first_name = firstMiddle.join(' ');
+        } else {
+           result.first_name = firstMiddle.join(' ');
+        }
+      } else {
+         result.last_name = grabAfterLabel(lines, NAME_LABELS.last_name);
+         result.first_name = grabAfterLabel(lines, NAME_LABELS.first_name);
+         result.middle_name = grabAfterLabel(lines, NAME_LABELS.middle_name);
+      }
+    } else {
+       result.last_name = grabAfterLabel(lines, NAME_LABELS.last_name);
+       result.first_name = grabAfterLabel(lines, NAME_LABELS.first_name);
+       result.middle_name = grabAfterLabel(lines, NAME_LABELS.middle_name);
+    }
+  } else {
+    // PhilSys or generic fallback
+    result.last_name = grabAfterLabel(lines, NAME_LABELS.last_name);
+    result.first_name = grabAfterLabel(lines, NAME_LABELS.first_name);
+    result.middle_name = grabAfterLabel(lines, NAME_LABELS.middle_name);
+  }
+
+  return result;
 }
 
 module.exports = { extractIdText, parseIdFields };
