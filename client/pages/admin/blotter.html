@@ -7,29 +7,9 @@
   <link rel="icon" type="image/png" href="/public/images/favicon.png">
   <link rel="stylesheet" href="/public/css/output.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" crossorigin="anonymous">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 </head>
 <body class="bg-gray-50 font-sans">
-
-<!-- Re-auth gate: blotter entries contain complainant/respondent PII, so we
-     require the admin to re-confirm their password every time this page
-     loads before any entry data is fetched or rendered. -->
-<div id="reauth-overlay" class="fixed inset-0 z-[100] bg-slate-900/95 flex items-center justify-center p-4">
-  <div class="bg-white rounded-2xl shadow-xl max-w-sm w-full p-6">
-    <div class="flex items-center gap-2 mb-1.5">
-      <i class="fa-solid fa-lock text-blue-500"></i>
-      <h2 class="font-bold text-gray-800">Confirm Your Password</h2>
-    </div>
-    <p class="text-sm text-gray-500 mb-4">The Digital Blotter contains sensitive complaint records. Re-enter your password to continue.</p>
-    <form id="reauth-form" class="space-y-3">
-      <input type="password" id="reauth-password" required autofocus placeholder="Password" class="input-field">
-      <p id="reauth-error" class="hidden text-xs text-red-500"></p>
-      <div class="flex gap-2">
-        <button type="submit" id="reauth-submit" class="btn-primary flex-1">Continue</button>
-        <a href="/pages/admin/dashboard.html" class="btn-secondary flex-1 flex items-center justify-center">Cancel</a>
-      </div>
-    </form>
-  </div>
-</div>
 
 <div class="flex h-screen overflow-hidden">
 
@@ -41,6 +21,7 @@
       <span class="ml-2 text-slate-500 text-xs uppercase tracking-wider">Admin</span>
     </div>
     <nav class="flex-1 py-4 px-3 space-y-0.5 overflow-y-auto">
+      <div class="px-3 pb-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">Admin</div>
       <a href="/pages/admin/dashboard.html"    class="nav-item"><i class="fa-solid fa-gauge w-5 text-center"></i> Dashboard</a>
       <a href="/pages/admin/incidents.html"    class="nav-item"><i class="fa-solid fa-triangle-exclamation w-5 text-center"></i> Incidents</a>
       <a href="/pages/admin/users.html"        class="nav-item"><i class="fa-solid fa-users w-5 text-center"></i> Users</a>
@@ -50,6 +31,28 @@
       <a href="/pages/admin/reports.html"      class="nav-item"><i class="fa-solid fa-chart-bar w-5 text-center"></i> Reports</a>
       <a href="/pages/admin/puroks.html"       class="nav-item"><i class="fa-solid fa-map-location-dot w-5 text-center"></i> Puroks</a>
       <a href="/pages/admin/audit.html"        class="nav-item"><i class="fa-solid fa-user-shield w-5 text-center"></i> Audit Log</a>
+
+      <!-- Portal Switcher Dock in Sidebar -->
+      <div class="pt-3 px-1 pb-1 border-t border-slate-800/80 mt-2">
+        <div class="px-2 pb-1.5 flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-slate-400">
+          <span>Switch Portal</span>
+          <span class="text-blue-400 font-semibold bg-blue-500/10 px-1.5 py-0.5 rounded text-[9px] border border-blue-500/20">Admin</span>
+        </div>
+        <div class="grid grid-cols-2 gap-1.5 mt-1">
+          <a href="/pages/responder/dashboard.html"
+             class="group flex flex-col items-center justify-center p-2 rounded-xl bg-slate-800/70 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700/50 hover:border-emerald-500/40 transition-all text-center"
+             title="Switch to Responder View">
+            <i class="fa-solid fa-truck-medical text-emerald-400 text-sm mb-1 group-hover:scale-110 transition-transform"></i>
+            <span class="text-[11px] font-medium leading-none">Responder</span>
+          </a>
+          <a href="/pages/client/home.html"
+             class="group flex flex-col items-center justify-center p-2 rounded-xl bg-slate-800/70 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700/50 hover:border-blue-500/40 transition-all text-center"
+             title="Switch to Resident View">
+            <i class="fa-solid fa-house text-blue-400 text-sm mb-1 group-hover:scale-110 transition-transform"></i>
+            <span class="text-[11px] font-medium leading-none">Resident</span>
+          </a>
+        </div>
+      </div>
     </nav>
     <div class="border-t border-slate-800 p-4">
       <div class="flex items-center gap-3">
@@ -68,7 +71,10 @@
         <button onclick="toggleSidebar()" class="lg:hidden text-gray-500 hover:text-gray-700 -ml-1 p-1"><i class="fa-solid fa-bars text-xl"></i></button>
         <h1 class="text-lg font-semibold text-gray-800">Digital Blotter</h1>
       </div>
-      <button onclick="openNewEntryModal()" class="btn-primary btn-sm"><i class="fa-solid fa-plus mr-1"></i> File Entry</button>
+      <div class="flex items-center gap-3">
+        <div id="portal-switcher"></div>
+        <button onclick="openNewEntryModal()" class="btn-primary btn-sm"><i class="fa-solid fa-plus mr-1"></i> File Entry</button>
+      </div>
     </header>
 
     <main class="flex-1 overflow-y-auto p-4 lg:p-6">
@@ -82,7 +88,7 @@
         <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
           <input type="text" id="search-blotter" placeholder="Search entry # / name / nature…" class="input-field">
           <select id="filter-status" class="input-field">
-            <option value="">All Statuses</option>
+            <option value="">All Status</option>
             <option>Open</option><option>Under Mediation</option><option>Resolved</option>
             <option>Endorsed to Court</option><option>Voided</option>
           </select>
@@ -105,7 +111,7 @@
                 <th class="px-4 py-3 text-left">Purok</th>
                 <th class="px-4 py-3 text-left">Status</th>
                 <th class="px-4 py-3 text-left">Filed</th>
-                <th class="px-4 py-3 text-left">View</th>
+                <th class="px-4 py-3 text-left">Action</th>
               </tr>
             </thead>
             <tbody id="blotter-body" class="divide-y divide-gray-100">
@@ -120,41 +126,94 @@
 
 <!-- New Entry Modal -->
 <div id="new-entry-modal" class="modal-overlay hidden">
-  <div class="modal-box max-w-2xl">
-    <div class="flex items-center justify-between p-5 border-b border-gray-100">
-      <h3 class="font-bold text-gray-800 text-lg">File Blotter Entry</h3>
-      <button onclick="closeNewEntryModal()" class="text-gray-400 hover:text-gray-600"><i class="fa-solid fa-xmark text-xl"></i></button>
-    </div>
-    <form id="entry-form" class="p-5 space-y-4">
-      <div class="grid grid-cols-2 gap-4">
-        <fieldset class="col-span-2 sm:col-span-1 border border-gray-200 rounded-lg p-3 space-y-2">
-          <legend class="text-xs font-semibold text-gray-500 uppercase px-1">Complainant</legend>
-          <input type="text" id="e-complainant_name" required placeholder="Full name" class="input-field">
-          <input type="text" id="e-complainant_address" placeholder="Address (optional)" class="input-field">
-          <input type="tel" id="e-complainant_contact" placeholder="Contact no. (optional)" class="input-field">
-        </fieldset>
-        <fieldset class="col-span-2 sm:col-span-1 border border-gray-200 rounded-lg p-3 space-y-2">
-          <legend class="text-xs font-semibold text-gray-500 uppercase px-1">Respondent</legend>
-          <input type="text" id="e-respondent_name" required placeholder="Full name" class="input-field">
-          <input type="text" id="e-respondent_address" placeholder="Address (optional)" class="input-field">
-          <input type="tel" id="e-respondent_contact" placeholder="Contact no. (optional)" class="input-field">
-        </fieldset>
-        <div class="col-span-2">
-          <label class="block text-sm font-medium text-gray-700 mb-1.5">Nature of Complaint</label>
-          <input type="text" id="e-nature" required placeholder="e.g. Noise Disturbance, Property Dispute, Threat" class="input-field">
+  <div class="modal-box max-w-4xl">
+    <div class="modal-header">
+      <div class="flex items-center gap-2.5">
+        <div class="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold text-base">
+          <i class="fa-solid fa-scale-balanced"></i>
         </div>
-        <div class="col-span-2">
-          <label class="block text-sm font-medium text-gray-700 mb-1.5">Purok</label>
-          <select id="e-purok" class="input-field"><option value="">— Select —</option></select>
-        </div>
-        <div class="col-span-2">
-          <label class="block text-sm font-medium text-gray-700 mb-1.5">Narrative</label>
-          <textarea id="e-narrative" required rows="4" placeholder="What happened, as reported to the barangay…" class="input-field"></textarea>
+        <div>
+          <h3 class="font-bold text-gray-800 text-lg">File Barangay Blotter Entry</h3>
+          <p class="text-xs text-gray-400">Record a new community complaint or incident report</p>
         </div>
       </div>
-      <div class="flex gap-3 pt-2">
-        <button type="submit" class="btn-primary flex-1" id="entry-submit-btn">File Entry</button>
-        <button type="button" onclick="closeNewEntryModal()" class="btn-secondary flex-1">Cancel</button>
+      <button onclick="closeNewEntryModal()" class="text-gray-400 hover:text-gray-600 p-1 transition-colors"><i class="fa-solid fa-xmark text-xl"></i></button>
+    </div>
+    <form id="entry-form" class="flex flex-col flex-1 overflow-hidden min-h-0" autocomplete="off">
+      <div class="modal-body space-y-4">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+          <!-- Complainant Fieldset with Resident Search -->
+          <fieldset class="border border-gray-200 bg-gray-50/50 rounded-xl p-4 space-y-2.5 relative">
+            <legend class="text-xs font-bold text-gray-600 uppercase px-1.5 flex items-center gap-1">
+              <i class="fa-solid fa-user text-blue-600"></i> Complainant <span class="text-red-500">*</span>
+            </legend>
+            
+            <div class="relative">
+              <label class="block text-[11px] text-gray-500 font-medium mb-0.5">Full Name <span class="text-red-500">*</span></label>
+              <input type="text" id="e-complainant_name" required placeholder="Type name to search resident…" class="input-field">
+              <div id="comp-autocomplete" class="hidden absolute top-full left-0 right-0 z-50 bg-white border border-gray-200 rounded-lg shadow-lg mt-1 max-h-48 overflow-y-auto divide-y divide-gray-100 text-xs"></div>
+            </div>
+            <input type="hidden" id="e-complainant_user_id">
+            <input type="hidden" id="e-complainant_email">
+            <div id="comp-linked-badge" class="hidden text-xs bg-blue-50 text-blue-700 border border-blue-200 rounded-lg px-2.5 py-1.5 flex items-center justify-between">
+              <span class="truncate font-medium"><i class="fa-solid fa-user-check mr-1 text-blue-600"></i><span id="comp-linked-name">Linked Resident</span></span>
+              <button type="button" onclick="unlinkResident('comp')" class="text-blue-500 hover:text-red-500 ml-1"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+
+            <div>
+              <label class="block text-[11px] text-gray-500 font-medium mb-0.5">Address <span class="text-red-500">*</span></label>
+              <input type="text" id="e-complainant_address" required placeholder="House No., Purok, Street" class="input-field">
+            </div>
+            <div>
+              <label class="block text-[11px] text-gray-500 font-medium mb-0.5">Contact Number <span class="text-red-500">*</span></label>
+              <input type="tel" id="e-complainant_contact" required placeholder="09XXXXXXXXX" class="input-field">
+            </div>
+          </fieldset>
+
+          <!-- Respondent Fieldset with Resident Search -->
+          <fieldset class="border border-gray-200 bg-gray-50/50 rounded-xl p-4 space-y-2.5 relative">
+            <legend class="text-xs font-bold text-gray-600 uppercase px-1.5 flex items-center gap-1">
+              <i class="fa-solid fa-user-tag text-purple-600"></i> Respondent <span class="text-red-500">*</span>
+            </legend>
+            
+            <div class="relative">
+              <label class="block text-[11px] text-gray-500 font-medium mb-0.5">Full Name <span class="text-red-500">*</span></label>
+              <input type="text" id="e-respondent_name" required placeholder="Type name to search resident…" class="input-field">
+              <div id="resp-autocomplete" class="hidden absolute top-full left-0 right-0 z-50 bg-white border border-gray-200 rounded-lg shadow-lg mt-1 max-h-48 overflow-y-auto divide-y divide-gray-100 text-xs"></div>
+            </div>
+            <input type="hidden" id="e-respondent_user_id">
+            <div id="resp-linked-badge" class="hidden text-xs bg-purple-50 text-purple-700 border border-purple-200 rounded-lg px-2.5 py-1.5 flex items-center justify-between">
+              <span class="truncate font-medium"><i class="fa-solid fa-user-check mr-1 text-purple-600"></i><span id="resp-linked-name">Linked Resident</span></span>
+              <button type="button" onclick="unlinkResident('resp')" class="text-purple-500 hover:text-red-500 ml-1"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+
+            <div>
+              <label class="block text-[11px] text-gray-500 font-medium mb-0.5">Address (optional)</label>
+              <input type="text" id="e-respondent_address" placeholder="Address" class="input-field">
+            </div>
+            <div>
+              <label class="block text-[11px] text-gray-500 font-medium mb-0.5">Contact Number (optional)</label>
+              <input type="tel" id="e-respondent_contact" placeholder="09XXXXXXXXX" class="input-field">
+            </div>
+          </fieldset>
+
+          <div class="md:col-span-1">
+            <label class="block text-sm font-medium text-gray-700 mb-1.5">Nature of Complaint <span class="text-red-500">*</span></label>
+            <input type="text" id="e-nature" required placeholder="e.g. Noise Disturbance, Property Dispute, Threat" class="input-field">
+          </div>
+          <div class="md:col-span-1">
+            <label class="block text-sm font-medium text-gray-700 mb-1.5">Purok</label>
+            <select id="e-purok" class="input-field"><option value="">— Select —</option></select>
+          </div>
+          <div class="col-span-1 md:col-span-2">
+            <label class="block text-sm font-medium text-gray-700 mb-1.5">Narrative <span class="text-red-500">*</span></label>
+            <textarea id="e-narrative" required rows="4" placeholder="What happened, as reported to the barangay…" class="input-field"></textarea>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="submit" class="btn-primary flex-1 py-2.5" id="entry-submit-btn">File Entry</button>
+        <button type="button" onclick="closeNewEntryModal()" class="btn-secondary flex-1 py-2.5">Cancel</button>
       </div>
     </form>
   </div>
@@ -162,33 +221,88 @@
 
 <!-- Detail Modal -->
 <div id="detail-modal" class="modal-overlay hidden">
-  <div class="modal-box max-w-2xl">
-    <div class="flex items-center justify-between p-5 border-b border-gray-100">
-      <h3 class="font-bold text-gray-800" id="detail-entry-no">Blotter Entry</h3>
-      <button onclick="closeDetailModal()" class="text-gray-400 hover:text-gray-600"><i class="fa-solid fa-xmark text-xl"></i></button>
+  <div class="modal-box max-w-5xl">
+    <div class="modal-header">
+      <div class="flex items-center gap-2.5">
+        <div class="w-9 h-9 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center font-bold text-base">
+          <i class="fa-solid fa-scale-balanced"></i>
+        </div>
+        <div>
+          <h3 class="font-bold text-gray-800 text-lg" id="detail-entry-no">Blotter Entry</h3>
+          <p class="text-xs text-gray-400">Official barangay blotter record and proceedings</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
+        <button onclick="exportDetailToPDF()" class="text-xs bg-red-50 text-red-600 hover:bg-red-100 font-semibold px-3 py-1.5 rounded-lg border border-red-200 flex items-center gap-1.5 transition-colors" title="Export PDF">
+          <i class="fa-solid fa-file-pdf"></i> Export PDF
+        </button>
+        <button onclick="openNotifyModal(currentEntryId)" class="text-xs bg-blue-50 text-blue-600 hover:bg-blue-100 font-semibold px-3 py-1.5 rounded-lg border border-blue-200 flex items-center gap-1.5 transition-colors" title="Send SMS/Email Notification">
+          <i class="fa-solid fa-bell"></i> Notify
+        </button>
+        <button onclick="closeDetailModal()" class="text-gray-400 hover:text-gray-600 p-1 ml-1 transition-colors"><i class="fa-solid fa-xmark text-xl"></i></button>
+      </div>
     </div>
-    <div class="p-5 space-y-4" id="detail-content"></div>
+    <div class="modal-body space-y-4">
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <!-- Left: Case Details (7 cols) -->
+        <div class="lg:col-span-7 space-y-4">
+          <div id="detail-content"></div>
+          <div id="lock-banner-wrap"></div>
+        </div>
 
-    <div class="px-5" id="lock-banner-wrap"></div>
+        <!-- Right: Status Update & Activity Log (5 cols) -->
+        <div class="lg:col-span-5 space-y-4">
+          <!-- Status change -->
+          <div class="bg-gray-50/80 rounded-xl border border-gray-200 p-4" id="status-change-wrap">
+            <h4 class="font-bold text-gray-700 text-xs uppercase tracking-wider mb-3">Update Status</h4>
+            <div class="flex flex-wrap gap-2 mb-3" id="status-buttons"></div>
+            <div id="status-note-wrap" class="hidden space-y-2">
+              <label class="block text-xs font-semibold text-gray-700">Closing note / Remarks <span class="text-red-500">*</span></label>
+              <textarea id="status-note" rows="2" class="input-field text-sm" placeholder="Mediation outcome, resolution, or reason…"></textarea>
+              <p class="text-[11px] text-gray-400"><i class="fa-solid fa-bell mr-1"></i>An SMS and Email notification will automatically be sent to the complainant upon updating.</p>
+              <div class="flex gap-2 pt-1">
+                <button onclick="confirmStatusChange()" class="btn-primary btn-sm flex-1">Confirm Update &amp; Notify</button>
+                <button onclick="cancelStatusChange()" class="btn-secondary btn-sm flex-1">Cancel</button>
+              </div>
+            </div>
+          </div>
 
-    <!-- Status change -->
-    <div class="p-5 border-t border-gray-100" id="status-change-wrap">
-      <h4 class="font-semibold text-gray-700 text-sm mb-3">Update Status</h4>
-      <div class="flex flex-wrap gap-2 mb-3" id="status-buttons"></div>
-      <div id="status-note-wrap" class="hidden space-y-2">
-        <label class="block text-xs font-medium text-gray-600">Closing note <span class="text-red-500">*</span></label>
-        <textarea id="status-note" rows="2" class="input-field text-sm" placeholder="Mediation outcome, resolution, or reason…"></textarea>
-        <div class="flex gap-2">
-          <button onclick="confirmStatusChange()" class="btn-primary btn-sm flex-1">Confirm</button>
-          <button onclick="cancelStatusChange()" class="btn-secondary btn-sm flex-1">Cancel</button>
+          <div class="bg-gray-50/80 rounded-xl border border-gray-200 p-4 space-y-2">
+            <h4 class="font-bold text-gray-700 text-xs uppercase tracking-wider flex items-center gap-1.5 mb-2">
+              <i class="fa-solid fa-clock-rotate-left text-blue-500"></i> Blotter Log History
+            </h4>
+            <div id="detail-log" class="space-y-2 max-h-56 overflow-y-auto pr-1"></div>
+          </div>
         </div>
       </div>
     </div>
-
-    <div class="p-5 border-t border-gray-100">
-      <h4 class="font-semibold text-gray-700 text-sm mb-3">Activity Log</h4>
-      <div id="detail-log" class="space-y-2 max-h-48 overflow-y-auto"></div>
+    <div class="modal-footer">
+      <button onclick="closeDetailModal()" class="btn-secondary btn-sm ml-auto px-6">Close</button>
     </div>
+  </div>
+</div>
+
+<!-- Notify Complainant Modal -->
+<div id="notify-modal" class="modal-overlay hidden">
+  <div class="modal-box max-w-lg">
+    <div class="modal-header">
+      <h3 class="font-bold text-gray-800 flex items-center gap-2"><i class="fa-solid fa-bell text-blue-500"></i> Send Notification</h3>
+      <button onclick="closeNotifyModal()" class="text-gray-400 hover:text-gray-600 p-1"><i class="fa-solid fa-xmark text-xl"></i></button>
+    </div>
+    <form id="notify-form" class="flex flex-col flex-1 overflow-hidden min-h-0">
+      <div class="modal-body space-y-4">
+        <input type="hidden" id="notify-entry-id">
+        <div>
+          <p class="text-xs text-gray-500 mb-2" id="notify-target-info">Sending official SMS and Email notification to complainant regarding this blotter record.</p>
+          <label class="block text-xs font-semibold text-gray-700 mb-1">Message / Notice to Complainant <span class="text-red-500">*</span></label>
+          <textarea id="notify-custom-msg" required rows="3" class="input-field text-sm" placeholder="e.g. Please appear at the Barangay Hall on Monday at 9:00 AM for mediation hearing…"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="submit" id="notify-submit-btn" class="btn-primary flex-1"><i class="fa-solid fa-paper-plane mr-1.5"></i> Send Notification</button>
+        <button type="button" onclick="closeNotifyModal()" class="btn-secondary flex-1">Cancel</button>
+      </div>
+    </form>
   </div>
 </div>
 
@@ -199,3 +313,4 @@
 <script src="/js/admin/blotter.js"></script>
 </body>
 </html>
+

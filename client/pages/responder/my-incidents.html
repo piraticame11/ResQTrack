@@ -21,8 +21,31 @@
       <span class="ml-2 text-slate-500 text-xs uppercase tracking-wider">Responder</span>
     </div>
     <nav class="flex-1 py-4 px-3 space-y-0.5 overflow-y-auto">
+      <div class="px-3 pb-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">Field Operations</div>
       <a href="/pages/responder/dashboard.html"    class="nav-item"><i class="fa-solid fa-gauge w-5 text-center"></i> Dashboard</a>
       <a href="/pages/responder/my-incidents.html" class="nav-item active"><i class="fa-solid fa-clipboard-list w-5 text-center"></i> My Incidents</a>
+
+      <!-- Portal Switcher Dock in Responder Sidebar -->
+      <div class="pt-3 px-1 pb-1 border-t border-slate-800/80 mt-3">
+        <div class="px-2 pb-1.5 flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-slate-400">
+          <span>Switch Portal</span>
+          <span class="text-emerald-400 font-semibold bg-emerald-500/10 px-1.5 py-0.5 rounded text-[9px] border border-emerald-500/20">Responder</span>
+        </div>
+        <div class="grid grid-cols-2 gap-1.5 mt-1" id="responder-switch-grid">
+          <a href="/pages/admin/dashboard.html" id="resp-to-admin-btn"
+             class="hidden group flex flex-col items-center justify-center p-2 rounded-xl bg-slate-800/70 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700/50 hover:border-blue-500/40 transition-all text-center"
+             title="Switch to Admin Console">
+            <i class="fa-solid fa-shield-halved text-blue-400 text-sm mb-1 group-hover:scale-110 transition-transform"></i>
+            <span class="text-[11px] font-medium leading-none">Admin</span>
+          </a>
+          <a href="/pages/client/home.html" id="resp-to-client-btn"
+             class="group flex flex-col items-center justify-center p-2 rounded-xl bg-slate-800/70 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700/50 hover:border-cyan-500/40 transition-all text-center col-span-2"
+             title="Switch to Resident View">
+            <i class="fa-solid fa-house text-cyan-400 text-sm mb-1 group-hover:scale-110 transition-transform"></i>
+            <span class="text-[11px] font-medium leading-none">Resident View</span>
+          </a>
+        </div>
+      </div>
     </nav>
     <div class="border-t border-slate-800 p-4">
       <div class="flex items-center gap-3">
@@ -47,7 +70,10 @@
         <button onclick="toggleSidebar()" class="lg:hidden text-gray-500 hover:text-gray-700 -ml-1 p-1"><i class="fa-solid fa-bars text-xl"></i></button>
         <h1 class="text-lg font-semibold text-gray-800">My Incident History</h1>
       </div>
-      <span id="total-count" class="text-sm text-gray-500"></span>
+      <div class="flex items-center gap-3">
+        <div id="portal-switcher"></div>
+        <span id="total-count" class="text-sm text-gray-500"></span>
+      </div>
     </header>
 
     <main class="flex-1 overflow-y-auto p-4 lg:p-6">
@@ -57,12 +83,12 @@
         <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
           <input type="text" id="filter-search" placeholder="Search ref / description…" class="input-field col-span-2 md:col-span-1">
           <select id="filter-status" class="input-field">
-            <option value="">All Statuses</option>
+            <option value="">All Status</option>
             <option>Assigned</option><option>Initiate</option><option>Delayed</option><option>Resolved</option><option>Archived</option>
           </select>
           <select id="filter-type" class="input-field">
             <option value="">All Types</option>
-            <option>Fire</option><option>Rescue</option><option>Crime</option><option>Noise</option><option>Garbage</option><option>Other</option>
+            <option>Fire</option><option>Rescue</option><option>Crime</option><option>Fights</option><option>Flood</option><option>Missing</option><option>Noise</option><option>Other</option>
           </select>
           <button onclick="applyFilter()" class="btn-primary"><i class="fa-solid fa-filter mr-1"></i> Filter</button>
         </div>
@@ -101,13 +127,21 @@
 
 <!-- Incident Detail Modal (read-only) -->
 <div id="incident-modal" class="modal-overlay hidden">
-  <div class="modal-box">
-    <div class="flex items-center justify-between p-5 border-b border-gray-100">
-      <h3 class="font-bold text-gray-800 text-lg" id="modal-ref">Incident Details</h3>
-      <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600"><i class="fa-solid fa-xmark text-xl"></i></button>
+  <div class="modal-box max-w-4xl">
+    <div class="modal-header">
+      <div class="flex items-center gap-2.5">
+        <div class="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold text-base">
+          <i class="fa-solid fa-triangle-exclamation"></i>
+        </div>
+        <div>
+          <h3 class="font-bold text-gray-800 text-lg" id="modal-ref">Incident Details</h3>
+          <p class="text-xs text-gray-400">Incident report details and location map</p>
+        </div>
+      </div>
+      <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600 p-1 transition-colors"><i class="fa-solid fa-xmark text-xl"></i></button>
     </div>
-    <div class="p-5 space-y-4" id="modal-content"></div>
-    <div class="p-5 border-t border-gray-100 flex flex-wrap gap-3" id="modal-actions">
+    <div class="modal-body space-y-4" id="modal-content"></div>
+    <div class="modal-footer" id="modal-actions">
       <button onclick="closeModal()" class="btn-secondary btn-sm ml-auto">Close</button>
     </div>
   </div>

@@ -1,5 +1,5 @@
 (async function () {
-  const user = requireRole('admin', 'super_admin');
+  const user = requireRole('admin');
   if (!user) return;
   setUserUI(user);
 
@@ -72,18 +72,35 @@ async function openDetailModal(id) {
   document.getElementById('detail-ref').textContent = inc.reference_no;
 
   document.getElementById('detail-content').innerHTML = `
-    <div class="grid grid-cols-2 gap-3 text-sm">
-      <div><span class="text-gray-500">Triage</span><p>${triageBadge(inc.triage_color)}</p></div>
-      <div><span class="text-gray-500">Type</span><p><span class="inline-flex px-2 py-0.5 rounded text-xs ${typeColor(inc.incident_type)}">${inc.incident_type}</span></p></div>
-      <div><span class="text-gray-500">Purok</span><p class="font-semibold">${inc.purok_name || '—'}</p></div>
-      <div><span class="text-gray-500">Reporter</span><p class="font-semibold">${inc.reporter_name || '—'}</p></div>
-      <div><span class="text-gray-500">Responder</span><p class="font-semibold">${inc.responder_name || '—'}</p></div>
-      <div class="col-span-2"><span class="text-gray-500">Reported at</span><p class="font-semibold">${formatDate(inc.reported_at)}</p></div>
-      ${inc.resolved_at ? `<div class="col-span-2"><span class="text-gray-500">Resolved at</span><p class="font-semibold">${formatDate(inc.resolved_at)}</p></div>` : ''}
-      <div><span class="text-gray-500">Status</span><p>${statusBadge(inc.status)}</p></div>
-      <div class="col-span-2"><span class="text-gray-500">Description</span><p class="bg-gray-50 rounded-lg p-3 mt-1">${inc.description}</p></div>
+    <div class="space-y-4">
+      <div class="bg-gray-50/80 rounded-xl border border-gray-200 p-4">
+        <h4 class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+          <i class="fa-solid fa-circle-info text-blue-500"></i> Incident Details
+        </h4>
+        <div class="grid grid-cols-2 gap-3 text-sm">
+          <div><span class="text-gray-400 text-xs font-medium">Triage Priority</span><p class="mt-0.5">${triageBadge(inc.triage_color)}</p></div>
+          <div><span class="text-gray-400 text-xs font-medium">Incident Type</span><p><span class="inline-flex px-2 py-0.5 rounded text-xs ${typeColor(inc.incident_type)}">${inc.incident_type}</span></p></div>
+          <div><span class="text-gray-400 text-xs font-medium">Purok</span><p class="font-semibold text-gray-800">${inc.purok_name || '—'}</p></div>
+          <div><span class="text-gray-400 text-xs font-medium">Reporter</span><p class="font-semibold text-gray-800">${inc.reporter_name || '—'}</p></div>
+          <div><span class="text-gray-400 text-xs font-medium">Primary Responder</span><p class="font-semibold text-gray-800">${inc.responder_name || '—'}</p></div>
+          <div><span class="text-gray-400 text-xs font-medium">Final Status</span><p class="mt-0.5">${statusBadge(inc.status)}</p></div>
+          <div><span class="text-gray-400 text-xs font-medium">Reported At</span><p class="font-medium text-gray-700 text-xs mt-0.5">${formatDate(inc.reported_at)}</p></div>
+          <div><span class="text-gray-400 text-xs font-medium">Resolved At</span><p class="font-medium text-gray-700 text-xs mt-0.5">${inc.resolved_at ? formatDate(inc.resolved_at) : '—'}</p></div>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-xl border border-gray-200 p-4">
+        <span class="text-gray-500 text-xs font-semibold uppercase tracking-wider block mb-1">Description / Narrative</span>
+        <p class="text-gray-700 text-sm whitespace-pre-line leading-relaxed">${inc.description}</p>
+      </div>
+
       ${(inc.attachments?.length ? inc.attachments.map(a => a.file_path) : (inc.photo_path ? [inc.photo_path] : [])).length
-        ? `<div class="col-span-2 grid grid-cols-3 gap-2">${(inc.attachments?.length ? inc.attachments.map(a => a.file_path) : [inc.photo_path]).map(p => `<a href="${p}" target="_blank" rel="noopener"><img src="${p}" class="w-full h-24 object-cover rounded-lg border border-gray-200"></a>`).join('')}</div>`
+        ? `<div class="bg-gray-50/80 rounded-xl border border-gray-200 p-3.5 space-y-2">
+             <span class="text-gray-500 text-xs font-semibold uppercase tracking-wider block"><i class="fa-solid fa-camera text-blue-500 mr-1"></i> Attached Photos</span>
+             <div class="grid grid-cols-3 gap-2">
+               ${(inc.attachments?.length ? inc.attachments.map(a => a.file_path) : [inc.photo_path]).map(p => `<a href="${p}" target="_blank" rel="noopener" class="group"><img src="${p}" class="w-full h-24 object-cover rounded-lg border border-gray-200 group-hover:opacity-90 transition-opacity"></a>`).join('')}
+             </div>
+           </div>`
         : ''}
     </div>`;
 

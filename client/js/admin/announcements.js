@@ -1,15 +1,56 @@
 (async function () {
-  const user = requireRole('admin', 'super_admin');
+  const user = requireRole('admin');
   if (!user) return;
   setUserUI(user);
 
   document.getElementById('announcement-form').addEventListener('submit', handleAnnSubmit);
   document.getElementById('contact-form').addEventListener('submit', handleContactSubmit);
 
+  // Live preview bindings
+  document.getElementById('ann-title').addEventListener('input', updateLivePreview);
+  document.getElementById('ann-body').addEventListener('input', updateLivePreview);
+  document.querySelectorAll('input[name="ann-when"]').forEach(r => r.addEventListener('change', updateLivePreview));
+  document.getElementById('ann-scheduled-at').addEventListener('input', updateLivePreview);
+
+  updateLivePreview();
   await Promise.all([loadAnnouncements(), loadContacts()]);
 })();
 
 let allAnnouncements = [];
+
+function updateLivePreview() {
+  const title = document.getElementById('ann-title').value.trim();
+  const body  = document.getElementById('ann-body').value.trim();
+  const when  = document.querySelector('input[name="ann-when"]:checked')?.value || 'draft';
+  const sched = document.getElementById('ann-scheduled-at').value;
+  const user  = getUser();
+
+  const titleEl  = document.getElementById('preview-title');
+  const bodyEl   = document.getElementById('preview-body');
+  const authorEl = document.getElementById('preview-author');
+  const dateEl   = document.getElementById('preview-date');
+  const badgeEl  = document.getElementById('preview-badge');
+
+  if (titleEl)  titleEl.textContent  = title || 'Announcement title';
+  if (bodyEl)   bodyEl.textContent   = body  || 'Announcement content will preview here in real-time as you type…';
+  if (authorEl) authorEl.innerHTML    = `<i class="fa-solid fa-user-shield mr-1"></i>${escapeHtml(user?.name || 'Barangay Admin')}`;
+  
+  if (badgeEl && dateEl) {
+    if (when === 'now') {
+      badgeEl.className = 'ml-auto inline-flex px-2 py-0.5 rounded-full text-xs bg-green-100 text-green-700';
+      badgeEl.textContent = 'Published';
+      dateEl.innerHTML = `<i class="fa-solid fa-calendar mr-1"></i>Now`;
+    } else if (when === 'schedule') {
+      badgeEl.className = 'ml-auto inline-flex px-2 py-0.5 rounded-full text-xs bg-blue-100 text-blue-700';
+      badgeEl.textContent = 'Scheduled';
+      dateEl.innerHTML = `<i class="fa-solid fa-calendar mr-1"></i>${sched ? formatDate(sched) : 'Scheduled'}`;
+    } else {
+      badgeEl.className = 'ml-auto inline-flex px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-600';
+      badgeEl.textContent = 'Draft';
+      dateEl.innerHTML = `<i class="fa-solid fa-calendar mr-1"></i>Draft`;
+    }
+  }
+}
 
 async function loadAnnouncements() {
   const res = await api.get('/announcements');
@@ -27,27 +68,29 @@ async function loadAnnouncements() {
       ? `<span class="inline-flex px-2 py-0.5 rounded-full text-xs bg-blue-100 text-blue-700">Scheduled for ${formatDate(a.scheduled_at)}</span>`
       : '';
     return `
-    <div class="border border-gray-200 rounded-xl p-4 ${a.is_published ? '' : 'opacity-60'}">
+    <div class="border border-gray-200 rounded-xl p-4 ${a.is_published ? '' : 'opacity-70 bg-gray-50/50'}">
       <div class="flex items-start justify-between gap-3">
         <div class="flex-1">
           <div class="flex items-center gap-2 mb-1 flex-wrap">
-            <span class="font-semibold text-gray-800 text-sm">${a.title}</span>
+            <span class="font-semibold text-gray-800 text-sm">${escapeHtml(a.title)}</span>
             ${a.is_published
               ? `<span class="inline-flex px-2 py-0.5 rounded-full text-xs bg-green-100 text-green-700">Published</span>`
               : `<span class="inline-flex px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-500">Draft</span>`}
             ${scheduledBadge}
           </div>
-          <p class="text-gray-600 text-sm whitespace-pre-line">${a.body}</p>
-          <p class="text-gray-400 text-xs mt-2">By ${a.author || 'Admin'} · ${formatDate(a.published_at || a.created_at)}</p>
+          <p class="text-gray-600 text-sm whitespace-pre-line">${escapeHtml(a.body)}</p>
+          <p class="text-gray-400 text-xs mt-2">By ${escapeHtml(a.author || 'Admin')} · ${formatDate(a.published_at || a.created_at)}</p>
         </div>
         <div class="flex gap-2 shrink-0">
+          <button onclick="previewAnn(${a.id})"
+            class="text-indigo-500 hover:text-indigo-700 text-sm" title="Preview post"><i class="fa-solid fa-eye"></i></button>
           <button onclick="editAnn(${a.id})"
-            class="text-blue-500 hover:text-blue-700 text-sm"><i class="fa-solid fa-pen"></i></button>
+            class="text-blue-500 hover:text-blue-700 text-sm" title="Edit post"><i class="fa-solid fa-pen"></i></button>
           <button onclick="togglePublish(${a.id},${a.is_published})"
-            class="text-${a.is_published ? 'yellow' : 'green'}-500 hover:opacity-80 text-sm">
-            <i class="fa-solid fa-${a.is_published ? 'eye-slash' : 'eye'}"></i>
+            class="text-${a.is_published ? 'yellow' : 'green'}-500 hover:opacity-80 text-sm" title="${a.is_published ? 'Unpublish' : 'Publish'}">
+            <i class="fa-solid fa-${a.is_published ? 'eye-slash' : 'paper-plane'}"></i>
           </button>
-          <button onclick="deleteAnn(${a.id})" class="text-red-400 hover:text-red-600 text-sm"><i class="fa-solid fa-trash"></i></button>
+          <button onclick="deleteAnn(${a.id})" class="text-red-400 hover:text-red-600 text-sm" title="Delete"><i class="fa-solid fa-trash"></i></button>
         </div>
       </div>
     </div>`;
@@ -57,6 +100,7 @@ async function loadAnnouncements() {
 function updateAnnWhenUI() {
   const when = document.querySelector('input[name="ann-when"]:checked').value;
   document.getElementById('ann-scheduled-at').classList.toggle('hidden', when !== 'schedule');
+  updateLivePreview();
 }
 
 async function handleAnnSubmit(e) {
@@ -105,10 +149,38 @@ function editAnn(id) {
     document.getElementById('ann-scheduled-at').value = new Date(a.scheduled_at).toISOString().slice(0, 16);
   }
   updateAnnWhenUI();
+  updateLivePreview();
 
   document.getElementById('ann-submit-btn').innerHTML = '<i class="fa-solid fa-floppy-disk mr-1"></i> Update';
   document.getElementById('ann-cancel-btn').classList.remove('hidden');
   window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function previewAnn(id) {
+  const a = allAnnouncements.find(x => x.id === id);
+  if (!a) return;
+  document.getElementById('modal-prev-title').textContent = a.title;
+  document.getElementById('modal-prev-body').textContent = a.body;
+  document.getElementById('modal-prev-meta').innerHTML =
+    `<i class="fa-solid fa-user-shield mr-1"></i>${escapeHtml(a.author || 'Admin')} · ${formatDate(a.published_at || a.created_at)}`;
+  
+  const statusEl = document.getElementById('modal-prev-status');
+  if (a.is_published) {
+    statusEl.className = 'inline-flex px-2 py-0.5 rounded-full text-xs bg-green-100 text-green-700';
+    statusEl.textContent = 'Published';
+  } else if (a.scheduled_at) {
+    statusEl.className = 'inline-flex px-2 py-0.5 rounded-full text-xs bg-blue-100 text-blue-700';
+    statusEl.textContent = `Scheduled for ${formatDate(a.scheduled_at)}`;
+  } else {
+    statusEl.className = 'inline-flex px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-600';
+    statusEl.textContent = 'Draft';
+  }
+
+  document.getElementById('ann-preview-modal').classList.remove('hidden');
+}
+
+function closeAnnPreviewModal() {
+  document.getElementById('ann-preview-modal').classList.add('hidden');
 }
 
 function resetAnnForm() {
@@ -116,6 +188,7 @@ function resetAnnForm() {
   document.getElementById('announcement-form').reset();
   document.querySelector('input[name="ann-when"][value="draft"]').checked = true;
   updateAnnWhenUI();
+  updateLivePreview();
   document.getElementById('ann-submit-btn').innerHTML = '<i class="fa-solid fa-paper-plane mr-1"></i> Post';
   document.getElementById('ann-cancel-btn').classList.add('hidden');
 }
@@ -145,11 +218,15 @@ async function loadContacts() {
   container.innerHTML = list.map(c => `
     <div class="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
       <div>
-        <p class="text-sm font-medium text-gray-800">${c.label}</p>
-        <p class="text-sm text-blue-600 font-mono">${c.phone}</p>
+        <p class="text-sm font-medium text-gray-800">${escapeHtml(c.label)}</p>
+        <p class="text-sm text-blue-600 font-mono">${escapeHtml(c.phone)}</p>
       </div>
-      <button onclick="openEditContact(${c.id},'${encodeURIComponent(c.label)}','${c.phone}')"
-        class="text-gray-400 hover:text-blue-500 text-sm"><i class="fa-solid fa-pen"></i></button>
+      <div class="flex items-center gap-2">
+        <button onclick="openEditContact(${c.id},'${encodeURIComponent(c.label)}','${c.phone}')"
+          class="text-gray-400 hover:text-blue-500 text-sm" title="Edit contact"><i class="fa-solid fa-pen"></i></button>
+        <button onclick="deleteContact(${c.id})"
+          class="text-gray-400 hover:text-red-500 text-sm" title="Delete contact"><i class="fa-solid fa-trash"></i></button>
+      </div>
     </div>`).join('');
 }
 
@@ -188,4 +265,16 @@ async function handleContactSubmit(e) {
   }
 }
 
+async function deleteContact(id) {
+  if (!confirm('Are you sure you want to delete this emergency contact?')) return;
+  const res = await api.delete(`/announcements/emergency-contacts/${id}`);
+  if (res && res.ok) {
+    showToast('Emergency contact deleted');
+    await loadContacts();
+  } else {
+    showToast('Failed to delete emergency contact', 'error');
+  }
+}
+
 function closeContactModal() { document.getElementById('contact-modal').classList.add('hidden'); }
+

@@ -10,10 +10,10 @@
   <style>
     .card-header-stripe {
       background: white;
-      padding: 1.25rem 1.5rem;
+      padding: 1.25rem 2rem;
       border-bottom: 1.5px solid #bfdbfe;
       display: flex;
-      justify-content: center;
+      justify-content: space-between;
       align-items: center;
     }
     .card-header-stripe img {
@@ -27,341 +27,438 @@
     .residency-tab.active { background: #eff6ff; border-color: #3b82f6; color: #1d4ed8; }
   </style>
 </head>
-<body class="min-h-screen bg-gray-50 flex items-center justify-center p-4 py-10">
+<body class="min-h-screen bg-gray-50 flex items-center justify-center p-4 py-8 sm:py-12">
 
-  <div class="w-full max-w-lg">
+  <div class="w-full max-w-5xl mx-auto">
 
-    <div class="bg-white rounded-2xl shadow-md border border-gray-100 overflow-hidden">
+    <div class="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
 
       <!-- Header stripe -->
       <div class="card-header-stripe">
-        <img src="/public/images/favicon.png" alt="ResQTrack" class="h-16 w-16 object-contain">
+        <div class="flex items-center gap-3.5">
+          <img src="/public/images/favicon.png" alt="ResQTrack" class="h-12 w-12 sm:h-14 sm:w-14 object-contain">
+          <div>
+            <h1 class="text-base sm:text-lg font-bold text-gray-800">Create Resident Account</h1>
+            <p class="text-xs text-gray-500">Your account will be reviewed and verified by the Barangay Administrator prior to activation.</p>
+          </div>
+        </div>
+        <a href="/pages/shared/login.html" class="hidden sm:inline-flex items-center gap-1.5 text-xs font-semibold text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 px-3.5 py-2 rounded-xl transition-colors">
+          <i class="fa-solid fa-arrow-left"></i> Sign In
+        </a>
       </div>
 
-      <div class="p-6">
-        <div class="mb-5">
-          <h2 class="text-base font-bold text-gray-800">Create Resident Account</h2>
-          <p class="text-xs text-gray-400 mt-0.5">Your account will be reviewed and verified by the Barangay Administrator prior to activation.</p>
-        </div>
-        <div id="success-msg" class="hidden mb-4 bg-green-50 border border-green-200 text-green-700 rounded-lg px-4 py-3 text-sm flex items-start gap-2">
+      <div class="p-6 lg:p-8">
+        <div id="success-msg" class="hidden mb-6 bg-green-50 border border-green-200 text-green-700 rounded-xl px-4 py-3 text-sm flex items-start gap-2">
           <i class="fa-solid fa-circle-check mt-0.5 shrink-0"></i><span id="success-text"></span>
         </div>
-        <div id="error-msg" class="hidden mb-4 bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-3 text-sm flex items-start gap-2">
+        <div id="error-msg" class="hidden mb-6 bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 text-sm flex items-start gap-2">
           <i class="fa-solid fa-circle-exclamation mt-0.5 shrink-0"></i><span id="error-text"></span>
         </div>
 
-        <form id="reg-form" enctype="multipart/form-data" class="space-y-5">
+        <form id="reg-form" enctype="multipart/form-data">
+          <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
 
-          <!-- ── Name ── -->
-          <fieldset>
-            <legend class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
-              <i class="fa-solid fa-user text-blue-400"></i> Personal Information
-            </legend>
-            <div class="grid grid-cols-2 gap-3">
-              <div>
-                <label class="block text-xs font-medium text-gray-600 mb-1">Last Name <span class="text-blue-500">*</span></label>
-                <input type="text" id="last_name" required class="input-field uppercase" placeholder="DELA CRUZ"
-                       oninput="this.value = this.value.toUpperCase()">
-              </div>
-              <div>
-                <label class="block text-xs font-medium text-gray-600 mb-1">First Name <span class="text-blue-500">*</span></label>
-                <input type="text" id="first_name" required class="input-field" placeholder="Juan">
-              </div>
-              <div>
-                <label class="block text-xs font-medium text-gray-600 mb-1">Middle Name <span class="text-gray-400 font-normal">(optional)</span></label>
-                <input type="text" id="middle_name" class="input-field" placeholder="Santos">
-              </div>
-              <div>
-                <label class="block text-xs font-medium text-gray-600 mb-1">Birthdate <span class="text-blue-500">*</span></label>
-                <input type="date" id="birthdate" required class="input-field">
-              </div>
-            </div>
-          </fieldset>
+            <!-- ── Left Column: Personal, Contact & Address, Residency, Password (7 cols) ── -->
+            <div class="lg:col-span-7 space-y-6">
 
-          <!-- ── Contact ── -->
-          <fieldset>
-            <legend class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
-              <i class="fa-solid fa-address-book text-blue-400"></i> Contact &amp; Location
-            </legend>
-            <div class="grid grid-cols-2 gap-3">
-              <div class="col-span-2">
-                <label class="block text-xs font-medium text-gray-600 mb-1">Email Address <span class="text-blue-500">*</span></label>
-                <input type="email" id="email" required class="input-field" placeholder="you@example.com">
-              </div>
-              <div>
-                <label class="block text-xs font-medium text-gray-600 mb-1">Phone Number <span class="text-blue-500">*</span></label>
-                <input type="tel" id="phone" required inputmode="numeric" maxlength="11"
-                       class="input-field" placeholder="09XXXXXXXXX">
-                <p id="phone-hint" class="hidden text-xs text-red-500 mt-1">Must be 11 digits starting with 09</p>
-              </div>
-              <div class="col-span-2 grid grid-cols-3 gap-3">
-                <div>
-                  <label class="block text-xs font-medium text-gray-600 mb-1">Purok</label>
-                  <select id="purok_id" class="input-field">
-                    <option value="">— Select Purok —</option>
-                  </select>
+              <!-- ── Name ── -->
+              <fieldset class="bg-gray-50/60 rounded-xl p-4 sm:p-5 border border-gray-100">
+                <legend class="text-xs font-bold text-blue-700 uppercase tracking-wider px-2 py-0.5 rounded bg-blue-50 border border-blue-100 flex items-center gap-1.5">
+                  <i class="fa-solid fa-user text-blue-500"></i> Personal Information
+                </legend>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-1">
+                  <div>
+                    <label class="block text-xs font-medium text-gray-600 mb-1">Last Name <span class="text-blue-500">*</span></label>
+                    <input type="text" id="last_name" required class="input-field uppercase" placeholder="DELA CRUZ"
+                           oninput="this.value = this.value.toUpperCase()">
+                  </div>
+                  <div>
+                    <label class="block text-xs font-medium text-gray-600 mb-1">First Name <span class="text-blue-500">*</span></label>
+                    <input type="text" id="first_name" required class="input-field" placeholder="Juan">
+                  </div>
+                  <div>
+                    <label class="block text-xs font-medium text-gray-600 mb-1">Middle Name <span class="text-gray-400 font-normal">(optional)</span></label>
+                    <input type="text" id="middle_name" class="input-field" placeholder="Santos">
+                  </div>
+                  <div>
+                    <label class="block text-xs font-medium text-gray-600 mb-1">Birthdate <span class="text-blue-500">*</span></label>
+                    <input type="date" id="birthdate" required class="input-field">
+                  </div>
                 </div>
-                <div>
-                  <label class="block text-xs font-medium text-gray-600 mb-1">Province <span class="text-blue-500">*</span></label>
-                  <select id="province" required class="input-field">
-                    <option value="">— Select Province —</option>
-                  </select>
+              </fieldset>
+
+              <!-- ── Contact ── -->
+              <fieldset class="bg-gray-50/60 rounded-xl p-4 sm:p-5 border border-gray-100">
+                <legend class="text-xs font-bold text-blue-700 uppercase tracking-wider px-2 py-0.5 rounded bg-blue-50 border border-blue-100 flex items-center gap-1.5">
+                  <i class="fa-solid fa-address-book text-blue-500"></i> Contact and Information
+                </legend>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-1">
+                  <div>
+                    <label class="block text-xs font-medium text-gray-600 mb-1">Email Address <span class="text-blue-500">*</span></label>
+                    <input type="email" id="email" required class="input-field" placeholder="you@example.com">
+                  </div>
+                  <div>
+                    <label class="block text-xs font-medium text-gray-600 mb-1">Phone Number <span class="text-blue-500">*</span></label>
+                    <input type="tel" id="phone" required inputmode="numeric" maxlength="11"
+                           class="input-field" placeholder="09XXXXXXXXX">
+                    <p id="phone-hint" class="hidden text-xs text-red-500 mt-1">Must be 11 digits starting with 09</p>
+                  </div>
+                  <div>
+                    <label class="block text-xs font-medium text-gray-600 mb-1">Province <span class="text-blue-500">*</span></label>
+                    <select id="province" required class="input-field">
+                      <option value="">— Select Province —</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label class="block text-xs font-medium text-gray-600 mb-1">City / Municipality <span class="text-blue-500">*</span></label>
+                    <select id="city" required class="input-field" disabled>
+                      <option value="">— Select Province First —</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label class="block text-xs font-medium text-gray-600 mb-1">Barangay <span class="text-blue-500">*</span></label>
+                    <select id="barangay" required class="input-field">
+                      <option value="Manay" selected>Manay</option>
+                      <option value="New Visayas">New Visayas</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label class="block text-xs font-medium text-gray-600 mb-1">Purok</label>
+                    <select id="purok_id" class="input-field">
+                      <option value="">— Select Purok —</option>
+                    </select>
+                  </div>
+                  <div class="sm:col-span-2">
+                    <label class="block text-xs font-medium text-gray-600 mb-1">Exact Address <span class="text-blue-500">*</span></label>
+                    <input type="text" id="address_line" required class="input-field" placeholder="House No., Street, Landmark">
+                    <p class="text-[11px] text-gray-400 mt-1">A Purok alone isn't enough for responders to find you — please be specific.</p>
+                  </div>
                 </div>
-                <div>
-                  <label class="block text-xs font-medium text-gray-600 mb-1">City <span class="text-blue-500">*</span></label>
-                  <select id="city" required class="input-field" disabled>
-                    <option value="">— Select Province First —</option>
-                  </select>
+              </fieldset>
+
+              <!-- ── Residency ── -->
+              <fieldset class="bg-gray-50/60 rounded-xl p-4 sm:p-5 border border-gray-100">
+                <legend class="text-xs font-bold text-blue-700 uppercase tracking-wider px-2 py-0.5 rounded bg-blue-50 border border-blue-100 flex items-center gap-1.5">
+                  <i class="fa-solid fa-house-user text-blue-500"></i> Residency
+                </legend>
+                <div class="grid grid-cols-2 gap-3 mb-3 mt-1">
+                  <button type="button" id="res-owner" onclick="selectResidency('Owner')"
+                          class="residency-tab border-2 rounded-xl py-2.5 px-3 text-sm font-semibold transition-colors flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-key"></i> Household Owner
+                  </button>
+                  <button type="button" id="res-tenant" onclick="selectResidency('Tenant')"
+                          class="residency-tab border-2 rounded-xl py-2.5 px-3 text-sm font-semibold transition-colors flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-people-roof"></i> Tenant / Boarder
+                  </button>
                 </div>
-              </div>
-              <div class="col-span-2">
-                <label class="block text-xs font-medium text-gray-600 mb-1">Exact Address <span class="text-blue-500">*</span></label>
-                <input type="text" id="address_line" required class="input-field" placeholder="House No., Street, Landmark">
-                <p class="text-xs text-gray-400 mt-1">A Purok alone isn't enough for responders to find you — please be specific.</p>
-              </div>
-            </div>
-          </fieldset>
-
-          <!-- ── Residency ── -->
-          <fieldset>
-            <legend class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
-              <i class="fa-solid fa-house-user text-blue-400"></i> Residency
-            </legend>
-            <div class="grid grid-cols-2 gap-2 mb-3">
-              <button type="button" id="res-owner" onclick="selectResidency('Owner')"
-                      class="residency-tab border-2 rounded-lg py-2.5 text-sm font-semibold transition-colors">
-                <i class="fa-solid fa-key mr-1"></i> Homeowner
-              </button>
-              <button type="button" id="res-tenant" onclick="selectResidency('Tenant')"
-                      class="residency-tab border-2 rounded-lg py-2.5 text-sm font-semibold transition-colors">
-                <i class="fa-solid fa-people-roof mr-1"></i> Tenant / Boarder
-              </button>
-            </div>
-            <input type="hidden" id="residency_type" value="Owner">
-            <div id="landlord-fields" class="hidden grid grid-cols-2 gap-3">
-              <p class="col-span-2 text-xs text-gray-400 -mb-1">Since your ID may not show this address, provide your landlord's details as proof you live here.</p>
-              <div>
-                <label class="block text-xs font-medium text-gray-600 mb-1">Landlord's Name <span class="text-blue-500">*</span></label>
-                <input type="text" id="landlord_name" class="input-field" placeholder="Full name">
-              </div>
-              <div>
-                <label class="block text-xs font-medium text-gray-600 mb-1">Landlord's Contact No. <span class="text-blue-500">*</span></label>
-                <input type="tel" id="landlord_contact" inputmode="numeric" maxlength="11" class="input-field" placeholder="09XXXXXXXXX">
-              </div>
-              <div class="col-span-2 grid grid-cols-3 gap-3">
-                <div>
-                  <label class="block text-xs font-medium text-gray-600 mb-1">Purok</label>
-                  <select id="landlord_purok" class="input-field">
-                    <option value="">— Select Purok —</option>
-                  </select>
+                <input type="hidden" id="residency_type" value="Owner">
+                <div id="landlord-fields" class="hidden grid grid-cols-1 sm:grid-cols-2 gap-3 pt-3 border-t border-gray-200">
+                  <p class="sm:col-span-2 text-xs text-amber-800 -mb-1 bg-amber-50 p-2.5 rounded-lg border border-amber-200 flex items-center gap-1.5">
+                    <i class="fa-solid fa-circle-info shrink-0"></i>
+                    <span>Since your ID may not show this address, provide your landlord's details as proof you live here.</span>
+                  </p>
+                  <div>
+                    <label class="block text-xs font-medium text-gray-600 mb-1">Landlord's Name <span class="text-blue-500">*</span></label>
+                    <input type="text" id="landlord_name" class="input-field" placeholder="Full name">
+                  </div>
+                  <div>
+                    <label class="block text-xs font-medium text-gray-600 mb-1">Landlord's Contact No. <span class="text-blue-500">*</span></label>
+                    <input type="tel" id="landlord_contact" inputmode="numeric" maxlength="11" class="input-field" placeholder="09XXXXXXXXX">
+                  </div>
+                  <div>
+                    <label class="block text-xs font-medium text-gray-600 mb-1">Province</label>
+                    <select id="landlord_province" class="input-field">
+                      <option value="">— Select Province —</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label class="block text-xs font-medium text-gray-600 mb-1">City / Municipality</label>
+                    <select id="landlord_city" class="input-field" disabled>
+                      <option value="">— Select Province First —</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label class="block text-xs font-medium text-gray-600 mb-1">Barangay</label>
+                    <select id="landlord_barangay" class="input-field">
+                      <option value="Manay" selected>Manay</option>
+                      <option value="New Visayas">New Visayas</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label class="block text-xs font-medium text-gray-600 mb-1">Purok</label>
+                    <select id="landlord_purok" class="input-field">
+                      <option value="">— Select Purok —</option>
+                    </select>
+                  </div>
+                  <div class="sm:col-span-2">
+                    <label class="block text-xs font-medium text-gray-600 mb-1">Landlord's Address <span class="text-blue-500">*</span></label>
+                    <input type="text" id="landlord_address" class="input-field" placeholder="House No., Street, Landmark">
+                  </div>
                 </div>
-                <div>
-                  <label class="block text-xs font-medium text-gray-600 mb-1">Province</label>
-                  <select id="landlord_province" class="input-field">
-                    <option value="">— Select Province —</option>
-                  </select>
+              </fieldset>
+
+              <!-- ── Password ── -->
+              <fieldset class="bg-gray-50/60 rounded-xl p-4 sm:p-5 border border-gray-100">
+                <legend class="text-xs font-bold text-blue-700 uppercase tracking-wider px-2 py-0.5 rounded bg-blue-50 border border-blue-100 flex items-center gap-1.5">
+                  <i class="fa-solid fa-lock text-blue-500"></i> Password &amp; Security
+                </legend>
+                <div class="mt-1">
+                  <div class="relative">
+                    <input type="password" id="password" required class="input-field pr-10"
+                           placeholder="Min 8 chars — uppercase, lowercase &amp; number">
+                    <button type="button" id="toggle-pw"
+                            class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                      <i class="fa-solid fa-eye" id="toggle-pw-icon"></i>
+                    </button>
+                  </div>
+                  <!-- Strength bars -->
+                  <div class="mt-2.5 flex gap-1.5">
+                    <div id="s1" class="h-1.5 flex-1 rounded bg-gray-200 transition-colors"></div>
+                    <div id="s2" class="h-1.5 flex-1 rounded bg-gray-200 transition-colors"></div>
+                    <div id="s3" class="h-1.5 flex-1 rounded bg-gray-200 transition-colors"></div>
+                    <div id="s4" class="h-1.5 flex-1 rounded bg-gray-200 transition-colors"></div>
+                  </div>
+                  <p id="pw-strength-text" class="text-xs mt-1 text-gray-400 h-4 font-medium"></p>
+                  <!-- Requirements -->
+                  <ul class="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-gray-500">
+                    <li id="req-len" class="flex items-center gap-1.5"><i class="fa-solid fa-circle text-[7px]"></i> 8+ characters</li>
+                    <li id="req-up"  class="flex items-center gap-1.5"><i class="fa-solid fa-circle text-[7px]"></i> Uppercase letter</li>
+                    <li id="req-low" class="flex items-center gap-1.5"><i class="fa-solid fa-circle text-[7px]"></i> Lowercase letter</li>
+                    <li id="req-num" class="flex items-center gap-1.5"><i class="fa-solid fa-circle text-[7px]"></i> Number</li>
+                  </ul>
                 </div>
-                <div>
-                  <label class="block text-xs font-medium text-gray-600 mb-1">City</label>
-                  <select id="landlord_city" class="input-field" disabled>
-                    <option value="">— Select Province First —</option>
-                  </select>
+              </fieldset>
+
+            </div>
+
+            <!-- ── Right Column: Documents & Actions (5 cols) ── -->
+            <div class="lg:col-span-5 space-y-6">
+
+              <!-- ── Valid ID ── -->
+              <fieldset class="bg-gray-50/60 rounded-xl p-4 sm:p-5 border border-gray-100">
+                <legend class="text-xs font-bold text-blue-700 uppercase tracking-wider px-2 py-0.5 rounded bg-blue-50 border border-blue-100 flex items-center gap-1.5">
+                  <i class="fa-solid fa-id-card text-blue-500"></i> Valid ID for Verification <span class="text-blue-500">*</span>
+                </legend>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3 mt-1">
+                  <div>
+                    <label class="block text-xs font-medium text-gray-600 mb-1">ID Type <span class="text-blue-500">*</span></label>
+                    <select id="id_type" required class="input-field text-sm">
+                      <option value="">Select ID Type</option>
+                      <option>PhilSys National ID</option>
+                      <option>Driver's License</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label class="block text-xs font-medium text-gray-600 mb-1">ID Number <span class="text-blue-500">*</span></label>
+                    <input type="text" id="id_number" required class="input-field" placeholder="ID number">
+                  </div>
                 </div>
-              </div>
-              <div class="col-span-2">
-                <label class="block text-xs font-medium text-gray-600 mb-1">Landlord's Address <span class="text-blue-500">*</span></label>
-                <input type="text" id="landlord_address" class="input-field" placeholder="House No., Street, Landmark">
-              </div>
-            </div>
-          </fieldset>
 
-          <!-- ── Password ── -->
-          <fieldset>
-            <legend class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
-              <i class="fa-solid fa-lock text-blue-400"></i> Password
-            </legend>
-            <div class="relative">
-              <input type="password" id="password" required class="input-field pr-10"
-                     placeholder="Min 8 chars — uppercase, lowercase &amp; number">
-              <button type="button" id="toggle-pw"
-                      class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
-                <i class="fa-solid fa-eye" id="toggle-pw-icon"></i>
-              </button>
-            </div>
-            <!-- Strength bars -->
-            <div class="mt-2 flex gap-1">
-              <div id="s1" class="h-1 flex-1 rounded bg-gray-200"></div>
-              <div id="s2" class="h-1 flex-1 rounded bg-gray-200"></div>
-              <div id="s3" class="h-1 flex-1 rounded bg-gray-200"></div>
-              <div id="s4" class="h-1 flex-1 rounded bg-gray-200"></div>
-            </div>
-            <p id="pw-strength-text" class="text-xs mt-1 text-gray-400 h-4"></p>
-            <!-- Requirements -->
-            <ul class="mt-1 grid grid-cols-2 gap-x-4 gap-y-0.5 text-xs text-gray-400">
-              <li id="req-len" class="flex items-center gap-1"><i class="fa-solid fa-circle text-[7px]"></i> 8+ characters</li>
-              <li id="req-up"  class="flex items-center gap-1"><i class="fa-solid fa-circle text-[7px]"></i> Uppercase letter</li>
-              <li id="req-low" class="flex items-center gap-1"><i class="fa-solid fa-circle text-[7px]"></i> Lowercase letter</li>
-              <li id="req-num" class="flex items-center gap-1"><i class="fa-solid fa-circle text-[7px]"></i> Number</li>
-            </ul>
-          </fieldset>
+                <!-- Idle state: open camera or upload -->
+                <div id="cam-idle" class="flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-xl p-5 bg-white">
+                  <i class="fa-solid fa-camera text-3xl text-gray-300 mb-2"></i>
+                  <span class="text-xs font-medium text-gray-500 mb-3 text-center">Take or upload a photo of your valid ID</span>
+                  <div class="flex gap-2">
+                    <button type="button" id="btn-open-cam"
+                            class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-3.5 py-2 rounded-lg flex items-center gap-1.5 transition-colors">
+                      <i class="fa-solid fa-camera"></i> Camera
+                    </button>
+                    <button type="button" id="btn-upload"
+                            class="bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold px-3.5 py-2 rounded-lg flex items-center gap-1.5 transition-colors">
+                      <i class="fa-solid fa-upload"></i> Upload Photo
+                    </button>
+                    <input type="file" id="file-input" accept="image/*" class="hidden">
+                  </div>
+                </div>
 
-          <!-- ── Valid ID ── -->
-          <fieldset>
-            <legend class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
-              <i class="fa-solid fa-id-card text-blue-400"></i> Valid ID for Verification <span class="text-blue-500">*</span>
-            </legend>
+                <!-- Live camera viewfinder -->
+                <div id="cam-live" class="hidden flex-col items-center gap-3">
+                  <video id="cam-video" autoplay playsinline
+                         class="w-full rounded-xl border border-gray-200 bg-black max-h-52 object-cover"></video>
+                  <div class="flex gap-2 w-full">
+                    <button type="button" id="btn-capture"
+                            class="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold py-2 rounded-lg flex items-center justify-center gap-1.5 transition-colors">
+                      <i class="fa-solid fa-circle-dot"></i> Capture
+                    </button>
+                    <button type="button" id="btn-cancel-cam"
+                            class="px-4 bg-gray-100 hover:bg-gray-200 text-gray-600 text-xs font-semibold py-2 rounded-lg transition-colors">
+                      Cancel
+                    </button>
+                  </div>
+                </div>
 
-            <div class="grid grid-cols-2 gap-3 mb-3">
-              <div>
-                <label class="block text-xs font-medium text-gray-600 mb-1">ID Type <span class="text-blue-500">*</span></label>
-                <select id="id_type" required class="input-field">
-                  <option value="">— Select ID Type —</option>
-                  <option>PhilSys National ID</option>
-                  <option>Driver's License</option>
-                </select>
-              </div>
-              <div>
-                <label class="block text-xs font-medium text-gray-600 mb-1">ID Number <span class="text-blue-500">*</span></label>
-                <input type="text" id="id_number" required class="input-field" placeholder="ID number">
-              </div>
-            </div>
+                <!-- Captured preview -->
+                <div id="cam-captured" class="hidden flex-col items-center gap-3">
+                  <img id="id-preview" class="w-full rounded-xl max-h-52 object-cover border border-gray-200 shadow-sm" alt="ID Preview">
+                  <p id="ocr-banner" class="hidden w-full text-xs bg-blue-50 text-blue-700 rounded-lg px-3 py-2 flex items-center gap-1.5">
+                    <i id="ocr-banner-icon" class="fa-solid fa-circle-notch fa-spin"></i> <span id="ocr-banner-text">Reading your ID…</span>
+                  </p>
+                  <button type="button" id="btn-retake"
+                          class="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold py-2 rounded-lg flex items-center justify-center gap-1.5 transition-colors">
+                    <i class="fa-solid fa-rotate-left"></i> Retake
+                  </button>
+                </div>
 
-            <!-- Idle state: open camera or upload -->
-            <div id="cam-idle" class="flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-xl p-5">
-              <i class="fa-solid fa-camera text-3xl text-gray-300 mb-2"></i>
-              <span class="text-sm font-medium text-gray-500 mb-3">Take a photo of your valid ID</span>
-              <div class="flex gap-2">
-                <button type="button" id="btn-open-cam"
-                        class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2 rounded-lg flex items-center gap-2 transition-colors">
-                  <i class="fa-solid fa-camera"></i> Open Camera
+                <!-- Hidden canvas used to grab the frame -->
+                <canvas id="cam-canvas" class="hidden"></canvas>
+              </fieldset>
+
+              <!-- ── Proof of Residency ── -->
+              <fieldset class="bg-gray-50/60 rounded-xl p-4 sm:p-5 border border-gray-100">
+                <legend class="text-xs font-bold text-blue-700 uppercase tracking-wider px-2 py-0.5 rounded bg-blue-50 border border-blue-100 flex items-center gap-1.5">
+                  <i class="fa-solid fa-file-shield text-blue-500"></i> Proof of Residency <span class="text-blue-500">*</span>
+                </legend>
+                <p class="text-[11px] text-gray-500 mt-1 mb-3">Document showing your address — barangay certificate, utility bill, or lease contract.</p>
+
+                <!-- Idle state: open camera or upload -->
+                <div id="cam-idle-por" class="flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-xl p-5 bg-white">
+                  <i class="fa-solid fa-file-image text-3xl text-gray-300 mb-2"></i>
+                  <span class="text-xs font-medium text-gray-500 mb-3 text-center">Take or upload a photo of the document</span>
+                  <div class="flex gap-2">
+                    <button type="button" id="btn-open-cam-por"
+                            class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-3.5 py-2 rounded-lg flex items-center gap-1.5 transition-colors">
+                      <i class="fa-solid fa-camera"></i> Camera
+                    </button>
+                    <button type="button" id="btn-upload-por"
+                            class="bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold px-3.5 py-2 rounded-lg flex items-center gap-1.5 transition-colors">
+                      <i class="fa-solid fa-upload"></i> Upload Photo
+                    </button>
+                    <input type="file" id="file-input-por" accept="image/*" class="hidden">
+                  </div>
+                </div>
+
+                <!-- Live camera viewfinder -->
+                <div id="cam-live-por" class="hidden flex-col items-center gap-3">
+                  <video id="cam-video-por" autoplay playsinline
+                         class="w-full rounded-xl border border-gray-200 bg-black max-h-52 object-cover"></video>
+                  <div class="flex gap-2 w-full">
+                    <button type="button" id="btn-capture-por"
+                            class="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold py-2 rounded-lg flex items-center justify-center gap-1.5 transition-colors">
+                      <i class="fa-solid fa-circle-dot"></i> Capture
+                    </button>
+                    <button type="button" id="btn-cancel-cam-por"
+                            class="px-4 bg-gray-100 hover:bg-gray-200 text-gray-600 text-xs font-semibold py-2 rounded-lg transition-colors">
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Captured preview -->
+                <div id="cam-captured-por" class="hidden flex-col items-center gap-3">
+                  <img id="id-preview-por" class="w-full rounded-xl max-h-52 object-cover border border-gray-200 shadow-sm" alt="Proof of Residency Preview">
+                  <button type="button" id="btn-retake-por"
+                          class="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold py-2 rounded-lg flex items-center justify-center gap-1.5 transition-colors">
+                    <i class="fa-solid fa-rotate-left"></i> Retake
+                  </button>
+                </div>
+
+                <!-- Hidden canvas used to grab the frame -->
+                <canvas id="cam-canvas-por" class="hidden"></canvas>
+              </fieldset>
+
+              <!-- ── Submission & Sign In ── -->
+              <div class="bg-gray-50/60 rounded-xl p-5 border border-gray-100 space-y-3">
+                <button type="submit" id="reg-btn"
+                        class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl flex items-center justify-center gap-2 shadow-sm transition-colors text-sm">
+                  <i class="fa-solid fa-user-plus"></i> Create Account
                 </button>
-                <button type="button" id="btn-upload"
-                        class="bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-semibold px-4 py-2 rounded-lg flex items-center gap-2 transition-colors">
-                  <i class="fa-solid fa-upload"></i> Upload Photo
-                </button>
-                <input type="file" id="file-input" accept="image/*" class="hidden">
+                <p class="text-center text-xs text-gray-500">
+                  Already have an account?
+                  <a href="/pages/shared/login.html" class="text-blue-600 font-semibold hover:underline">Sign in</a>
+                </p>
               </div>
+
             </div>
 
-            <!-- Live camera viewfinder -->
-            <div id="cam-live" class="hidden flex-col items-center gap-3">
-              <video id="cam-video" autoplay playsinline
-                     class="w-full rounded-xl border border-gray-200 bg-black max-h-56 object-cover"></video>
-              <div class="flex gap-2 w-full">
-                <button type="button" id="btn-capture"
-                        class="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold py-2 rounded-lg flex items-center justify-center gap-2 transition-colors">
-                  <i class="fa-solid fa-circle-dot"></i> Capture
-                </button>
-                <button type="button" id="btn-cancel-cam"
-                        class="px-4 bg-gray-100 hover:bg-gray-200 text-gray-600 text-sm font-semibold py-2 rounded-lg transition-colors">
-                  Cancel
-                </button>
-              </div>
-            </div>
-
-            <!-- Captured preview -->
-            <div id="cam-captured" class="hidden flex-col items-center gap-3">
-              <img id="id-preview" class="w-full rounded-xl max-h-56 object-cover border border-gray-200" alt="ID Preview">
-              <p id="ocr-banner" class="hidden w-full text-xs bg-blue-50 text-blue-700 rounded-lg px-3 py-2 flex items-center gap-1.5">
-                <i id="ocr-banner-icon" class="fa-solid fa-circle-notch fa-spin"></i> <span id="ocr-banner-text">Reading your ID…</span>
-              </p>
-              <button type="button" id="btn-retake"
-                      class="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-semibold py-2 rounded-lg flex items-center justify-center gap-2 transition-colors">
-                <i class="fa-solid fa-rotate-left"></i> Retake
-              </button>
-            </div>
-
-            <!-- Hidden canvas used to grab the frame -->
-            <canvas id="cam-canvas" class="hidden"></canvas>
-          </fieldset>
-
-          <!-- ── Proof of Residency ── -->
-          <fieldset>
-            <legend class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
-              <i class="fa-solid fa-file-shield text-blue-400"></i> Proof of Residency <span class="text-blue-500">*</span>
-            </legend>
-            <p class="text-xs text-gray-400 -mt-1 mb-3">A document showing you live at the address above — barangay certificate, utility bill, or lease contract.</p>
-
-            <!-- Idle state: open camera or upload -->
-            <div id="cam-idle-por" class="flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-xl p-5">
-              <i class="fa-solid fa-file-image text-3xl text-gray-300 mb-2"></i>
-              <span class="text-sm font-medium text-gray-500 mb-3">Take a photo of the document</span>
-              <div class="flex gap-2">
-                <button type="button" id="btn-open-cam-por"
-                        class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2 rounded-lg flex items-center gap-2 transition-colors">
-                  <i class="fa-solid fa-camera"></i> Open Camera
-                </button>
-                <button type="button" id="btn-upload-por"
-                        class="bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-semibold px-4 py-2 rounded-lg flex items-center gap-2 transition-colors">
-                  <i class="fa-solid fa-upload"></i> Upload Photo
-                </button>
-                <input type="file" id="file-input-por" accept="image/*" class="hidden">
-              </div>
-            </div>
-
-            <!-- Live camera viewfinder -->
-            <div id="cam-live-por" class="hidden flex-col items-center gap-3">
-              <video id="cam-video-por" autoplay playsinline
-                     class="w-full rounded-xl border border-gray-200 bg-black max-h-56 object-cover"></video>
-              <div class="flex gap-2 w-full">
-                <button type="button" id="btn-capture-por"
-                        class="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold py-2 rounded-lg flex items-center justify-center gap-2 transition-colors">
-                  <i class="fa-solid fa-circle-dot"></i> Capture
-                </button>
-                <button type="button" id="btn-cancel-cam-por"
-                        class="px-4 bg-gray-100 hover:bg-gray-200 text-gray-600 text-sm font-semibold py-2 rounded-lg transition-colors">
-                  Cancel
-                </button>
-              </div>
-            </div>
-
-            <!-- Captured preview -->
-            <div id="cam-captured-por" class="hidden flex-col items-center gap-3">
-              <img id="id-preview-por" class="w-full rounded-xl max-h-56 object-cover border border-gray-200" alt="Proof of Residency Preview">
-              <button type="button" id="btn-retake-por"
-                      class="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-semibold py-2 rounded-lg flex items-center justify-center gap-2 transition-colors">
-                <i class="fa-solid fa-rotate-left"></i> Retake
-              </button>
-            </div>
-
-            <!-- Hidden canvas used to grab the frame -->
-            <canvas id="cam-canvas-por" class="hidden"></canvas>
-          </fieldset>
-
-          <button type="submit" id="reg-btn"
-                  class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl flex items-center justify-center gap-2 transition-colors">
-            <i class="fa-solid fa-user-plus"></i> Create Account
-          </button>
+          </div>
         </form>
 
-        <p class="text-center text-sm text-gray-500 mt-5">
-          Already have an account?
-          <a href="/pages/shared/login.html" class="text-blue-600 font-medium hover:underline">Sign in</a>
-        </p>
       </div>
     </div>
   </div>
 
   <script>
-    // Populate puroks
+    // Dynamic Purok options based on selected Barangay
+    let allPuroksList = [];
+
+    function updatePurokSelect(barangaySel, purokSel) {
+      if (!purokSel) return;
+      const selectedBrgy = barangaySel ? barangaySel.value : '';
+      const cleanSel = (selectedBrgy || '').toLowerCase().replace(/^(barangay|brgy\.?)\s+/i, '').trim();
+      const filtered = allPuroksList.filter(p => {
+        if (!cleanSel) return true;
+        const pBrgy = (p.barangay || '').toLowerCase().replace(/^(barangay|brgy\.?)\s+/i, '').trim();
+        return pBrgy.includes(cleanSel) || cleanSel.includes(pBrgy);
+      });
+
+      const prev = purokSel.value;
+      purokSel.innerHTML = '<option value="">— Select Purok —</option>';
+      filtered.forEach(p => {
+        const o = document.createElement('option');
+        o.value = p.id;
+        o.textContent = p.name;
+        purokSel.appendChild(o);
+      });
+
+      if (prev && filtered.some(p => String(p.id) === String(prev))) {
+        purokSel.value = prev;
+      }
+    }
+
+    const brgyEl = document.getElementById('barangay');
+    const purokEl = document.getElementById('purok_id');
+    const lBrgyEl = document.getElementById('landlord_barangay');
+    const lPurokEl = document.getElementById('landlord_purok');
+
+    if (brgyEl && purokEl) {
+      brgyEl.addEventListener('change', () => updatePurokSelect(brgyEl, purokEl));
+    }
+    if (lBrgyEl && lPurokEl) {
+      lBrgyEl.addEventListener('change', () => updatePurokSelect(lBrgyEl, lPurokEl));
+    }
+
     (async () => {
-      const sels = [document.getElementById('purok_id'), document.getElementById('landlord_purok')];
       try {
         const res = await fetch('/api/puroks');
-        const puroks = res.ok ? await res.json() : [];
-        sels.forEach(sel => {
-          puroks.forEach(p => {
-            const o = document.createElement('option');
-            o.value = p.id; o.textContent = p.name;
-            sel.appendChild(o);
-          });
-        });
-      } catch { /* leave the placeholder-only selects if this fails */ }
+        allPuroksList = res.ok ? await res.json() : [];
+        updatePurokSelect(brgyEl, purokEl);
+        updatePurokSelect(lBrgyEl, lPurokEl);
+      } catch { /* leave placeholder-only selects if this fails */ }
     })();
 
     // Province -> City cascade, shared by the main address and the
     // landlord's address. Fed by a static PSGC-derived dataset since PH
     // provinces/cities don't change often enough to warrant an API call.
+    let fillCitiesGlobal = null;
+    function applyLocationDefaults() {
+      const prov = document.getElementById('province');
+      const city = document.getElementById('city');
+      const lProv = document.getElementById('landlord_province');
+      const lCity = document.getElementById('landlord_city');
+      const brgy = document.getElementById('barangay');
+      const lBrgy = document.getElementById('landlord_barangay');
+
+      if (brgy) brgy.value = 'Manay';
+      if (lBrgy) lBrgy.value = 'Manay';
+
+      updatePurokSelect(brgy, document.getElementById('purok_id'));
+      updatePurokSelect(lBrgy, document.getElementById('landlord_purok'));
+
+      if (fillCitiesGlobal) {
+        if (prov && prov.options.length) {
+          prov.value = 'Davao del Norte';
+          fillCitiesGlobal(prov, city);
+          city.value = 'City of Panabo';
+        }
+        if (lProv && lProv.options.length) {
+          lProv.value = 'Davao del Norte';
+          fillCitiesGlobal(lProv, lCity);
+          lCity.value = 'City of Panabo';
+        }
+      }
+    }
+
     (async () => {
       const provincePairs = [
         [document.getElementById('province'), document.getElementById('city')],
@@ -388,6 +485,7 @@
         });
         citySel.disabled = !cities.length;
       }
+      fillCitiesGlobal = fillCities;
 
       provincePairs.forEach(([provinceSel, citySel]) => {
         provinceNames.forEach(name => {
@@ -397,6 +495,9 @@
         });
         provinceSel.addEventListener('change', () => fillCities(provinceSel, citySel));
       });
+
+      // Apply default locations: Davao del Norte, City of Panabo, Manay
+      applyLocationDefaults();
     })();
 
     // Homeowner / Tenant toggle
@@ -614,21 +715,26 @@
       const addressStreet = document.getElementById('address_line').value.trim();
       if (addressStreet.length < 5) return showErr('Please provide a complete address (house number, street, and landmark).');
 
+      const barangayVal = document.getElementById('barangay').value.trim();
+      if (!barangayVal) return showErr('Please provide your Barangay.');
+
       const provinceVal = document.getElementById('province').value;
       const cityVal     = document.getElementById('city').value;
       if (!provinceVal || !cityVal) return showErr('Please select your Province and City/Municipality.');
 
-      const address = [addressStreet, cityVal, provinceVal].filter(Boolean).join(', ');
+      const address = [addressStreet, `Brgy. ${barangayVal}`, cityVal, provinceVal].filter(Boolean).join(', ');
 
       const residency = document.getElementById('residency_type').value;
-      const landlordName    = document.getElementById('landlord_name').value.trim();
-      const landlordContact = document.getElementById('landlord_contact').value.trim();
-      const landlordStreet  = document.getElementById('landlord_address').value.trim();
+      const landlordName     = document.getElementById('landlord_name').value.trim();
+      const landlordContact  = document.getElementById('landlord_contact').value.trim();
+      const landlordStreet   = document.getElementById('landlord_address').value.trim();
+      const landlordBarangay = document.getElementById('landlord_barangay').value.trim();
       const landlordPurokSel = document.getElementById('landlord_purok');
       const landlordPurokName = landlordPurokSel.options[landlordPurokSel.selectedIndex]?.textContent || '';
       const landlordAddress = [
         landlordStreet,
         landlordPurokSel.value ? landlordPurokName : '',
+        landlordBarangay ? `Brgy. ${landlordBarangay}` : '',
         document.getElementById('landlord_city').value,
         document.getElementById('landlord_province').value,
       ].filter(Boolean).join(', ');
@@ -687,13 +793,7 @@
         idCapture.reset();
         porCapture.reset();
         selectResidency('Owner');
-        // form.reset() restores select values but not the `disabled` state
-        // the province->city cascade set dynamically — clear both city
-        // dropdowns back to their placeholder-only, disabled default.
-        [document.getElementById('city'), document.getElementById('landlord_city')].forEach(sel => {
-          sel.innerHTML = '<option value="">— Select Province First —</option>';
-          sel.disabled = true;
-        });
+        applyLocationDefaults();
         ['s1','s2','s3','s4'].forEach(id => document.getElementById(id).className = 'h-1 flex-1 rounded bg-gray-200');
         document.getElementById('pw-strength-text').textContent = '';
       } catch (err) {

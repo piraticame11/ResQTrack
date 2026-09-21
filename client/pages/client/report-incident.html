@@ -12,12 +12,14 @@
 <body class="bg-gray-50 font-sans min-h-screen">
 
   <nav class="bg-white border-b border-gray-200 sticky top-0 z-40">
-    <div class="max-w-2xl mx-auto px-4 h-16 flex items-center justify-between">
-      <a href="/pages/client/home.html" class="text-gray-500 hover:text-gray-700 flex items-center gap-2 text-sm">
-        <i class="fa-solid fa-arrow-left"></i> Back
-      </a>
-      <span class="font-semibold text-gray-800">Report an Incident</span>
-      <div class="w-16"></div>
+    <div id="portal-preview-bar"></div>
+    <div class="max-w-4xl mx-auto px-4 h-16 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <a href="/pages/client/home.html" class="text-gray-500 hover:text-gray-700 flex items-center gap-2 text-sm">
+          <i class="fa-solid fa-arrow-left"></i> Back
+        </a>
+        <span class="font-semibold text-gray-800">Report an Incident</span>
+      </div>
     </div>
   </nav>
 
@@ -25,7 +27,7 @@
     <i class="fa-solid fa-wifi-slash mr-1.5"></i>You're offline — your report will be saved on this device and sent automatically once you're back online.
   </div>
 
-  <div class="max-w-2xl mx-auto px-4 py-8">
+  <div class="max-w-4xl mx-auto px-4 py-8">
 
     <!-- Step Indicator -->
     <div class="flex items-center justify-center mb-8">
@@ -55,7 +57,7 @@
     <!-- Step 1: Incident Type -->
     <div id="step-1" class="space-y-4">
       <h2 class="text-xl font-bold text-gray-800 text-center mb-6">What type of incident are you reporting?</h2>
-      <div class="grid grid-cols-2 sm:grid-cols-3 gap-3" id="type-cards">
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3" id="type-cards">
         <button onclick="selectType('Fire')"    class="type-card p-4 rounded-xl border-2 border-gray-200 hover:border-red-400 hover:bg-red-50 transition-all text-center group">
           <div class="text-3xl mb-2">🔥</div>
           <span class="font-semibold text-gray-700 text-sm group-hover:text-red-700">Fire</span>
@@ -68,6 +70,18 @@
           <div class="text-3xl mb-2">🚔</div>
           <span class="font-semibold text-gray-700 text-sm group-hover:text-orange-700">Crime</span>
         </button>
+        <button onclick="selectType('Fights')"  class="type-card p-4 rounded-xl border-2 border-gray-200 hover:border-red-400 hover:bg-red-50 transition-all text-center group">
+          <div class="text-3xl mb-2">🥊</div>
+          <span class="font-semibold text-gray-700 text-sm group-hover:text-red-700">Fights</span>
+        </button>
+        <button onclick="selectType('Flood')"   class="type-card p-4 rounded-xl border-2 border-gray-200 hover:border-cyan-400 hover:bg-cyan-50 transition-all text-center group">
+          <div class="text-3xl mb-2">🌊</div>
+          <span class="font-semibold text-gray-700 text-sm group-hover:text-cyan-700">Flood</span>
+        </button>
+        <button onclick="selectType('Missing')" class="type-card p-4 rounded-xl border-2 border-gray-200 hover:border-purple-400 hover:bg-purple-50 transition-all text-center group">
+          <div class="text-3xl mb-2">🔍</div>
+          <span class="font-semibold text-gray-700 text-sm group-hover:text-purple-700">Missing</span>
+        </button>
         <button onclick="selectType('Noise')"   class="type-card p-4 rounded-xl border-2 border-gray-200 hover:border-yellow-400 hover:bg-yellow-50 transition-all text-center group">
           <div class="text-3xl mb-2">📢</div>
           <span class="font-semibold text-gray-700 text-sm group-hover:text-yellow-700">Noise</span>
@@ -76,6 +90,24 @@
           <div class="text-3xl mb-2">❗</div>
           <span class="font-semibold text-gray-700 text-sm">Others</span>
         </button>
+      </div>
+
+      <!-- Incident Guide & Legend with Bisaya translation -->
+      <div class="mt-6 border border-gray-200 rounded-xl p-4 bg-gray-50">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <i class="fa-solid fa-circle-info text-blue-500"></i>
+            <span class="text-sm font-bold text-gray-800" id="legend-guide-title">Incident Guide &amp; Priority</span>
+          </div>
+          <!-- Language Selector -->
+          <div class="flex items-center bg-white border border-gray-300 rounded-lg p-0.5 text-xs font-semibold">
+            <button type="button" onclick="setLegendLanguage('en')" id="lang-btn-en" class="px-2 py-1 rounded bg-blue-600 text-white transition-colors">English</button>
+            <button type="button" onclick="setLegendLanguage('ceb')" id="lang-btn-ceb" class="px-2 py-1 rounded text-gray-600 hover:text-gray-900 transition-colors">Bisaya</button>
+          </div>
+        </div>
+        <div id="legend-content-list" class="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+          <!-- Populated by JS in English/Bisaya -->
+        </div>
       </div>
     </div>
 
@@ -103,14 +135,19 @@
     <div id="step-3" class="hidden space-y-5">
       <h2 class="text-xl font-bold text-gray-800 text-center mb-6">Add your location & evidence</h2>
 
-      <div>
+      <div id="location-map-card" class="rounded-xl border border-gray-200 p-3 bg-gray-50/50">
         <div class="flex items-center justify-between mb-2">
-          <label class="block text-sm font-medium text-gray-700">GPS Location</label>
-          <button onclick="autoDetectLocation()" class="text-blue-600 text-xs font-medium hover:underline">
-            <i class="fa-solid fa-location-crosshairs mr-1"></i> Auto-detect
-          </button>
+          <label class="block text-sm font-semibold text-gray-700">GPS Location</label>
+          <div class="flex items-center gap-2">
+            <button type="button" onclick="autoDetectLocation()" class="text-blue-600 text-xs font-medium hover:underline">
+              <i class="fa-solid fa-location-crosshairs mr-1"></i> Auto-detect
+            </button>
+            <button type="button" id="btn-fs-location-map" onclick="toggleMapFullscreen('location-map-card', window.locationMap, 'btn-fs-location-map')" class="text-gray-600 hover:text-gray-900 text-xs px-2 py-1 rounded border border-gray-300 hover:bg-white transition-colors flex items-center" title="Full Screen">
+              <i class="fa-solid fa-expand mr-1"></i><span>Fullscreen</span>
+            </button>
+          </div>
         </div>
-        <div id="location-map" class="w-full h-48 rounded-xl border border-gray-300 bg-gray-100"></div>
+        <div id="location-map" class="w-full rounded-lg border border-gray-300 bg-gray-100" style="height:300px;min-height:300px;"></div>
         <p id="location-info" class="text-xs text-gray-500 mt-1.5">Click the map or use Auto-detect to set your location.</p>
       </div>
 
@@ -227,7 +264,7 @@
         <div class="text-5xl">❗</div>
         <h3 class="text-lg font-bold text-gray-800">What kind of issue is this?</h3>
         <p class="text-sm text-gray-600">Choose the option that best describes your report.</p>
-        <button onclick="chooseOthersType('Garbage')" class="btn-secondary w-full flex items-center justify-center gap-2 py-3">
+        <button onclick="chooseOthersType('Other')" class="btn-secondary w-full flex items-center justify-center gap-2 py-3">
           🗑️ Garbage / Sanitation
         </button>
         <button onclick="chooseOthersType('Other')" class="btn-secondary w-full flex items-center justify-center gap-2 py-3">

@@ -1,18 +1,33 @@
 USE resqtrack;
 
--- Puroks 1–14
-INSERT IGNORE INTO puroks (id, name) VALUES
-  (1,  'Purok 1'),  (2,  'Purok 2'),  (3,  'Purok 3'),  (4,  'Purok 4'),
-  (5,  'Purok 5'),  (6,  'Purok 6'),  (7,  'Purok 7'),  (8,  'Purok 8'),
-  (9,  'Purok 9'),  (10, 'Purok 10'), (11, 'Purok 11'), (12, 'Purok 12'),
-  (13, 'Purok 13'), (14, 'Purok 14');
+-- Puroks for Barangay Manay (1–15)
+INSERT IGNORE INTO puroks (id, name, barangay) VALUES
+  (1,  'Purok 1',  'Barangay Manay'), (2,  'Purok 2',  'Barangay Manay'),
+  (3,  'Purok 3',  'Barangay Manay'), (4,  'Purok 4',  'Barangay Manay'),
+  (5,  'Purok 5',  'Barangay Manay'), (6,  'Purok 6',  'Barangay Manay'),
+  (7,  'Purok 7',  'Barangay Manay'), (8,  'Purok 8',  'Barangay Manay'),
+  (9,  'Purok 9',  'Barangay Manay'), (10, 'Purok 10', 'Barangay Manay'),
+  (11, 'Purok 11', 'Barangay Manay'), (12, 'Purok 12', 'Barangay Manay'),
+  (13, 'Purok 13', 'Barangay Manay'), (14, 'Purok 14', 'Barangay Manay'),
+  (15, 'Purok 15', 'Barangay Manay');
+
+-- Puroks for Barangay New Visayas (16–30)
+INSERT IGNORE INTO puroks (id, name, barangay) VALUES
+  (16, 'Purok 1',  'Barangay New Visayas'), (17, 'Purok 2',  'Barangay New Visayas'),
+  (18, 'Purok 3',  'Barangay New Visayas'), (19, 'Purok 4',  'Barangay New Visayas'),
+  (20, 'Purok 5',  'Barangay New Visayas'), (21, 'Purok 6',  'Barangay New Visayas'),
+  (22, 'Purok 7',  'Barangay New Visayas'), (23, 'Purok 8',  'Barangay New Visayas'),
+  (24, 'Purok 9',  'Barangay New Visayas'), (25, 'Purok 10', 'Barangay New Visayas'),
+  (26, 'Purok 11', 'Barangay New Visayas'), (27, 'Purok 12', 'Barangay New Visayas'),
+  (28, 'Purok 13', 'Barangay New Visayas'), (29, 'Purok 14', 'Barangay New Visayas'),
+  (30, 'Purok 15', 'Barangay New Visayas');
 
 -- All passwords are: password
 -- bcrypt hash: $2b$10$erNRnBDFQ1iCraiqZNB7OuB0xSbQ2FbaRc8U5mLtKnS3/4T7njJ6.
 
 -- Admin accounts
 INSERT IGNORE INTO users (full_name, email, password_hash, phone, role, purok_id, is_verified, is_active) VALUES
-  ('Barangay Admin',    'admin@resqtrack.ph',       '$2b$10$erNRnBDFQ1iCraiqZNB7OuB0xSbQ2FbaRc8U5mLtKnS3/4T7njJ6.', '09100000001', 'super_admin', NULL, 1, 1),
+  ('Barangay Admin',    'admin@resqtrack.ph',       '$2b$10$erNRnBDFQ1iCraiqZNB7OuB0xSbQ2FbaRc8U5mLtKnS3/4T7njJ6.', '09100000001', 'admin',       NULL, 1, 1),
   ('Captain Juan Reyes','captain@resqtrack.ph',     '$2b$10$erNRnBDFQ1iCraiqZNB7OuB0xSbQ2FbaRc8U5mLtKnS3/4T7njJ6.', '09100000002', 'admin',     NULL, 1, 1);
 
 -- Responder / Tanod accounts

@@ -5,12 +5,16 @@ const TRIAGE_MAP = {
   Fire:    'Red',
   Rescue:  'Red',
   Crime:   'Orange',
+  Fights:  'Orange',
+  Flood:   'Orange',
+  Missing: 'Yellow',
   Noise:   'Yellow',
-  Garbage: 'Green',
-  Other:   'Yellow',
+  Other:   'Green',
+  'Flagged as Fake': 'Green',
+  Spam:    'Green',
 };
 
-const VALID_TYPES   = ['Fire', 'Rescue', 'Crime', 'Noise', 'Garbage', 'Other'];
+const VALID_TYPES   = ['Fire', 'Rescue', 'Crime', 'Fights', 'Flood', 'Missing', 'Noise', 'Other', 'Flagged as Fake', 'Spam'];
 const VALID_TRIAGE   = ['Red', 'Orange', 'Yellow', 'Green'];
 const VALID_STATUSES = ['Pending', 'Assigned', 'Initiate', 'Delayed', 'Resolved', 'Archived'];
 
@@ -60,30 +64,31 @@ exports.getIncidents = async (req, res) => {
 
 exports.getIncidentById = async (req, res) => {
   try {
-    const [rows] = await db.query(`
+    const [[incident]] = await db.query(`
       SELECT i.*, u.full_name AS reporter_name, u.phone AS reporter_phone,
-             r.full_name AS responder_name, r.phone AS responder_phone, p.name AS purok_name,
-             fu.full_name AS flagged_by_name,
-             GROUP_CONCAT(DISTINCT ir_u.full_name ORDER BY ir.assigned_at SEPARATOR ', ') AS all_responder_names,
-             GROUP_CONCAT(DISTINCT ir.responder_id ORDER BY ir.assigned_at SEPARATOR ',')  AS all_responder_ids
+             r.full_name AS responder_name, p.name AS purok_name
       FROM incidents i
-      LEFT JOIN users u   ON i.reporter_id = u.id
-      LEFT JOIN users r   ON i.assigned_responder_id = r.id
-      LEFT JOIN users fu  ON i.flagged_by = fu.id
-      LEFT JOIN puroks p  ON i.purok_id = p.id
-      LEFT JOIN incident_responders ir   ON ir.incident_id = i.id
-      LEFT JOIN users ir_u ON ir.responder_id = ir_u.id
-      WHERE i.id = ?
-      GROUP BY i.id, u.full_name, u.phone, r.full_name, r.phone, p.name, fu.full_name`,
-      [req.params.id]);
-    if (!rows.length) return res.status(404).json({ message: 'Incident not found' });
+      LEFT JOIN users u  ON i.reporter_id = u.id
+      LEFT JOIN users r  ON i.assigned_responder_id = r.id
+      LEFT JOIN puroks p ON i.purok_id = p.id
+      WHERE i.id = ?`, [req.params.id]);
+
+    if (!incident) return res.status(404).json({ message: 'Incident not found' });
+    if (req.user.role === 'resident' && incident.reporter_id !== req.user.id) {
+      return res.status(403).json({ message: 'Forbidden' });
+    }
 
     const [attachments] = await db.query(
-      'SELECT id, file_path, uploaded_at FROM incident_attachments WHERE incident_id = ? ORDER BY id',
+      'SELECT id, file_path, uploaded_at FROM incident_attachments WHERE incident_id = ?',
       [req.params.id]
     );
+    const [responders] = await db.query(`
+      SELECT u.id, u.full_name, u.phone, ir.assigned_at
+      FROM incident_responders ir
+      JOIN users u ON ir.responder_id = u.id
+      WHERE ir.incident_id = ?`, [req.params.id]);
 
-    res.json({ ...rows[0], attachments });
+    res.json({ ...incident, attachments, responders });
   } catch (err) {
     res.status(500).json({ message: 'Server error', error: err.message });
   }
@@ -92,38 +97,43 @@ exports.getIncidentById = async (req, res) => {
 exports.createIncident = async (req, res) => {
   try {
     const { incident_type, description, purok_id, latitude, longitude } = req.body;
-    const reporter_id  = req.user.id;
-    const files         = req.files || [];
-    const photo_path    = files[0] ? `/uploads/${files[0].filename}` : null;
+    if (!incident_type || !description) {
+      return res.status(400).json({ message: 'incident_type and description are required' });
+    }
+    if (!VALID_TYPES.includes(incident_type)) {
+      return res.status(400).json({ message: 'Invalid incident type' });
+    }
+
     const reference_no  = generateRefNo();
-    const triage_color  = TRIAGE_MAP[incident_type] || 'Yellow';
+    const photo_path    = req.files?.[0] ? `/uploads/${req.files[0].filename}` : null;
+    const triage_color  = TRIAGE_MAP[incident_type] || 'Green';
 
     const [result] = await db.query(
       `INSERT INTO incidents
          (reference_no, reporter_id, incident_type, description, purok_id, latitude, longitude, photo_path, status, triage_color)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Pending', ?)`,
-      [reference_no, reporter_id, incident_type, description,
+      [reference_no, req.user.id, incident_type, description,
        purok_id || null, latitude || null, longitude || null, photo_path, triage_color]
     );
 
-    await attachPhotosAndLogs(result.insertId, files);
+    const incidentId = result.insertId;
+    await attachPhotosAndLogs(incidentId, req.files);
+    await db.query(
+      'INSERT INTO incident_logs (incident_id, actor_id, action) VALUES (?, ?, ?)',
+      [incidentId, req.user.id, 'Reported']
+    );
 
-    const [inc] = await db.query(`
+    const [[created]] = await db.query(`
       SELECT i.*, u.full_name AS reporter_name, p.name AS purok_name
       FROM incidents i
       LEFT JOIN users u  ON i.reporter_id = u.id
       LEFT JOIN puroks p ON i.purok_id = p.id
-      WHERE i.id = ?`, [result.insertId]);
+      WHERE i.id = ?`, [incidentId]);
 
     const io = req.app.get('io');
-    if (io) io.emit('incident:new', inc[0]);
+    if (io) io.emit('incident:new', created);
 
-    await db.query(
-      'INSERT INTO incident_logs (incident_id, actor_id, action, note) VALUES (?, ?, ?, ?)',
-      [result.insertId, reporter_id, 'Incident reported', `New ${incident_type} incident created`]
-    );
-
-    res.status(201).json({ message: 'Incident reported successfully', incident: inc[0] });
+    res.status(201).json({ message: 'Incident reported successfully', incident: created });
   } catch (err) {
     res.status(500).json({ message: 'Server error', error: err.message });
   }
@@ -132,15 +142,8 @@ exports.createIncident = async (req, res) => {
 exports.updateStatus = async (req, res) => {
   try {
     const { status, note } = req.body;
-    if (!VALID_STATUSES.includes(status)) return res.status(400).json({ message: 'Invalid status' });
-
-    if (status === 'Initiate' || status === 'Delayed') {
-      const [[inc]] = await db.query(
-        'SELECT assigned_responder_id FROM incidents WHERE id = ?', [req.params.id]
-      );
-      if (!inc?.assigned_responder_id) {
-        return res.status(400).json({ message: `Assign at least one responder before marking as ${status}.` });
-      }
+    if (!VALID_STATUSES.includes(status)) {
+      return res.status(400).json({ message: 'Invalid status' });
     }
 
     const extra = {};
@@ -157,24 +160,46 @@ exports.updateStatus = async (req, res) => {
     );
 
     const [[incInfo]] = await db.query(
-      'SELECT reference_no, reporter_id FROM incidents WHERE id = ?', [req.params.id]
+      `SELECT i.reference_no, i.reporter_id, i.incident_type, p.name AS purok_name
+       FROM incidents i
+       LEFT JOIN puroks p ON i.purok_id = p.id
+       WHERE i.id = ?`, [req.params.id]
     );
     const io = req.app.get('io');
-    if (io) io.emit('incident:status_update', {
-      id: parseInt(req.params.id),
-      status,
-      reporter_id: incInfo.reporter_id,
-      reference_no: incInfo.reference_no,
-      updated_by: req.user.name,
-    });
+    if (io) {
+      io.emit('incident:status_update', {
+        id: parseInt(req.params.id),
+        status,
+        reporter_id: incInfo.reporter_id,
+        reference_no: incInfo.reference_no,
+        updated_by: req.user.name,
+      });
+      if (status === 'Delayed') {
+        io.emit('incident:delayed', {
+          id: parseInt(req.params.id),
+          reference_no: incInfo.reference_no,
+          incident_type: incInfo.incident_type,
+          purok_name: incInfo.purok_name || 'Barangay Manay',
+          responder_name: req.user.name,
+          note: note || '',
+        });
+      }
+    }
 
-    if (status === 'Assigned' || status === 'Resolved') {
-      const [[reporter]] = await db.query('SELECT phone FROM users WHERE id = ?', [incInfo.reporter_id]);
-      if (reporter?.phone) {
-        const msg = status === 'Assigned'
-          ? `ResQTrack: A responder has been assigned to your report ${incInfo.reference_no}.`
-          : `ResQTrack: Your report ${incInfo.reference_no} has been marked resolved.`;
-        sendSMS(reporter.phone, msg);
+    const [[reporter]] = await db.query('SELECT phone FROM users WHERE id = ?', [incInfo.reporter_id]);
+    if (reporter?.phone) {
+      let msg = '';
+      if (status === 'Assigned') {
+        msg = `[ResQTrack] Update on ${incInfo.reference_no}: A barangay responder has been assigned and is attending to your report.`;
+      } else if (status === 'Initiate') {
+        msg = `[ResQTrack] Update on ${incInfo.reference_no}: Responders have arrived on scene and initiated response operations.`;
+      } else if (status === 'Delayed') {
+        msg = `[ResQTrack] Advisory on ${incInfo.reference_no}: Responder reported a delay${note ? ` (${note})` : ''}. They are on their way.`;
+      } else if (status === 'Resolved') {
+        msg = `[ResQTrack] Update on ${incInfo.reference_no}: Your incident report has been resolved. Thank you for your vigilance. - Brgy. Manay`;
+      }
+      if (msg) {
+        sendSMS(reporter.phone, msg).catch(err => console.error('[SMS status error]:', err.message));
       }
     }
 
@@ -226,7 +251,8 @@ exports.flagFake = async (req, res) => {
     if (!inc) return res.status(404).json({ message: 'Incident not found' });
 
     await db.query(
-      'UPDATE incidents SET is_fake = 1, fake_reason = ?, flagged_by = ?, flagged_at = NOW() WHERE id = ?',
+      `UPDATE incidents SET is_fake = 1, status = 'Archived', incident_type = 'Flagged as Fake',
+       fake_reason = ?, flagged_by = ?, flagged_at = NOW(), archived_at = NOW() WHERE id = ?`,
       [reason.trim(), req.user.id, req.params.id]
     );
 
@@ -236,10 +262,13 @@ exports.flagFake = async (req, res) => {
 
     await db.query(
       'INSERT INTO incident_logs (incident_id, actor_id, action, note) VALUES (?, ?, ?, ?)',
-      [req.params.id, req.user.id, `Flagged as fake report by ${req.user.name}`, reason.trim()]
+      [req.params.id, req.user.id, `Flagged as fake report (Archived) by ${req.user.name}`, reason.trim()]
     );
 
-    res.json({ message: 'Incident flagged as fake' });
+    const io = req.app.get('io');
+    if (io) io.emit('incident:status_update', { id: parseInt(req.params.id), status: 'Archived', is_fake: 1 });
+
+    res.json({ message: 'Incident flagged as fake and archived' });
   } catch (err) {
     res.status(500).json({ message: 'Server error', error: err.message });
   }
@@ -252,17 +281,93 @@ exports.unflagFake = async (req, res) => {
     if (!inc.is_fake) return res.status(400).json({ message: 'This incident is not flagged.' });
 
     await db.query(
-      'UPDATE incidents SET is_fake = 0, fake_reason = NULL, flagged_by = NULL, flagged_at = NULL WHERE id = ?',
+      `UPDATE incidents SET is_fake = 0, status = 'Pending', incident_type = 'Other',
+       fake_reason = NULL, flagged_by = NULL, flagged_at = NULL WHERE id = ?`,
       [req.params.id]
     );
     await db.query('UPDATE users SET fake_report_count = GREATEST(fake_report_count - 1, 0) WHERE id = ?', [inc.reporter_id]);
 
     await db.query(
-      'INSERT INTO incident_logs (incident_id, actor_id, action) VALUES (?, ?, ?)',
-      [req.params.id, req.user.id, `Fake-report flag removed by ${req.user.name}`]
+      'INSERT INTO incident_logs (incident_id, actor_id, action, note) VALUES (?, ?, ?, ?)',
+      [req.params.id, req.user.id, `Fake report flag removed by ${req.user.name}`, 'Status restored to Pending']
     );
 
-    res.json({ message: 'Flag removed' });
+    const io = req.app.get('io');
+    if (io) io.emit('incident:status_update', { id: parseInt(req.params.id), status: 'Pending', is_fake: 0 });
+
+    res.json({ message: 'Fake flag removed' });
+  } catch (err) {
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+};
+
+exports.getDuplicates = async (req, res) => {
+  try {
+    const [[inc]] = await db.query(
+      'SELECT id, incident_type, purok_id, latitude, longitude, reported_at FROM incidents WHERE id = ?',
+      [req.params.id]
+    );
+    if (!inc) return res.status(404).json({ message: 'Incident not found' });
+
+    let q = `
+      SELECT i.id, i.reference_no, i.incident_type, i.status, i.triage_color,
+             i.description, i.reported_at, i.is_spam, i.is_fake,
+             u.full_name AS reporter_name, p.name AS purok_name
+      FROM incidents i
+      LEFT JOIN users u  ON i.reporter_id = u.id
+      LEFT JOIN puroks p ON i.purok_id = p.id
+      WHERE i.id != ?
+        AND i.is_spam = 0
+        AND i.is_fake = 0
+        AND (
+          (i.purok_id IS NOT NULL AND i.purok_id = ?)
+          OR (i.latitude IS NOT NULL AND ? IS NOT NULL AND ABS(i.latitude - ?) < 0.005 AND ABS(i.longitude - ?) < 0.005)
+        )
+        AND i.reported_at BETWEEN DATE_SUB(?, INTERVAL 4 HOUR) AND DATE_ADD(?, INTERVAL 4 HOUR)
+      ORDER BY i.reported_at DESC LIMIT 6`;
+
+    const [dupes] = await db.query(q, [
+      inc.id,
+      inc.purok_id || 0,
+      inc.latitude,
+      inc.latitude || 0,
+      inc.longitude || 0,
+      inc.reported_at,
+      inc.reported_at,
+    ]);
+
+    res.json(dupes);
+  } catch (err) {
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+};
+
+exports.flagSpam = async (req, res) => {
+  try {
+    const { reason, duplicate_of_id } = req.body;
+    if (!reason?.trim()) {
+      return res.status(400).json({ message: 'A reason for marking as spam/duplicate is required.' });
+    }
+
+    const [[inc]] = await db.query('SELECT reporter_id, reference_no FROM incidents WHERE id = ?', [req.params.id]);
+    if (!inc) return res.status(404).json({ message: 'Incident not found' });
+
+    await db.query(
+      `UPDATE incidents SET is_spam = 1, status = 'Archived', incident_type = 'Spam',
+       spam_reason = ?, duplicate_of_id = ?, flagged_by = ?, flagged_at = NOW(), archived_at = NOW() WHERE id = ?`,
+      [reason.trim(), duplicate_of_id || null, req.user.id, req.params.id]
+    );
+
+    const dupNote = duplicate_of_id ? ` (Linked as duplicate of #${duplicate_of_id})` : '';
+    await db.query(
+      'INSERT INTO incident_logs (incident_id, actor_id, action, note) VALUES (?, ?, ?, ?)',
+      [req.params.id, req.user.id, `Flagged as Spam/Duplicate (Archived) by ${req.user.name}${dupNote}`, reason.trim()]
+    );
+
+    const io = req.app.get('io');
+    if (io) io.emit('incident:status_update', { id: parseInt(req.params.id), status: 'Archived', is_spam: 1, incident_type: 'Spam' });
+
+    res.json({ message: 'Incident flagged as spam/duplicate and archived' });
   } catch (err) {
     res.status(500).json({ message: 'Server error', error: err.message });
   }
@@ -286,21 +391,25 @@ exports.assignResponder = async (req, res) => {
       [responder_ids[0], req.params.id]
     );
 
-    // Fetch names for the log
-    const [names] = await db.query(
-      `SELECT full_name FROM users WHERE id IN (${responder_ids.map(() => '?').join(',')})`,
+    // Fetch names and phone numbers for the log and SMS
+    const [responders] = await db.query(
+      `SELECT id, full_name, phone FROM users WHERE id IN (${responder_ids.map(() => '?').join(',')})`,
       responder_ids
     );
-    const nameList = names.map(n => n.full_name).join(', ');
+    const nameList = responders.map(n => n.full_name).join(', ');
 
     await db.query(
       'INSERT INTO incident_logs (incident_id, actor_id, action) VALUES (?, ?, ?)',
       [req.params.id, req.user.id, `Responder(s) assigned: ${nameList}`]
     );
 
-    const [[incData]] = await db.query(
-      'SELECT reference_no, reporter_id FROM incidents WHERE id = ?', [req.params.id]
-    );
+    const [[incData]] = await db.query(`
+      SELECT i.reference_no, i.reporter_id, i.incident_type, i.triage_color,
+             i.description, p.name AS purok_name
+      FROM incidents i
+      LEFT JOIN puroks p ON i.purok_id = p.id
+      WHERE i.id = ?`, [req.params.id]);
+
     const io = req.app.get('io');
     if (io) io.emit('incident:status_update', {
       id: parseInt(req.params.id),
@@ -310,12 +419,22 @@ exports.assignResponder = async (req, res) => {
       responder_name: nameList,
     });
 
-    const [[reporter]] = await db.query('SELECT phone FROM users WHERE id = ?', [incData.reporter_id]);
-    if (reporter?.phone) {
-      sendSMS(reporter.phone, `ResQTrack: A responder has been assigned to your report ${incData.reference_no}.`);
+    // Notify assigned responders via SMS
+    const purokStr = incData.purok_name ? `Purok ${incData.purok_name}` : 'Brgy. Manay';
+    for (const r of responders) {
+      if (r.phone) {
+        const smsMsg = `[ResQTrack] DISPATCH ALERT: You have been assigned to Incident ${incData.reference_no} (${incData.incident_type} - ${incData.triage_color}) at ${purokStr}. Please check your responder dashboard immediately.`;
+        sendSMS(r.phone, smsMsg).catch(err => console.error(`[SMS dispatch error]:`, err.message));
+      }
     }
 
-    res.json({ message: 'Responder(s) assigned' });
+    // Notify reporter via SMS
+    const [[reporter]] = await db.query('SELECT phone FROM users WHERE id = ?', [incData.reporter_id]);
+    if (reporter?.phone) {
+      sendSMS(reporter.phone, `[ResQTrack] Update for report ${incData.reference_no}: Responder(s) ${nameList} have been dispatched to assist you.`);
+    }
+
+    res.json({ message: 'Responder(s) assigned and notified' });
   } catch (err) {
     res.status(500).json({ message: 'Server error', error: err.message });
   }
@@ -330,6 +449,52 @@ exports.getIncidentLogs = async (req, res) => {
       WHERE l.incident_id = ?
       ORDER BY l.logged_at ASC`, [req.params.id]);
     res.json(rows);
+  } catch (err) {
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+};
+
+exports.askUpdate = async (req, res) => {
+  try {
+    const [[inc]] = await db.query(`
+      SELECT i.*, p.name AS purok_name
+      FROM incidents i
+      LEFT JOIN puroks p ON i.purok_id = p.id
+      WHERE i.id = ?`, [req.params.id]);
+    if (!inc) return res.status(404).json({ message: 'Incident not found' });
+
+    if (!['Initiate', 'Delayed'].includes(inc.status)) {
+      return res.status(400).json({ message: 'Status update can only be requested for Initiate or Delayed incidents.' });
+    }
+
+    const [responders] = await db.query(`
+      SELECT u.id, u.full_name, u.phone
+      FROM incident_responders ir
+      JOIN users u ON ir.responder_id = u.id
+      WHERE ir.incident_id = ? AND u.phone IS NOT NULL`, [req.params.id]);
+
+    if (!responders.length && inc.assigned_responder_id) {
+      const [single] = await db.query(`SELECT id, full_name, phone FROM users WHERE id = ? AND phone IS NOT NULL`, [inc.assigned_responder_id]);
+      if (single.length) responders.push(single[0]);
+    }
+
+    if (!responders.length) {
+      return res.status(400).json({ message: 'No assigned responder with a valid phone number found.' });
+    }
+
+    const customNote = req.body.note?.trim();
+    const smsBody = `ResQTrack Alert: Admin is requesting an immediate update on Incident ${inc.reference_no} (${inc.incident_type}, Purok: ${inc.purok_name || 'N/A'}). ${customNote ? `Note: ${customNote} ` : ''}Please update status or report in immediately. - Brgy. Manay`;
+
+    for (const r of responders) {
+      sendSMS(r.phone, smsBody).catch(err => console.error(`[SMS ask-update Error]:`, err.message));
+    }
+
+    await db.query(
+      'INSERT INTO incident_logs (incident_id, actor_id, action, note) VALUES (?, ?, ?, ?)',
+      [req.params.id, req.user.id, `Status update requested via SMS from ${responders.map(r => r.full_name).join(', ')}`, customNote || null]
+    );
+
+    res.json({ message: `Update request sent via SMS to ${responders.length} responder(s).` });
   } catch (err) {
     res.status(500).json({ message: 'Server error', error: err.message });
   }

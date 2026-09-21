@@ -24,6 +24,7 @@ const server = http.createServer(app);
 const io     = new Server(server, { cors: { origin: '*' } });
 
 app.set('io', io);
+global.__resqtrack_io = io;
 
 app.use(cors());
 app.use(express.json());

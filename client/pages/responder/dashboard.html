@@ -21,8 +21,31 @@
       <span class="ml-2 text-slate-500 text-xs uppercase tracking-wider">Responder</span>
     </div>
     <nav class="flex-1 py-4 px-3 space-y-0.5 overflow-y-auto">
+      <div class="px-3 pb-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">Field Operations</div>
       <a href="/pages/responder/dashboard.html"    class="nav-item active"><i class="fa-solid fa-gauge w-5 text-center"></i> Dashboard</a>
       <a href="/pages/responder/my-incidents.html" class="nav-item"><i class="fa-solid fa-clipboard-list w-5 text-center"></i> My Incidents</a>
+
+      <!-- Portal Switcher Dock in Responder Sidebar -->
+      <div class="pt-3 px-1 pb-1 border-t border-slate-800/80 mt-3">
+        <div class="px-2 pb-1.5 flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-slate-400">
+          <span>Switch Portal</span>
+          <span class="text-emerald-400 font-semibold bg-emerald-500/10 px-1.5 py-0.5 rounded text-[9px] border border-emerald-500/20">Responder</span>
+        </div>
+        <div class="grid grid-cols-2 gap-1.5 mt-1" id="responder-switch-grid">
+          <a href="/pages/admin/dashboard.html" id="resp-to-admin-btn"
+             class="hidden group flex flex-col items-center justify-center p-2 rounded-xl bg-slate-800/70 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700/50 hover:border-blue-500/40 transition-all text-center"
+             title="Switch to Admin Console">
+            <i class="fa-solid fa-shield-halved text-blue-400 text-sm mb-1 group-hover:scale-110 transition-transform"></i>
+            <span class="text-[11px] font-medium leading-none">Admin</span>
+          </a>
+          <a href="/pages/client/home.html" id="resp-to-client-btn"
+             class="group flex flex-col items-center justify-center p-2 rounded-xl bg-slate-800/70 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700/50 hover:border-cyan-500/40 transition-all text-center col-span-2"
+             title="Switch to Resident View">
+            <i class="fa-solid fa-house text-cyan-400 text-sm mb-1 group-hover:scale-110 transition-transform"></i>
+            <span class="text-[11px] font-medium leading-none">Resident View</span>
+          </a>
+        </div>
+      </div>
     </nav>
     <div class="border-t border-slate-800 p-4">
       <div class="flex items-center gap-3">
@@ -47,9 +70,12 @@
         <button onclick="toggleSidebar()" class="lg:hidden text-gray-500 hover:text-gray-700 -ml-1 p-1"><i class="fa-solid fa-bars text-xl"></i></button>
         <h1 class="text-lg font-semibold text-gray-800">Responder Dashboard</h1>
       </div>
-      <div class="flex items-center gap-3 text-sm text-gray-500">
-        <i class="fa-solid fa-circle text-green-500 text-xs"></i> Live
-        <span id="live-time"></span>
+      <div class="flex items-center gap-3">
+        <div id="portal-switcher"></div>
+        <div class="hidden sm:flex items-center gap-2 text-sm text-gray-500">
+          <i class="fa-solid fa-circle text-green-500 text-xs"></i> Live
+          <span id="live-time"></span>
+        </div>
       </div>
     </header>
 
@@ -96,11 +122,14 @@
         </div>
 
         <!-- Incident Map -->
-        <div class="card p-0 overflow-hidden lg:col-span-2" style="isolation:isolate;z-index:0;position:relative;">
-          <div class="px-5 py-4 border-b border-gray-100">
+        <div id="incident-map-card" class="card p-0 overflow-hidden lg:col-span-2" style="isolation:isolate;z-index:0;position:relative;">
+          <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
             <h2 class="font-semibold text-gray-800">Active Incident Locations</h2>
+            <button type="button" id="btn-fs-incident-map" onclick="toggleMapFullscreen('incident-map-card', window.incidentMap, 'btn-fs-incident-map')" class="text-gray-600 hover:text-gray-900 text-xs px-2.5 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors flex items-center" title="Full Screen">
+              <i class="fa-solid fa-expand mr-1"></i><span>Fullscreen</span>
+            </button>
           </div>
-          <div id="incident-map" class="h-56"></div>
+          <div id="incident-map" class="w-full" style="height:250px;min-height:250px;"></div>
         </div>
       </div>
 
@@ -146,13 +175,21 @@
 
 <!-- Incident Detail Modal -->
 <div id="incident-modal" class="modal-overlay hidden">
-  <div class="modal-box">
-    <div class="flex items-center justify-between p-5 border-b border-gray-100">
-      <h3 class="font-bold text-gray-800 text-lg" id="modal-ref">Incident Details</h3>
-      <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600"><i class="fa-solid fa-xmark text-xl"></i></button>
+  <div class="modal-box max-w-4xl">
+    <div class="modal-header">
+      <div class="flex items-center gap-2.5">
+        <div class="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold text-base">
+          <i class="fa-solid fa-triangle-exclamation"></i>
+        </div>
+        <div>
+          <h3 class="font-bold text-gray-800 text-lg" id="modal-ref">Incident Details</h3>
+          <p class="text-xs text-gray-400">Incident status, map, evidence, and responder actions</p>
+        </div>
+      </div>
+      <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600 p-1 transition-colors"><i class="fa-solid fa-xmark text-xl"></i></button>
     </div>
-    <div class="p-5 space-y-4" id="modal-content"></div>
-    <div class="p-5 border-t border-gray-100 flex flex-wrap gap-3" id="modal-actions"></div>
+    <div class="modal-body space-y-4" id="modal-content"></div>
+    <div class="modal-footer" id="modal-actions"></div>
   </div>
 </div>
 

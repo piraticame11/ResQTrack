@@ -1,5 +1,5 @@
 (async function () {
-  const user = requireRole('admin', 'super_admin', 'responder');
+  const user = requireRole('admin');
   if (!user) return;
   setUserUI(user);
 
@@ -102,9 +102,15 @@
   }
 
   function initMap(locations) {
-    if (window._dashMap) { window._dashMap.remove(); }
-    // Centers on wherever responders actually are (fitBounds below);
-    // falls back to the Manay/New Visayas midpoint when no one is tracked yet.
+    const container = document.getElementById('responder-map');
+    if (!container) return;
+    if (window._dashMap) {
+      try { window._dashMap.remove(); } catch (_) {}
+      window._dashMap = null;
+    }
+    if (container._leaflet_id) {
+      container._leaflet_id = null;
+    }
     const map = L.map('responder-map').setView([7.3269, 125.6352], 12);
     window._dashMap = map;
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -113,12 +119,16 @@
 
     const points = [];
     locations.forEach(loc => {
+      if (!loc.latitude || !loc.longitude) return;
       L.marker([loc.latitude, loc.longitude])
         .addTo(map)
         .bindPopup(`<b>${loc.responder_name}</b><br>Responder`);
       points.push([loc.latitude, loc.longitude]);
     });
-    if (points.length) map.fitBounds(points, { padding: [30, 30], maxZoom: 16 });
+    if (points.length) {
+      map.fitBounds(points, { padding: [30, 30], maxZoom: 16 });
+    }
+    setTimeout(() => { if (map) map.invalidateSize(); }, 200);
   }
 
   // Socket.IO — uses the shared socket created by notify.js

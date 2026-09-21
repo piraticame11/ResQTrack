@@ -1,20 +1,27 @@
-let gpsWatchId  = null;
-let incidentMap = null;
-let modalMap    = null;
-let currentUser = null;
+const SERVICE_AREA_FALLBACK_CENTER = [7.3269, 125.6352];
+const SERVICE_AREA_FALLBACK_ZOOM   = 12;
+
+let gpsWatchId        = null;
+let incidentMap       = null;
+let modalMap          = null;
+let currentUser       = null;
+let responderGpsMarker = null;
 
 (async function () {
-  currentUser = requireRole('responder');
+  currentUser = requireRole('responder', 'admin');
   if (!currentUser) return;
   setUserUI(currentUser);
+  if (currentUser.role === 'admin') {
+    document.getElementById('admin-nav-section')?.classList.remove('hidden');
+  }
 
   setInterval(() => {
     const el = document.getElementById('live-time');
     if (el) el.textContent = new Date().toLocaleTimeString('en-PH');
   }, 1000);
 
-  await loadActive();
   initMap();
+  await loadActive();
 
   const socket = io();
   socket.on('incident:status_update', () => loadActive());
@@ -80,9 +87,13 @@ const TYPE_ICON = {
   Fire:    'fa-fire text-red-500',
   Rescue:  'fa-kit-medical text-blue-500',
   Crime:   'fa-shield-halved text-orange-500',
+  Fights:  'fa-hand-fist text-red-600',
+  Flood:   'fa-water text-cyan-600',
+  Missing: 'fa-person-circle-question text-purple-600',
   Noise:   'fa-volume-high text-yellow-500',
-  Garbage: 'fa-trash text-green-500',
   Other:   'fa-circle-exclamation text-gray-500',
+  'Flagged as Fake': 'fa-triangle-exclamation text-gray-500',
+  Spam:    'fa-ban text-gray-500',
 };
 
 const TRIAGE_CARD = {
@@ -117,10 +128,9 @@ function renderCards(list) {
     const mineBadge  = isMine
       ? `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-blue-600 text-white"><i class="fa-solid fa-user-check mr-1 text-xs"></i>Mine</span>`
       : '';
-    const btnClass   = isMine ? 'btn-primary' : 'btn-secondary';
 
     return `
-    <div class="border-l-4 ${cardColor} rounded-r-xl shadow-sm p-4">
+    <div class="border-l-4 ${cardColor} rounded-r-xl shadow-sm p-4 bg-white">
       <div class="flex items-start justify-between gap-2 mb-1">
         <div class="flex items-center gap-2 flex-wrap">
           ${triageBadge(i.triage_color)}
@@ -136,33 +146,43 @@ function renderCards(list) {
         ${i.purok_name ? `<span>·</span><span class="font-medium text-gray-700">${i.purok_name}</span>` : ''}
         <span>·</span><span>${timeAgo(i.reported_at)}</span>
       </div>
-      ${i.description ? `<p class="text-xs text-gray-500 mt-1.5 line-clamp-1">${i.description}</p>` : ''}
-      <button onclick="openModal(${i.id})"
-        class="${btnClass} w-full mt-3 flex items-center justify-center gap-2 py-2.5 text-sm">
-        <i class="fa-solid fa-eye"></i> View Details
-      </button>
+      <div class="mt-3 flex items-center justify-end gap-2 border-t pt-2.5">
+        <button onclick="openModal(${i.id})" class="btn-primary btn-sm text-xs">
+          <i class="fa-solid fa-eye mr-1"></i> View Details
+        </button>
+      </div>
     </div>`;
   }).join('');
 }
 
 // ── Map ───────────────────────────────────────────────────────────────────────
-// The map centers on wherever the incident data actually is (fitBounds
-// below). When there's nothing to fit to yet, it falls back to the
-// midpoint between Barangay Manay and Barangay New Visayas (Panabo City) —
-// covers both pilot areas without hardcoding just one.
-const SERVICE_AREA_FALLBACK_CENTER = [7.3269, 125.6352];
-const SERVICE_AREA_FALLBACK_ZOOM   = 12;
-
 function initMap() {
+  const container = document.getElementById('incident-map');
+  if (!container) return;
+  if (incidentMap) {
+    setTimeout(() => incidentMap.invalidateSize(), 150);
+    return;
+  }
+  if (container._leaflet_id) {
+    container._leaflet_id = null;
+  }
   incidentMap = L.map('incident-map').setView(SERVICE_AREA_FALLBACK_CENTER, SERVICE_AREA_FALLBACK_ZOOM);
+  window.incidentMap = incidentMap;
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '© OpenStreetMap contributors',
   }).addTo(incidentMap);
+  setTimeout(() => incidentMap.invalidateSize(), 200);
 }
 
 function plotMapMarkers(incidents) {
   if (!incidentMap) return;
-  incidentMap.eachLayer(l => { if (l instanceof L.Marker) incidentMap.removeLayer(l); });
+
+  // Remove existing incident markers (leave responder GPS marker if present)
+  incidentMap.eachLayer(l => {
+    if (l instanceof L.Marker && l !== responderGpsMarker) {
+      incidentMap.removeLayer(l);
+    }
+  });
 
   const points = [];
   incidents.forEach(i => {
@@ -170,7 +190,7 @@ function plotMapMarkers(incidents) {
     const isMine = i.assigned_responder_id === currentUser.id;
     const color  = { Red: '#ef4444', Orange: '#f97316', Yellow: '#eab308', Green: '#22c55e' }[i.triage_color] || '#6b7280';
     const size   = isMine ? 18 : 12;
-    const border = isMine ? '2px solid #2563eb' : '2px solid #fff';
+    const border = isMine ? '3px solid #2563eb' : '2px solid #fff';
     const icon   = L.divIcon({
       html: `<div style="background:${color};width:${size}px;height:${size}px;border-radius:50%;border:${border};box-shadow:0 1px 4px rgba(0,0,0,.4)"></div>`,
       className: '',
@@ -182,7 +202,17 @@ function plotMapMarkers(incidents) {
     points.push([i.latitude, i.longitude]);
   });
 
-  if (points.length) incidentMap.fitBounds(points, { padding: [30, 30], maxZoom: 16 });
+  if (responderGpsMarker) {
+    const latlng = responderGpsMarker.getLatLng();
+    points.push([latlng.lat, latlng.lng]);
+  }
+
+  if (points.length) {
+    incidentMap.fitBounds(points, { padding: [30, 30], maxZoom: 16 });
+  } else {
+    incidentMap.setView(SERVICE_AREA_FALLBACK_CENTER, SERVICE_AREA_FALLBACK_ZOOM);
+  }
+  setTimeout(() => incidentMap.invalidateSize(), 150);
 }
 
 // ── Incident detail modal ─────────────────────────────────────────────────────
@@ -215,45 +245,79 @@ async function openModal(id) {
   const isMyIncident = inc.assigned_responder_id === currentUser.id;
 
   document.getElementById('modal-content').innerHTML = `
-    ${isMyIncident ? `<div class="bg-blue-50 border border-blue-200 text-blue-700 rounded-lg px-3 py-2 text-xs font-medium"><i class="fa-solid fa-user-check mr-1"></i>This incident is assigned to you</div>` : ''}
-    <div class="grid grid-cols-2 gap-3 text-sm">
-      <div><span class="text-gray-500">Triage</span><p class="mt-0.5">${triageBadge(inc.triage_color)}</p></div>
-      <div><span class="text-gray-500">Type</span><p class="font-semibold mt-0.5"><span class="inline-flex px-2 py-0.5 rounded text-xs ${typeColor(inc.incident_type)}">${inc.incident_type}</span></p></div>
-      <div><span class="text-gray-500">Purok</span><p class="font-semibold">${inc.purok_name || '—'}</p></div>
-      <div><span class="text-gray-500">Reporter</span><p class="font-semibold">${inc.reporter_name}</p></div>
-      <div><span class="text-gray-500">Phone</span><p class="font-semibold">${inc.reporter_phone || '—'}</p></div>
-      <div class="col-span-2"><span class="text-gray-500">Reported</span><p class="font-semibold">${formatDate(inc.reported_at)}</p></div>
-      <div><span class="text-gray-500">Status</span><p class="mt-0.5">${statusBadge(inc.status)}</p></div>
-      <div class="col-span-2"><span class="text-gray-500">Description</span><p class="bg-gray-50 rounded-lg p-3 mt-1 text-gray-700 text-sm">${inc.description}</p></div>
-      ${inc.latitude ? `
-      <div class="col-span-2">
-        <span class="text-gray-500">Location</span>
-        <div id="modal-incident-map" class="rounded-lg overflow-hidden mt-1.5" style="height:180px"></div>
-        <div class="flex items-center justify-between mt-1">
-          <p class="font-mono text-xs text-gray-400">${inc.latitude}, ${inc.longitude}</p>
-          ${mapsLink}
-        </div>
-      </div>` : ''}
-      <div class="col-span-2">${photoHtml}</div>
-    </div>
-    <div class="border-t pt-4 mt-2">
-      <p class="text-sm font-medium text-gray-700 mb-2">Activity Log</p>
-      <div class="space-y-2 max-h-36 overflow-y-auto">
-        ${logs.length ? logs.map(l => `
-          <div class="flex gap-3 text-xs">
-            <div class="w-1.5 h-1.5 rounded-full bg-blue-400 mt-1.5 shrink-0"></div>
-            <div>
-              <span class="font-medium text-gray-700">${l.action}</span>
-              ${l.note ? `<span class="text-gray-500"> — ${l.note}</span>` : ''}
-              <span class="text-gray-400 block">${l.actor_name || 'System'} · ${formatDate(l.logged_at)}</span>
+    ${isMyIncident ? `<div class="bg-blue-50 border border-blue-200 text-blue-700 rounded-xl px-4 py-2.5 text-xs font-semibold flex items-center gap-2 mb-4"><i class="fa-solid fa-user-check text-base"></i> You are assigned to respond to this incident.</div>` : ''}
+    <div class="grid grid-cols-1 md:grid-cols-12 gap-6">
+      <!-- Left Column: Details & Description (7 cols) -->
+      <div class="md:col-span-7 space-y-4">
+        <div class="bg-gray-50/80 rounded-xl border border-gray-200 p-4">
+          <h4 class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+            <i class="fa-solid fa-circle-info text-blue-500"></i> Incident Overview
+          </h4>
+          <div class="grid grid-cols-2 gap-3 text-sm">
+            <div><span class="text-gray-400 text-xs font-medium">Triage Priority</span><p class="mt-0.5">${triageBadge(inc.triage_color)}</p></div>
+            <div><span class="text-gray-400 text-xs font-medium">Incident Type</span><p class="font-semibold mt-0.5"><span class="inline-flex px-2 py-0.5 rounded text-xs ${typeColor(inc.incident_type)}">${inc.incident_type}</span></p></div>
+            <div><span class="text-gray-400 text-xs font-medium">Purok</span><p class="font-semibold text-gray-800">${inc.purok_name || '—'}</p></div>
+            <div><span class="text-gray-400 text-xs font-medium">Reporter</span><p class="font-semibold text-gray-800">${inc.reporter_name}</p></div>
+            <div><span class="text-gray-400 text-xs font-medium">Reporter Phone</span><p class="font-semibold text-gray-700">${inc.reporter_phone || '—'}</p></div>
+            <div><span class="text-gray-400 text-xs font-medium">Current Status</span><p class="mt-0.5">${statusBadge(inc.status)}</p></div>
+            <div class="col-span-2 pt-1.5 border-t border-gray-200/80">
+              <span class="text-gray-400 text-xs font-medium">Reported Time</span>
+              <p class="font-medium text-gray-700 text-xs mt-0.5">${formatDate(inc.reported_at)}</p>
             </div>
-          </div>`).join('') : '<p class="text-gray-400 text-xs">No log entries.</p>'}
+          </div>
+        </div>
+
+        <div class="bg-white rounded-xl border border-gray-200 p-4">
+          <span class="text-gray-500 text-xs font-semibold uppercase tracking-wider block mb-1">Description / Narrative</span>
+          <p class="text-gray-700 text-sm whitespace-pre-line leading-relaxed">${inc.description}</p>
+        </div>
+
+        ${photoHtml ? `
+        <div class="bg-gray-50/80 rounded-xl border border-gray-200 p-3.5 space-y-2">
+          <span class="text-gray-500 text-xs font-semibold uppercase tracking-wider block"><i class="fa-solid fa-camera text-blue-500 mr-1"></i> Attached Photos</span>
+          ${photoHtml}
+        </div>` : ''}
+      </div>
+
+      <!-- Right Column: Map & Activity Log (5 cols) -->
+      <div class="md:col-span-5 space-y-4">
+        ${inc.latitude ? `
+        <div class="bg-gray-50/80 rounded-xl border border-gray-200 p-3.5" id="modal-map-card">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-gray-500 text-xs font-semibold uppercase tracking-wider flex items-center gap-1"><i class="fa-solid fa-location-dot text-red-500"></i> Location Map</span>
+            <button type="button" id="btn-fs-modal-map" onclick="toggleMapFullscreen('modal-map-card', window.modalMap, 'btn-fs-modal-map')" class="text-gray-600 hover:text-gray-900 text-xs px-2 py-0.5 rounded border border-gray-200 bg-white hover:bg-gray-50 flex items-center" title="Full Screen">
+              <i class="fa-solid fa-expand mr-1"></i><span>Fullscreen</span>
+            </button>
+          </div>
+          <div id="modal-incident-map" class="rounded-lg overflow-hidden border border-gray-200 bg-gray-100" style="height:220px"></div>
+          <div class="flex items-center justify-between mt-2 pt-1">
+            <p class="font-mono text-xs text-gray-500">${inc.latitude}, ${inc.longitude}</p>
+            ${mapsLink}
+          </div>
+        </div>` : ''}
+
+        <div class="bg-gray-50/80 rounded-xl border border-gray-200 p-3.5 space-y-2">
+          <span class="text-gray-500 text-xs font-semibold uppercase tracking-wider block"><i class="fa-solid fa-clock-rotate-left text-indigo-500 mr-1"></i> Activity Log</span>
+          <div class="space-y-2 max-h-56 overflow-y-auto pr-1">
+            ${logs.length ? logs.map(l => `
+              <div class="flex gap-2.5 text-xs bg-white p-2.5 rounded-lg border border-gray-100">
+                <div class="w-2 h-2 rounded-full bg-blue-500 mt-1 shrink-0"></div>
+                <div class="flex-1 min-w-0">
+                  <span class="font-semibold text-gray-800">${l.action}</span>
+                  ${l.note ? `<span class="text-gray-500 block text-[11px] mt-0.5"> — ${l.note}</span>` : ''}
+                  <span class="text-gray-400 text-[10px] block mt-0.5">${l.actor_name || 'System'} · ${formatDate(l.logged_at)}</span>
+                </div>
+              </div>`).join('') : '<p class="text-gray-400 text-xs">No log entries.</p>'}
+          </div>
+        </div>
       </div>
     </div>`;
 
   if (inc.latitude && inc.longitude) {
     if (modalMap) { modalMap.remove(); modalMap = null; }
     modalMap = L.map('modal-incident-map').setView([inc.latitude, inc.longitude], 16);
+    window.modalMap = modalMap;
+    setTimeout(() => { if (modalMap) modalMap.invalidateSize(); }, 200);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '© OpenStreetMap contributors',
     }).addTo(modalMap);
@@ -276,11 +340,14 @@ async function openModal(id) {
     (INCIDENT_TRANSITIONS[inc.status] || []).forEach(s => {
       const icon = STATUS_ACTION_ICON[s] || 'fa-arrow-right';
       actionsHtml.push(s === 'Delayed'
-        ? `<button onclick="promptDelayReason(${id})" class="btn-warning btn-sm"><i class="fa-solid ${icon} mr-1"></i>Mark Delayed</button>`
-        : `<button onclick="changeStatus(${id},'${s}')" class="btn-primary btn-sm"><i class="fa-solid ${icon} mr-1"></i>Mark ${s}</button>`);
+        ? `<button onclick="closeModal(); promptDelayReason(${id})" class="btn-warning btn-sm"><i class="fa-solid ${icon} mr-1"></i> Delayed</button>`
+        : `<button onclick="changeStatus(${id},'${s}')" class="btn-primary btn-sm"><i class="fa-solid ${icon} mr-1"></i> ${s}</button>`);
     });
   }
-  if (!inc.is_fake) {
+  if (!inc.is_fake && !inc.is_spam) {
+    actionsHtml.push(`<button onclick="promptFlagSpam(${id})" class="text-xs text-amber-600 hover:underline self-center mr-2">
+                         <i class="fa-solid fa-ban mr-1"></i> Flag as Spam
+                       </button>`);
     actionsHtml.push(`<button onclick="promptFlagFake(${id})" class="text-xs text-red-500 hover:underline self-center">
                          <i class="fa-solid fa-flag mr-1"></i> Flag as Fake
                        </button>`);
@@ -289,14 +356,30 @@ async function openModal(id) {
   document.getElementById('modal-actions').innerHTML = actionsHtml.join('');
 }
 
+function promptFlagSpam(id) {
+  openReasonModal('Why is this being flagged as spam / duplicate? (This will archive the report)', reason => flagSpam(id, reason));
+}
+
+async function flagSpam(id, reason) {
+  const res = await api.patch(`/incidents/${id}/flag-spam`, { reason });
+  if (res && res.ok) {
+    showToast('Incident flagged as spam and archived');
+    closeModal();
+    loadActive();
+  } else {
+    const data = res ? await res.json() : null;
+    showToast(data?.message || 'Failed to flag incident as spam', 'error');
+  }
+}
+
 function promptFlagFake(id) {
-  openReasonModal('Why is this being flagged as a fake report?', reason => flagFake(id, reason));
+  openReasonModal('Why is this being flagged as a fake report? (This will archive the report)', reason => flagFake(id, reason));
 }
 
 async function flagFake(id, reason) {
   const res = await api.patch(`/incidents/${id}/flag-fake`, { reason });
   if (res && res.ok) {
-    showToast('Incident flagged as fake');
+    showToast('Incident flagged as fake and archived');
     closeModal();
     loadActive();
   } else {
@@ -312,7 +395,7 @@ function promptDelayReason(id) {
 async function changeStatus(id, status, note) {
   const res = await api.patch(`/incidents/${id}/status`, note ? { status, note } : { status });
   if (res && res.ok) {
-    showToast(`Incident marked as ${status}`);
+    showToast(`Status updated to ${status}`);
     closeModal();
     loadActive();
   } else {
@@ -330,6 +413,10 @@ function toggleGPS() {
   if (gpsWatchId !== null) {
     navigator.geolocation.clearWatch(gpsWatchId);
     gpsWatchId = null;
+    if (responderGpsMarker && incidentMap) {
+      incidentMap.removeLayer(responderGpsMarker);
+      responderGpsMarker = null;
+    }
     setGPSUI(false);
     showToast('Location sharing stopped', 'info');
     return;
@@ -346,6 +433,20 @@ function toggleGPS() {
       api.post('/responders/location', { latitude, longitude });
       document.getElementById('gps-coords').textContent = `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
       document.getElementById('gps-coords').classList.remove('hidden');
+
+      if (incidentMap) {
+        const liveIcon = L.divIcon({
+          html: `<div style="background:#2563eb;width:16px;height:16px;border-radius:50%;border:3px solid #fff;box-shadow:0 0 0 3px rgba(37,99,235,0.4)"></div>`,
+          className: '', iconSize: [16, 16],
+        });
+        if (!responderGpsMarker) {
+          responderGpsMarker = L.marker([latitude, longitude], { icon: liveIcon })
+            .addTo(incidentMap)
+            .bindPopup('<b>Your Live Position</b>');
+        } else {
+          responderGpsMarker.setLatLng([latitude, longitude]);
+        }
+      }
     },
     err => {
       showToast('GPS error: ' + err.message, 'error');

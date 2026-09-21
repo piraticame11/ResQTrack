@@ -97,3 +97,13 @@ exports.updateEmergencyContact = async (req, res) => {
     res.status(500).json({ message: 'Server error', error: err.message });
   }
 };
+
+exports.deleteEmergencyContact = async (req, res) => {
+  try {
+    await db.query('DELETE FROM emergency_contacts WHERE id = ?', [req.params.id]);
+    res.json({ message: 'Contact deleted' });
+  } catch (err) {
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+};
+

@@ -113,49 +113,61 @@ async function migrate() {
        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'incidents' AND COLUMN_NAME = 'incident_type'`
     );
     const typeCol = typeColRows[0];
-    if (typeCol && typeCol.COLUMN_TYPE.includes("'Medical'")) {
+    if (typeCol && (!typeCol.COLUMN_TYPE.includes("'Fights'") || !typeCol.COLUMN_TYPE.includes("'Flood'") || !typeCol.COLUMN_TYPE.includes("'Missing'") || !typeCol.COLUMN_TYPE.includes("'Spam'"))) {
+      await conn.query(`UPDATE incidents SET incident_type = 'Other' WHERE incident_type = 'Garbage'`);
       await conn.query(`ALTER TABLE incidents MODIFY COLUMN incident_type
-        ENUM('Fire','Medical','Rescue','Crime','Noise','Garbage','Other') NOT NULL`);
-      await conn.query(`UPDATE incidents SET incident_type = 'Rescue' WHERE incident_type = 'Medical'`);
-      await conn.query(`ALTER TABLE incidents MODIFY COLUMN incident_type
-        ENUM('Fire','Rescue','Crime','Noise','Garbage','Other') NOT NULL`);
-      console.log('  ✅ Migrated incidents.incident_type: Medical -> Rescue');
+        ENUM('Fire','Rescue','Crime','Fights','Noise','Flood','Missing','Other','Flagged as Fake','Spam') NOT NULL`);
+      console.log('  ✅ Migrated incidents.incident_type: added Fights, Flood, Missing, Spam');
     } else {
-      console.log('  ⏭  incidents.incident_type already migrated');
+      console.log('  ⏭  incidents.incident_type already up to date');
+    }
+
+    const [incCols] = await conn.query(
+      `SELECT COLUMN_NAME FROM information_schema.COLUMNS
+       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'incidents'`
+    );
+    const incColNames = incCols.map(c => c.COLUMN_NAME);
+    if (!incColNames.includes('updated_at')) {
+      await conn.query('ALTER TABLE incidents ADD COLUMN updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP');
+      console.log('  ✅ Added updated_at to incidents');
+    }
+    if (!incColNames.includes('is_spam')) {
+      await conn.query('ALTER TABLE incidents ADD COLUMN is_spam TINYINT(1) NOT NULL DEFAULT 0, ADD COLUMN spam_reason TEXT DEFAULT NULL, ADD COLUMN duplicate_of_id INT DEFAULT NULL');
+      console.log('  ✅ Added is_spam, spam_reason, duplicate_of_id to incidents');
     }
 
     console.log('Checking users.role enum…');
+    // First, convert any existing super_admin users to admin
+    await conn.query("UPDATE users SET role = 'admin' WHERE role = 'super_admin'");
     const [roleColRows] = await conn.query(
       `SELECT COLUMN_TYPE FROM information_schema.COLUMNS
        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'role'`
     );
     const roleCol = roleColRows[0];
-    if (roleCol && !roleCol.COLUMN_TYPE.includes("'super_admin'")) {
+    if (roleCol && roleCol.COLUMN_TYPE.includes("'super_admin'")) {
       await conn.query(`ALTER TABLE users MODIFY COLUMN role
-        ENUM('super_admin','admin','responder','resident') NOT NULL DEFAULT 'resident'`);
-      console.log('  ✅ Widened users.role to include super_admin');
+        ENUM('admin','responder','resident') NOT NULL DEFAULT 'resident'`);
+      console.log('  ✅ Updated users.role to remove super_admin (admin is now highest tier)');
     } else {
-      console.log('  ⏭  users.role already includes super_admin');
+      console.log('  ⏭  users.role already updated (no super_admin)');
     }
-
-    // Account management needs an owner — if this install has no super_admin
-    // yet, promote its earliest-created active admin instead of leaving the
-    // system with nobody able to manage admin-level accounts.
-    const [[{ count: superAdminCount }]] = await conn.query(
-      "SELECT COUNT(*) AS count FROM users WHERE role = 'super_admin' AND is_active = 1"
+    console.log('Checking blotter_entries columns…');
+    const [blotterCols] = await conn.query(
+      `SELECT COLUMN_NAME FROM information_schema.COLUMNS
+       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'blotter_entries'`
     );
-    if (superAdminCount === 0) {
-      const [[earliestAdmin]] = await conn.query(
-        "SELECT id, full_name FROM users WHERE role = 'admin' AND is_active = 1 ORDER BY created_at ASC LIMIT 1"
-      );
-      if (earliestAdmin) {
-        await conn.query("UPDATE users SET role = 'super_admin' WHERE id = ?", [earliestAdmin.id]);
-        console.log(`  ✅ Promoted ${earliestAdmin.full_name} (#${earliestAdmin.id}) to super_admin`);
-      } else {
-        console.log('  ⚠️  No admin account found to promote — create one, then re-run migrate to get a super_admin.');
-      }
-    } else {
-      console.log('  ⏭  A super_admin already exists');
+    const blotterColNames = blotterCols.map(c => c.COLUMN_NAME);
+    if (!blotterColNames.includes('complainant_user_id')) {
+      await conn.query('ALTER TABLE blotter_entries ADD COLUMN complainant_user_id INT DEFAULT NULL AFTER incident_id, ADD CONSTRAINT fk_blotter_comp_user FOREIGN KEY (complainant_user_id) REFERENCES users(id) ON DELETE SET NULL');
+      console.log('  ✅ Added complainant_user_id to blotter_entries');
+    }
+    if (!blotterColNames.includes('complainant_email')) {
+      await conn.query('ALTER TABLE blotter_entries ADD COLUMN complainant_email VARCHAR(150) DEFAULT NULL AFTER complainant_name');
+      console.log('  ✅ Added complainant_email to blotter_entries');
+    }
+    if (!blotterColNames.includes('respondent_user_id')) {
+      await conn.query('ALTER TABLE blotter_entries ADD COLUMN respondent_user_id INT DEFAULT NULL AFTER complainant_contact, ADD CONSTRAINT fk_blotter_resp_user FOREIGN KEY (respondent_user_id) REFERENCES users(id) ON DELETE SET NULL');
+      console.log('  ✅ Added respondent_user_id to blotter_entries');
     }
 
     console.log('\n🎉 Migration complete. You can now run: npm run dev');

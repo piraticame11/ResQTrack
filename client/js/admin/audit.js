@@ -1,7 +1,7 @@
 let allLogs = [];
 
 (async function () {
-  const user = requireRole('admin', 'super_admin');
+  const user = requireRole('admin');
   if (!user) return;
   setUserUI(user);
 

@@ -3,9 +3,12 @@ let currentUser  = null;
 let modalMap     = null;
 
 (async function () {
-  currentUser = requireRole('responder');
+  currentUser = requireRole('responder', 'admin');
   if (!currentUser) return;
   setUserUI(currentUser);
+  if (currentUser.role === 'admin') {
+    document.getElementById('admin-nav-section')?.classList.remove('hidden');
+  }
 
   document.getElementById('filter-search').addEventListener('keydown', e => { if (e.key === 'Enter') applyFilter(); });
 
@@ -85,11 +88,14 @@ async function openModal(id) {
     (INCIDENT_TRANSITIONS[inc.status] || []).forEach(s => {
       const icon = STATUS_ACTION_ICON[s] || 'fa-arrow-right';
       btnHtml.push(s === 'Delayed'
-        ? `<button onclick="promptDelayReason(${id})" class="btn-warning btn-sm"><i class="fa-solid ${icon} mr-1"></i> Mark Delayed</button>`
-        : `<button onclick="changeStatus(${id},'${s}')" class="btn-primary btn-sm"><i class="fa-solid ${icon} mr-1"></i> Mark ${s}</button>`);
+        ? `<button onclick="promptDelayReason(${id})" class="btn-warning btn-sm"><i class="fa-solid ${icon} mr-1"></i> Delayed</button>`
+        : `<button onclick="changeStatus(${id},'${s}')" class="btn-primary btn-sm"><i class="fa-solid ${icon} mr-1"></i> ${s}</button>`);
     });
   }
-  if (!inc.is_fake) {
+  if (!inc.is_fake && !inc.is_spam) {
+    btnHtml.push(`<button onclick="promptFlagSpam(${id})" class="text-xs text-amber-600 hover:underline self-center mr-2">
+                     <i class="fa-solid fa-ban mr-1"></i> Flag as Spam
+                   </button>`);
     btnHtml.push(`<button onclick="promptFlagFake(${id})" class="text-xs text-red-500 hover:underline self-center">
                      <i class="fa-solid fa-flag mr-1"></i> Flag as Fake
                    </button>`);
@@ -110,44 +116,76 @@ async function openModal(id) {
   if (modalMap) { modalMap.remove(); modalMap = null; }
 
   document.getElementById('modal-content').innerHTML = `
-    <div class="grid grid-cols-2 gap-3 text-sm">
-      <div><span class="text-gray-500">Triage</span><p class="mt-0.5">${triageBadge(inc.triage_color)}</p></div>
-      <div><span class="text-gray-500">Type</span><p class="font-semibold mt-0.5"><span class="inline-flex px-2 py-0.5 rounded text-xs ${typeColor(inc.incident_type)}">${inc.incident_type}</span></p></div>
-      <div><span class="text-gray-500">Purok</span><p class="font-semibold">${inc.purok_name || '—'}</p></div>
-      <div><span class="text-gray-500">Reporter</span><p class="font-semibold">${inc.reporter_name}</p></div>
-      <div><span class="text-gray-500">Reporter Phone</span><p class="font-semibold">${inc.reporter_phone || '—'}</p></div>
-      <div><span class="text-gray-500">Reported</span><p class="font-semibold">${formatDate(inc.reported_at)}</p></div>
-      <div><span class="text-gray-500">Resolved</span><p class="font-semibold">${inc.resolved_at ? formatDate(inc.resolved_at) : '—'}</p></div>
-      <div><span class="text-gray-500">Status</span><p class="mt-0.5">${statusBadge(inc.status)}</p></div>
-      <div class="col-span-2"><span class="text-gray-500">Description</span><p class="bg-gray-50 rounded-lg p-3 mt-1 text-gray-700">${inc.description}</p></div>
-      ${inc.latitude ? `
-      <div class="col-span-2">
-        <span class="text-gray-500">Location</span>
-        <div id="modal-incident-map" class="rounded-lg overflow-hidden mt-1.5" style="height:180px"></div>
-        <div class="flex items-center justify-between mt-1">
-          <p class="font-mono text-xs text-gray-400">${inc.latitude}, ${inc.longitude}</p>
-          ${mapsLink}
+    <div class="grid grid-cols-1 md:grid-cols-12 gap-6">
+      <!-- Left Column: Details & Description (7 cols) -->
+      <div class="md:col-span-7 space-y-4">
+        <div class="bg-gray-50/80 rounded-xl border border-gray-200 p-4">
+          <h4 class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+            <i class="fa-solid fa-circle-info text-blue-500"></i> Incident Overview
+          </h4>
+          <div class="grid grid-cols-2 gap-3 text-sm">
+            <div><span class="text-gray-400 text-xs font-medium">Triage Priority</span><p class="mt-0.5">${triageBadge(inc.triage_color)}</p></div>
+            <div><span class="text-gray-400 text-xs font-medium">Incident Type</span><p class="font-semibold mt-0.5"><span class="inline-flex px-2 py-0.5 rounded text-xs ${typeColor(inc.incident_type)}">${inc.incident_type}</span></p></div>
+            <div><span class="text-gray-400 text-xs font-medium">Purok</span><p class="font-semibold text-gray-800">${inc.purok_name || '—'}</p></div>
+            <div><span class="text-gray-400 text-xs font-medium">Reporter</span><p class="font-semibold text-gray-800">${inc.reporter_name}</p></div>
+            <div><span class="text-gray-400 text-xs font-medium">Reporter Phone</span><p class="font-semibold text-gray-700">${inc.reporter_phone || '—'}</p></div>
+            <div><span class="text-gray-400 text-xs font-medium">Current Status</span><p class="mt-0.5">${statusBadge(inc.status)}</p></div>
+            <div><span class="text-gray-400 text-xs font-medium">Reported Time</span><p class="font-medium text-gray-700 text-xs mt-0.5">${formatDate(inc.reported_at)}</p></div>
+            <div><span class="text-gray-400 text-xs font-medium">Resolved Time</span><p class="font-medium text-gray-700 text-xs mt-0.5">${inc.resolved_at ? formatDate(inc.resolved_at) : '—'}</p></div>
+          </div>
         </div>
-      </div>` : ''}
-      <div class="col-span-2">${photoHtml}</div>
-    </div>
-    <div class="border-t pt-4 mt-2">
-      <p class="text-sm font-medium text-gray-700 mb-2">Activity Log</p>
-      <div class="space-y-2 max-h-36 overflow-y-auto">
-        ${logs.length ? logs.map(l => `
-          <div class="flex gap-3 text-xs">
-            <div class="w-1.5 h-1.5 rounded-full bg-blue-400 mt-1.5 shrink-0"></div>
-            <div>
-              <span class="font-medium text-gray-700">${l.action}</span>
-              ${l.note ? `<span class="text-gray-500"> — ${l.note}</span>` : ''}
-              <span class="text-gray-400 block">${l.actor_name || 'System'} · ${formatDate(l.logged_at)}</span>
-            </div>
-          </div>`).join('') : '<p class="text-gray-400 text-xs">No log entries.</p>'}
+
+        <div class="bg-white rounded-xl border border-gray-200 p-4">
+          <span class="text-gray-500 text-xs font-semibold uppercase tracking-wider block mb-1">Description / Narrative</span>
+          <p class="text-gray-700 text-sm whitespace-pre-line leading-relaxed">${inc.description}</p>
+        </div>
+
+        ${photoHtml ? `
+        <div class="bg-gray-50/80 rounded-xl border border-gray-200 p-3.5 space-y-2">
+          <span class="text-gray-500 text-xs font-semibold uppercase tracking-wider block"><i class="fa-solid fa-camera text-blue-500 mr-1"></i> Attached Photos</span>
+          ${photoHtml}
+        </div>` : ''}
+      </div>
+
+      <!-- Right Column: Map & Activity Log (5 cols) -->
+      <div class="md:col-span-5 space-y-4">
+        ${inc.latitude ? `
+        <div class="bg-gray-50/80 rounded-xl border border-gray-200 p-3.5" id="modal-map-card">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-gray-500 text-xs font-semibold uppercase tracking-wider flex items-center gap-1"><i class="fa-solid fa-location-dot text-red-500"></i> Location Map</span>
+            <button type="button" id="btn-fs-modal-map" onclick="toggleMapFullscreen('modal-map-card', window.modalMap, 'btn-fs-modal-map')" class="text-gray-600 hover:text-gray-900 text-xs px-2 py-0.5 rounded border border-gray-200 bg-white hover:bg-gray-50 flex items-center" title="Full Screen">
+              <i class="fa-solid fa-expand mr-1"></i><span>Fullscreen</span>
+            </button>
+          </div>
+          <div id="modal-incident-map" class="rounded-lg overflow-hidden border border-gray-200 bg-gray-100" style="height:220px"></div>
+          <div class="flex items-center justify-between mt-2 pt-1">
+            <p class="font-mono text-xs text-gray-500">${inc.latitude}, ${inc.longitude}</p>
+            ${mapsLink}
+          </div>
+        </div>` : ''}
+
+        <div class="bg-gray-50/80 rounded-xl border border-gray-200 p-3.5 space-y-2">
+          <span class="text-gray-500 text-xs font-semibold uppercase tracking-wider block"><i class="fa-solid fa-clock-rotate-left text-indigo-500 mr-1"></i> Activity Log</span>
+          <div class="space-y-2 max-h-56 overflow-y-auto pr-1">
+            ${logs.length ? logs.map(l => `
+              <div class="flex gap-2.5 text-xs bg-white p-2.5 rounded-lg border border-gray-100">
+                <div class="w-2 h-2 rounded-full bg-blue-500 mt-1 shrink-0"></div>
+                <div class="flex-1 min-w-0">
+                  <span class="font-semibold text-gray-800">${l.action}</span>
+                  ${l.note ? `<span class="text-gray-500 block text-[11px] mt-0.5"> — ${l.note}</span>` : ''}
+                  <span class="text-gray-400 text-[10px] block mt-0.5">${l.actor_name || 'System'} · ${formatDate(l.logged_at)}</span>
+                </div>
+              </div>`).join('') : '<p class="text-gray-400 text-xs">No log entries.</p>'}
+          </div>
+        </div>
       </div>
     </div>`;
 
   if (inc.latitude && inc.longitude) {
+    if (modalMap) { modalMap.remove(); modalMap = null; }
     modalMap = L.map('modal-incident-map').setView([inc.latitude, inc.longitude], 16);
+    window.modalMap = modalMap;
+    setTimeout(() => { if (modalMap) modalMap.invalidateSize(); }, 200);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '© OpenStreetMap contributors',
     }).addTo(modalMap);
@@ -156,7 +194,6 @@ async function openModal(id) {
       html: `<div style="background:${mColor};width:16px;height:16px;border-radius:50%;border:3px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.5)"></div>`,
       className: '',
       iconSize: [16, 16],
-      iconAnchor: [8, 8],
     });
     L.marker([inc.latitude, inc.longitude], { icon: mIcon })
       .addTo(modalMap)
@@ -166,14 +203,35 @@ async function openModal(id) {
   }
 }
 
+function promptFlagSpam(id) {
+  openReasonModal('Why is this being flagged as spam / duplicate? (This will archive the report)', reason => flagSpam(id, reason));
+}
+
+async function flagSpam(id, reason) {
+  const res = await api.patch(`/incidents/${id}/flag-spam`, { reason });
+  if (res && res.ok) {
+    showToast('Incident flagged as spam and archived');
+    closeModal();
+    const r = await api.get('/incidents');
+    if (r && r.ok) {
+      const all = await r.json();
+      allIncidents = all.filter(i => i.assigned_responder_id === currentUser.id);
+      renderTable(allIncidents);
+    }
+  } else {
+    const data = res ? await res.json() : null;
+    showToast(data?.message || 'Failed to flag incident as spam', 'error');
+  }
+}
+
 function promptFlagFake(id) {
-  openReasonModal('Why is this being flagged as a fake report?', reason => flagFake(id, reason));
+  openReasonModal('Why is this being flagged as a fake report? (This will archive the report)', reason => flagFake(id, reason));
 }
 
 async function flagFake(id, reason) {
   const res = await api.patch(`/incidents/${id}/flag-fake`, { reason });
   if (res && res.ok) {
-    showToast('Incident flagged as fake');
+    showToast('Incident flagged as fake and archived');
     closeModal();
     const r = await api.get('/incidents');
     if (r && r.ok) {
@@ -194,7 +252,7 @@ function promptDelayReason(id) {
 async function changeStatus(id, status, note) {
   const res = await api.patch(`/incidents/${id}/status`, note ? { status, note } : { status });
   if (res && res.ok) {
-    showToast(`Marked as ${status}`);
+    showToast(`Status updated to ${status}`);
     closeModal();
     // Refresh and re-apply the assignment filter
     const r = await api.get('/incidents');

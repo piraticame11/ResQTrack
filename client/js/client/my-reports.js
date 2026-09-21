@@ -1,6 +1,7 @@
 (async function () {
   const user = requireRole('resident', 'admin', 'responder');
   if (!user) return;
+  setUserUI(user);
 
   await loadMyReports();
 

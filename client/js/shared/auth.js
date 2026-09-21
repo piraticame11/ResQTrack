@@ -55,7 +55,266 @@ function setUserUI(user) {
       avatarEl.textContent = user.name.charAt(0).toUpperCase();
     }
   }
+
+  // Unified Portal & View Switcher (Admin, Responder, Resident)
+  renderPortalSwitcher(user);
 }
+
+function renderPortalSwitcher(user) {
+  if (!user) return;
+
+  const path = window.location.pathname;
+  let currentPortal = 'resident';
+  if (path.includes('/pages/admin/')) currentPortal = 'admin';
+  else if (path.includes('/pages/responder/')) currentPortal = 'responder';
+
+  // 1. Configure Responder Sidebar Dock (if present)
+  const respToAdminBtn  = document.getElementById('resp-to-admin-btn');
+  const respToClientBtn = document.getElementById('resp-to-client-btn');
+  if (respToClientBtn) {
+    if (user.role === 'admin') {
+      respToAdminBtn && respToAdminBtn.classList.remove('hidden');
+      respToClientBtn.classList.remove('col-span-2');
+    } else {
+      respToAdminBtn && respToAdminBtn.classList.add('hidden');
+      respToClientBtn.classList.add('col-span-2');
+    }
+  }
+
+  // 2. Configure Header Portal Switcher (supports #portal-switcher or legacy #role-shortcuts)
+  const targetEl = document.getElementById('portal-switcher') || document.getElementById('role-shortcuts');
+
+  // Pure residents don't need portal switching or preview bar
+  if (user.role !== 'admin' && user.role !== 'responder') {
+    if (targetEl) targetEl.innerHTML = '';
+    const existingPreview = document.getElementById('portal-preview-bar');
+    if (existingPreview) existingPreview.remove();
+    return;
+  }
+
+  // If on Admin or Responder portal and no target element exists, nothing to mount
+  if (currentPortal !== 'resident' && !targetEl) {
+    return;
+  }
+
+  // Build Portal Options
+  let optionsHtml = '';
+
+  // Admin Option
+  if (user.role === 'admin') {
+    if (currentPortal === 'admin') {
+      optionsHtml += `
+        <div class="flex items-center justify-between p-2.5 rounded-xl bg-blue-50/80 border border-blue-100">
+          <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center text-sm shadow-sm">
+              <i class="fa-solid fa-shield-halved"></i>
+            </div>
+            <div>
+              <p class="text-xs font-bold text-blue-950">Admin Console</p>
+              <p class="text-[11px] text-blue-700/80">Command center &amp; management</p>
+            </div>
+          </div>
+          <span class="text-[10px] font-bold text-blue-700 bg-white px-2 py-0.5 rounded-full border border-blue-200 shadow-2xs">Active</span>
+        </div>`;
+    } else {
+      optionsHtml += `
+        <a href="/pages/admin/dashboard.html" class="flex items-center justify-between p-2.5 rounded-xl hover:bg-blue-50 text-gray-700 hover:text-blue-700 transition-colors group">
+          <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center text-sm group-hover:scale-105 transition-transform">
+              <i class="fa-solid fa-shield-halved"></i>
+            </div>
+            <div>
+              <p class="text-xs font-bold text-gray-800 group-hover:text-blue-700">Admin Console</p>
+              <p class="text-[11px] text-gray-400">Command center, users &amp; blotters</p>
+            </div>
+          </div>
+          <i class="fa-solid fa-arrow-right text-xs text-gray-300 group-hover:text-blue-500 group-hover:translate-x-0.5 transition-all"></i>
+        </a>`;
+    }
+  }
+
+  // Responder Option
+  if (user.role === 'admin' || user.role === 'responder') {
+    if (currentPortal === 'responder') {
+      optionsHtml += `
+        <div class="flex items-center justify-between p-2.5 rounded-xl bg-emerald-50/80 border border-emerald-100">
+          <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center text-sm shadow-sm">
+              <i class="fa-solid fa-truck-medical"></i>
+            </div>
+            <div>
+              <p class="text-xs font-bold text-emerald-950">Responder View</p>
+              <p class="text-[11px] text-emerald-700/80">Dispatch &amp; incident handling</p>
+            </div>
+          </div>
+          <span class="text-[10px] font-bold text-emerald-700 bg-white px-2 py-0.5 rounded-full border border-emerald-200 shadow-2xs">Active</span>
+        </div>`;
+    } else {
+      optionsHtml += `
+        <a href="/pages/responder/dashboard.html" class="flex items-center justify-between p-2.5 rounded-xl hover:bg-emerald-50 text-gray-700 hover:text-emerald-700 transition-colors group">
+          <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-600 flex items-center justify-center text-sm group-hover:scale-105 transition-transform">
+              <i class="fa-solid fa-truck-medical"></i>
+            </div>
+            <div>
+              <p class="text-xs font-bold text-gray-800 group-hover:text-emerald-700">Responder View</p>
+              <p class="text-[11px] text-gray-400">Field dispatch, map &amp; incidents</p>
+            </div>
+          </div>
+          <i class="fa-solid fa-arrow-right text-xs text-gray-300 group-hover:text-emerald-500 group-hover:translate-x-0.5 transition-all"></i>
+        </a>`;
+    }
+  }
+
+  // Resident Option
+  if (currentPortal === 'resident') {
+    optionsHtml += `
+      <div class="flex items-center justify-between p-2.5 rounded-xl bg-cyan-50/80 border border-cyan-100">
+        <div class="flex items-center gap-3">
+          <div class="w-8 h-8 rounded-lg bg-cyan-600 text-white flex items-center justify-center text-sm shadow-sm">
+            <i class="fa-solid fa-house"></i>
+          </div>
+          <div>
+            <p class="text-xs font-bold text-cyan-950">Resident View</p>
+            <p class="text-[11px] text-cyan-700/80">Citizen reports &amp; announcements</p>
+          </div>
+        </div>
+        <span class="text-[10px] font-bold text-cyan-700 bg-white px-2 py-0.5 rounded-full border border-cyan-200 shadow-2xs">Active</span>
+      </div>`;
+  } else {
+    optionsHtml += `
+      <a href="/pages/client/home.html" class="flex items-center justify-between p-2.5 rounded-xl hover:bg-cyan-50 text-gray-700 hover:text-cyan-700 transition-colors group">
+        <div class="flex items-center gap-3">
+          <div class="w-8 h-8 rounded-lg bg-cyan-100 text-cyan-600 flex items-center justify-center text-sm group-hover:scale-105 transition-transform">
+            <i class="fa-solid fa-house"></i>
+          </div>
+          <div>
+            <p class="text-xs font-bold text-gray-800 group-hover:text-cyan-700">Resident View</p>
+            <p class="text-[11px] text-gray-400">Citizen emergency services</p>
+          </div>
+        </div>
+        <i class="fa-solid fa-arrow-right text-xs text-gray-300 group-hover:text-cyan-500 group-hover:translate-x-0.5 transition-all"></i>
+      </a>`;
+  }
+
+  // Trigger button styling based on active portal
+  let triggerBtnHtml = '';
+
+  if (currentPortal === 'admin') {
+    triggerBtnHtml = `
+      <button type="button" onclick="togglePortalDropdown(event)"
+              class="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 text-xs font-semibold text-gray-700 shadow-xs hover:border-gray-300 transition-all focus:outline-none">
+        <span class="w-2 h-2 rounded-full bg-blue-600"></span>
+        <i class="fa-solid fa-shield-halved text-blue-600 text-xs"></i>
+        <span class="hidden sm:inline">Admin Portal</span>
+        <i class="fa-solid fa-chevron-down text-[10px] text-gray-400 ml-0.5 transition-transform" id="portal-menu-chevron"></i>
+      </button>`;
+  } else if (currentPortal === 'responder') {
+    triggerBtnHtml = `
+      <button type="button" onclick="togglePortalDropdown(event)"
+              class="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 text-xs font-semibold text-gray-700 shadow-xs hover:border-gray-300 transition-all focus:outline-none">
+        <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+        <i class="fa-solid fa-truck-medical text-emerald-600 text-xs"></i>
+        <span class="hidden sm:inline">Responder View</span>
+        <i class="fa-solid fa-chevron-down text-[10px] text-gray-400 ml-0.5 transition-transform" id="portal-menu-chevron"></i>
+      </button>`;
+  } else {
+    // ── RESIDENT PORTAL PREVIEW BAR ──
+    // Clear in-navbar shortcuts to prevent mobile navbar overflow
+    if (targetEl) targetEl.innerHTML = '';
+
+    const exitTarget = user.role === 'admin' ? '/pages/admin/dashboard.html' : '/pages/responder/dashboard.html';
+    const exitRole   = user.role === 'admin' ? 'Admin' : 'Responder';
+    const exitIcon   = user.role === 'admin' ? 'fa-shield-halved text-blue-300' : 'fa-truck-medical text-emerald-300';
+    const exitBtnBg  = user.role === 'admin' ? 'bg-blue-600 hover:bg-blue-500' : 'bg-emerald-600 hover:bg-emerald-500';
+
+    let previewBar = document.getElementById('portal-preview-bar');
+    if (!previewBar) {
+      previewBar = document.createElement('div');
+      previewBar.id = 'portal-preview-bar';
+      const nav = document.querySelector('nav');
+      if (nav) nav.prepend(previewBar);
+      else document.body.prepend(previewBar);
+    }
+
+    previewBar.className = 'bg-slate-900 text-white px-3 sm:px-4 py-1.5 flex items-center justify-between border-b border-slate-800 text-xs w-full shrink-0';
+    previewBar.style.backgroundColor = '#0f172a';
+    previewBar.style.color = '#ffffff';
+    previewBar.innerHTML = `
+      <div class="flex items-center gap-1.5 sm:gap-2 min-w-0">
+        <span class="w-2 h-2 rounded-full bg-emerald-400 shrink-0 animate-pulse"></span>
+        <span class="text-slate-200 truncate text-[11px] sm:text-xs font-medium">
+          Viewing <strong>Resident Portal</strong> <span class="text-slate-400 hidden sm:inline">(as ${exitRole})</span>
+        </span>
+      </div>
+      <div class="flex items-center gap-2 shrink-0">
+        <div class="relative inline-block text-left" id="portal-menu-container">
+          <button type="button" onclick="togglePortalDropdown(event)"
+                  class="flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-[11px] font-medium transition-colors border border-slate-700/80 shadow-xs" title="Switch Portal">
+            <span>Switch</span>
+            <i class="fa-solid fa-chevron-down text-[9px] text-slate-400 ml-0.5 transition-transform" id="portal-menu-chevron"></i>
+          </button>
+          <div id="portal-menu-dropdown"
+               class="hidden absolute right-0 mt-1.5 w-72 bg-white rounded-2xl shadow-xl border border-gray-100 p-2 z-50 text-gray-800 transition-all">
+            <div class="px-3 py-2 border-b border-gray-100">
+              <p class="text-[10px] font-bold uppercase tracking-wider text-gray-400">Switch Workspace Portal</p>
+              <p class="text-xs text-gray-500 mt-0.5">${user.role === 'admin' ? 'Administrator Permissions' : 'Field Responder Permissions'}</p>
+            </div>
+            <div class="p-1 space-y-1 mt-1">
+              ${optionsHtml}
+            </div>
+          </div>
+        </div>
+        <a href="${exitTarget}" class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg ${exitBtnBg} text-white font-semibold text-[11px] transition-colors shadow-xs">
+          <i class="fa-solid ${exitIcon} text-[10px]"></i>
+          <span>Exit to ${exitRole}</span>
+        </a>
+      </div>`;
+    return;
+  }
+
+  // If we are not in resident view, clean up any preview bar that may exist
+  const existingPreview = document.getElementById('portal-preview-bar');
+  if (existingPreview) existingPreview.remove();
+
+  // Render header dropdown inside Admin/Responder headers
+  targetEl.innerHTML = `
+    <div class="relative inline-block text-left" id="portal-menu-container">
+      ${triggerBtnHtml}
+      <div id="portal-menu-dropdown"
+           class="hidden absolute right-0 mt-2 w-72 bg-white rounded-2xl shadow-xl border border-gray-100 p-2 z-50 transition-all">
+        <div class="px-3 py-2 border-b border-gray-100">
+          <p class="text-[10px] font-bold uppercase tracking-wider text-gray-400">Switch Workspace Portal</p>
+          <p class="text-xs text-gray-500 mt-0.5">${user.role === 'admin' ? 'Administrator Permissions' : 'Field Responder Permissions'}</p>
+        </div>
+        <div class="p-1 space-y-1 mt-1">
+          ${optionsHtml}
+        </div>
+      </div>
+    </div>`;
+}
+
+// Global click-outside to close the portal dropdown
+window.togglePortalDropdown = function(e) {
+  if (e) e.stopPropagation();
+  const dropdown = document.getElementById('portal-menu-dropdown');
+  const chevron  = document.getElementById('portal-menu-chevron');
+  if (dropdown) {
+    const isHidden = dropdown.classList.contains('hidden');
+    dropdown.classList.toggle('hidden', !isHidden);
+    if (chevron) chevron.style.transform = isHidden ? 'rotate(180deg)' : 'rotate(0deg)';
+  }
+};
+
+document.addEventListener('click', (e) => {
+  const container = document.getElementById('portal-menu-container');
+  const dropdown  = document.getElementById('portal-menu-dropdown');
+  const chevron   = document.getElementById('portal-menu-chevron');
+  if (container && dropdown && !container.contains(e.target)) {
+    dropdown.classList.add('hidden');
+    if (chevron) chevron.style.transform = 'rotate(0deg)';
+  }
+});
 
 function formatDate(ts) {
   if (!ts) return '—';
@@ -106,9 +365,9 @@ const STATUS_LEGEND = [
 ];
 const TRIAGE_LEGEND = [
   ['Red',    'Life-threatening — Fire or Rescue.'],
-  ['Orange', 'Urgent — Crime.'],
-  ['Yellow', 'Moderate — Noise or unclassified reports.'],
-  ['Green',  'Low priority — Garbage/sanitation.'],
+  ['Orange', 'Urgent — Crime, Fights, or Flood.'],
+  ['Yellow', 'Moderate — Noise or Missing Person.'],
+  ['Green',  'Low priority — Other general concerns.'],
 ];
 
 function renderLegendPanel() {
@@ -147,11 +406,15 @@ function blotterStatusBadge(status) {
 function typeColor(type) {
   const map = {
     Fire:    'bg-red-100 text-red-700',
-    Rescue:  'bg-red-100 text-red-700',
+    Rescue:  'bg-blue-100 text-blue-700',
     Crime:   'bg-orange-100 text-orange-700',
+    Fights:  'bg-red-100 text-red-800',
+    Flood:   'bg-cyan-100 text-cyan-800',
+    Missing: 'bg-purple-100 text-purple-700',
     Noise:   'bg-yellow-100 text-yellow-700',
-    Garbage: 'bg-green-100 text-green-700',
     Other:   'bg-gray-100 text-gray-700',
+    'Flagged as Fake': 'bg-gray-200 text-gray-800 border border-gray-300 font-semibold',
+    Spam:    'bg-gray-200 text-gray-800 border border-gray-300 font-semibold',
   };
   return map[type] || 'bg-gray-100 text-gray-700';
 }
@@ -169,18 +432,18 @@ function _ensureReasonModal() {
   div.id = 'reason-modal';
   div.className = 'modal-overlay hidden';
   div.innerHTML = `
-    <div class="modal-box max-w-sm">
-      <div class="flex items-center justify-between p-5 border-b border-gray-100">
-        <h3 class="font-bold text-gray-800 text-sm" id="reason-modal-title">Reason</h3>
-        <button type="button" onclick="closeReasonModal()" class="text-gray-400 hover:text-gray-600"><i class="fa-solid fa-xmark text-xl"></i></button>
+    <div class="modal-box max-w-md">
+      <div class="modal-header">
+        <h3 class="font-bold text-gray-800 text-base" id="reason-modal-title">Reason</h3>
+        <button type="button" onclick="closeReasonModal()" class="text-gray-400 hover:text-gray-600 p-1"><i class="fa-solid fa-xmark text-xl"></i></button>
       </div>
-      <div class="p-5 space-y-3">
+      <div class="modal-body space-y-3">
         <textarea id="reason-modal-input" rows="3" class="input-field text-sm" placeholder="Type your reason…"></textarea>
         <p id="reason-modal-error" class="hidden text-xs text-red-500">A reason is required.</p>
-        <div class="flex gap-2">
-          <button type="button" onclick="confirmReasonModal()" class="btn-primary flex-1">Confirm</button>
-          <button type="button" onclick="closeReasonModal()" class="btn-secondary flex-1">Cancel</button>
-        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" onclick="confirmReasonModal()" class="btn-primary flex-1 py-2.5">Confirm</button>
+        <button type="button" onclick="closeReasonModal()" class="btn-secondary flex-1 py-2.5">Cancel</button>
       </div>
     </div>`;
   document.body.appendChild(div);
@@ -258,13 +521,20 @@ async function fetchPuroks(force = false) {
   return _puroksCache;
 }
 
-async function populatePurokSelect(selectEl, { placeholder = '— Select Purok —' } = {}) {
+async function populatePurokSelect(selectEl, { placeholder = '— Select Purok —', barangay = '' } = {}) {
   if (!selectEl) return;
   const puroks = await fetchPuroks();
+  const cleanSel = (barangay || '').toLowerCase().replace(/^(barangay|brgy\.?)\s+/i, '').trim();
+  const filtered = cleanSel
+    ? puroks.filter(p => {
+        const pBrgy = (p.barangay || '').toLowerCase().replace(/^(barangay|brgy\.?)\s+/i, '').trim();
+        return pBrgy.includes(cleanSel) || cleanSel.includes(pBrgy);
+      })
+    : puroks;
   const current = selectEl.value;
   selectEl.innerHTML = `<option value="">${placeholder}</option>` +
-    puroks.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
-  if (current) selectEl.value = current;
+    filtered.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+  if (current && filtered.some(p => String(p.id) === String(current))) selectEl.value = current;
 }
 
 function toggleSidebar() {
@@ -290,4 +560,48 @@ function showToast(message, type = 'success') {
   toast.textContent = message;
   document.body.appendChild(toast);
   setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 300); }, 3000);
+}
+
+function toggleMapFullscreen(cardOrContainerId, mapInstanceOrGetter, btnId) {
+  const container = document.getElementById(cardOrContainerId);
+  if (!container) return;
+
+  const isFull = container.classList.toggle('map-fullscreen-active');
+  const btn = btnId ? document.getElementById(btnId) : container.querySelector('.map-fullscreen-btn');
+
+  if (btn) {
+    btn.innerHTML = isFull
+      ? '<i class="fa-solid fa-compress mr-1"></i><span class="text-xs">Exit Fullscreen</span>'
+      : '<i class="fa-solid fa-expand mr-1"></i><span class="text-xs">Fullscreen</span>';
+    btn.setAttribute('title', isFull ? 'Exit Full Screen' : 'Full Screen');
+  }
+
+  const resolveMap = () => {
+    if (typeof mapInstanceOrGetter === 'function') return mapInstanceOrGetter();
+    if (mapInstanceOrGetter) return mapInstanceOrGetter;
+    if (window._dashMap) return window._dashMap;
+    if (window.hotspotMap) return window.hotspotMap;
+    if (window.incidentMap) return window.incidentMap;
+    if (window.modalMap) return window.modalMap;
+    if (window.locationMap) return window.locationMap;
+    return null;
+  };
+
+  const map = resolveMap();
+  if (map && typeof map.invalidateSize === 'function') {
+    map.invalidateSize();
+    setTimeout(() => map.invalidateSize(), 100);
+    setTimeout(() => map.invalidateSize(), 300);
+  }
+
+  // Escape key to exit fullscreen
+  if (isFull) {
+    const escHandler = (e) => {
+      if (e.key === 'Escape' && container.classList.contains('map-fullscreen-active')) {
+        toggleMapFullscreen(cardOrContainerId, mapInstanceOrGetter, btnId);
+        document.removeEventListener('keydown', escHandler);
+      }
+    };
+    document.addEventListener('keydown', escHandler);
+  }
 }

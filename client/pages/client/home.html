@@ -12,20 +12,22 @@
 
   <!-- Navbar -->
   <nav class="bg-white border-b border-gray-200 sticky top-0 z-40">
+    <div id="portal-preview-bar"></div>
     <div class="max-w-4xl mx-auto px-4 h-16 flex items-center justify-between">
       <div class="flex items-center gap-2">
         <span class="text-red-500 font-bold text-xl">ResQ</span><span class="text-gray-800 font-bold text-xl">Track</span>
         <span class="text-gray-400 text-xs ml-1 hidden sm:inline">Emergency Response</span>
       </div>
-      <div class="flex items-center gap-4">
-        <a href="/pages/client/my-reports.html" class="text-sm text-gray-600 hover:text-blue-600 font-medium">
-          <i class="fa-solid fa-list-check mr-1"></i> My Reports
+      <div class="flex items-center gap-2 sm:gap-3">
+        <a href="/pages/client/my-reports.html" class="text-sm text-gray-600 hover:text-blue-600 font-medium flex items-center gap-1.5 shrink-0" title="My Reports">
+          <i class="fa-solid fa-list-check"></i>
+          <span class="hidden sm:inline">My Reports</span>
         </a>
-        <a href="/pages/shared/profile.html" class="flex items-center gap-2 hover:opacity-75 transition-opacity" title="My Profile">
+        <a href="/pages/shared/profile.html" class="flex items-center gap-2 hover:opacity-75 transition-opacity shrink-0" title="My Profile">
           <div class="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold text-sm overflow-hidden" id="user-avatar">R</div>
           <span class="text-sm text-gray-700 font-medium hidden sm:inline" id="user-name">Resident</span>
         </a>
-        <button onclick="logout()" class="text-gray-400 hover:text-red-500 text-sm" title="Logout">
+        <button onclick="logout()" class="text-gray-400 hover:text-red-500 text-sm p-1 shrink-0" title="Logout">
           <i class="fa-solid fa-right-from-bracket"></i>
         </button>
       </div>
@@ -49,9 +51,19 @@
 
     <!-- Emergency Contacts -->
     <div class="card">
-      <h2 class="font-semibold text-gray-800 mb-4"><i class="fa-solid fa-phone-volume text-red-500 mr-2"></i>Emergency Hotlines</h2>
-      <div id="contacts-accordion" class="divide-y divide-gray-100">
-        <div class="text-center py-4 text-gray-400">Loading contacts…</div>
+      <button type="button" class="w-full flex items-center justify-between text-left focus:outline-none" onclick="toggleHotlinesSection()" id="hotlines-toggle-btn">
+        <h2 class="font-semibold text-gray-800 flex items-center gap-2">
+          <i class="fa-solid fa-phone-volume text-red-500"></i> Emergency Hotlines
+        </h2>
+        <div class="flex items-center gap-2">
+          <span class="text-xs text-gray-400 font-normal">Click to view</span>
+          <i class="fa-solid fa-chevron-down text-gray-400 text-sm transition-transform duration-200" id="hotlines-toggle-icon"></i>
+        </div>
+      </button>
+      <div id="hotlines-container" class="hidden mt-3 pt-3 border-t border-gray-100">
+        <div id="contacts-accordion" class="divide-y divide-gray-100">
+          <div class="text-center py-4 text-gray-400">Loading contacts…</div>
+        </div>
       </div>
     </div>
 

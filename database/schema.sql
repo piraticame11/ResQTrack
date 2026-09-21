@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS users (
   password_hash VARCHAR(255) NOT NULL,
   phone         VARCHAR(20)  DEFAULT NULL,
   birthdate     DATE         DEFAULT NULL,
-  role          ENUM('super_admin','admin','responder','resident') NOT NULL DEFAULT 'resident',
+  role          ENUM('admin','responder','resident') NOT NULL DEFAULT 'resident',
   purok_id      INT          DEFAULT NULL,
   address_line  VARCHAR(255) DEFAULT NULL,
   address_lat   DECIMAL(10,8) DEFAULT NULL,
@@ -42,7 +42,7 @@ CREATE TABLE IF NOT EXISTS incidents (
   id                    INT           PRIMARY KEY AUTO_INCREMENT,
   reference_no          VARCHAR(30)   NOT NULL UNIQUE,
   reporter_id           INT           NOT NULL,
-  incident_type         ENUM('Fire','Rescue','Crime','Noise','Garbage','Other') NOT NULL,
+  incident_type         ENUM('Fire','Rescue','Crime','Fights','Noise','Flood','Missing','Other','Flagged as Fake','Spam') NOT NULL,
   description           TEXT          NOT NULL,
   purok_id              INT           DEFAULT NULL,
   latitude              DECIMAL(10,8) DEFAULT NULL,
@@ -53,15 +53,20 @@ CREATE TABLE IF NOT EXISTS incidents (
   assigned_responder_id INT           DEFAULT NULL,
   is_fake               TINYINT(1)    NOT NULL DEFAULT 0,
   fake_reason           TEXT          DEFAULT NULL,
+  is_spam               TINYINT(1)    NOT NULL DEFAULT 0,
+  spam_reason           TEXT          DEFAULT NULL,
+  duplicate_of_id       INT           DEFAULT NULL,
   flagged_by            INT           DEFAULT NULL,
   flagged_at            TIMESTAMP     NULL DEFAULT NULL,
   reported_at           TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   resolved_at           TIMESTAMP     NULL DEFAULT NULL,
   archived_at           TIMESTAMP     NULL DEFAULT NULL,
+  updated_at           TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   FOREIGN KEY (reporter_id)           REFERENCES users(id),
   FOREIGN KEY (purok_id)              REFERENCES puroks(id) ON DELETE SET NULL,
   FOREIGN KEY (assigned_responder_id) REFERENCES users(id) ON DELETE SET NULL,
-  FOREIGN KEY (flagged_by)            REFERENCES users(id) ON DELETE SET NULL
+  FOREIGN KEY (flagged_by)            REFERENCES users(id) ON DELETE SET NULL,
+  FOREIGN KEY (duplicate_of_id)       REFERENCES incidents(id) ON DELETE SET NULL
 );
 
 -- Multiple evidence photos per incident (camera or gallery). photo_path on
@@ -132,9 +137,12 @@ CREATE TABLE IF NOT EXISTS blotter_entries (
   id                   INT           PRIMARY KEY AUTO_INCREMENT,
   entry_no             VARCHAR(30)   NOT NULL UNIQUE,
   incident_id          INT           DEFAULT NULL,
+  complainant_user_id  INT           DEFAULT NULL,
   complainant_name     VARCHAR(150)  NOT NULL,
-  complainant_address  VARCHAR(255)  DEFAULT NULL,
-  complainant_contact  VARCHAR(20)   DEFAULT NULL,
+  complainant_email    VARCHAR(150)  DEFAULT NULL,
+  complainant_address  VARCHAR(255)  NOT NULL,
+  complainant_contact  VARCHAR(20)   NOT NULL,
+  respondent_user_id   INT           DEFAULT NULL,
   respondent_name      VARCHAR(150)  NOT NULL,
   respondent_address   VARCHAR(255)  DEFAULT NULL,
   respondent_contact   VARCHAR(20)   DEFAULT NULL,
@@ -147,9 +155,11 @@ CREATE TABLE IF NOT EXISTS blotter_entries (
   is_locked            TINYINT(1)    NOT NULL DEFAULT 0,
   filed_at             TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   resolved_at          TIMESTAMP     NULL DEFAULT NULL,
-  FOREIGN KEY (incident_id) REFERENCES incidents(id) ON DELETE SET NULL,
-  FOREIGN KEY (purok_id)    REFERENCES puroks(id)    ON DELETE SET NULL,
-  FOREIGN KEY (filed_by)    REFERENCES users(id)
+  FOREIGN KEY (incident_id)         REFERENCES incidents(id) ON DELETE SET NULL,
+  FOREIGN KEY (complainant_user_id) REFERENCES users(id)     ON DELETE SET NULL,
+  FOREIGN KEY (respondent_user_id)  REFERENCES users(id)     ON DELETE SET NULL,
+  FOREIGN KEY (purok_id)            REFERENCES puroks(id)    ON DELETE SET NULL,
+  FOREIGN KEY (filed_by)            REFERENCES users(id)
 );
 
 -- Immutable audit trail for blotter entries — every create/edit/status change

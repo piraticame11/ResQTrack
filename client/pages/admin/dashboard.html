@@ -21,6 +21,7 @@
       <span class="ml-2 text-slate-500 text-xs uppercase tracking-wider">Admin</span>
     </div>
     <nav class="flex-1 py-4 px-3 space-y-0.5 overflow-y-auto">
+      <div class="px-3 pb-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">Admin</div>
       <a href="/pages/admin/dashboard.html"    class="nav-item active"><i class="fa-solid fa-gauge w-5 text-center"></i> Dashboard</a>
       <a href="/pages/admin/incidents.html"    class="nav-item"><i class="fa-solid fa-triangle-exclamation w-5 text-center"></i> Incidents</a>
       <a href="/pages/admin/users.html"        class="nav-item"><i class="fa-solid fa-users w-5 text-center"></i> Users</a>
@@ -30,6 +31,28 @@
       <a href="/pages/admin/reports.html"      class="nav-item"><i class="fa-solid fa-chart-bar w-5 text-center"></i> Reports</a>
       <a href="/pages/admin/puroks.html"       class="nav-item"><i class="fa-solid fa-map-location-dot w-5 text-center"></i> Puroks</a>
       <a href="/pages/admin/audit.html"        class="nav-item"><i class="fa-solid fa-user-shield w-5 text-center"></i> Audit Log</a>
+
+      <!-- Portal Switcher Dock in Sidebar -->
+      <div class="pt-3 px-1 pb-1 border-t border-slate-800/80 mt-2">
+        <div class="px-2 pb-1.5 flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-slate-400">
+          <span>Switch Portal</span>
+          <span class="text-blue-400 font-semibold bg-blue-500/10 px-1.5 py-0.5 rounded text-[9px] border border-blue-500/20">Admin</span>
+        </div>
+        <div class="grid grid-cols-2 gap-1.5 mt-1">
+          <a href="/pages/responder/dashboard.html"
+             class="group flex flex-col items-center justify-center p-2 rounded-xl bg-slate-800/70 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700/50 hover:border-emerald-500/40 transition-all text-center"
+             title="Switch to Responder View">
+            <i class="fa-solid fa-truck-medical text-emerald-400 text-sm mb-1 group-hover:scale-110 transition-transform"></i>
+            <span class="text-[11px] font-medium leading-none">Responder</span>
+          </a>
+          <a href="/pages/client/home.html"
+             class="group flex flex-col items-center justify-center p-2 rounded-xl bg-slate-800/70 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700/50 hover:border-blue-500/40 transition-all text-center"
+             title="Switch to Resident View">
+            <i class="fa-solid fa-house text-blue-400 text-sm mb-1 group-hover:scale-110 transition-transform"></i>
+            <span class="text-[11px] font-medium leading-none">Resident</span>
+          </a>
+        </div>
+      </div>
     </nav>
     <div class="border-t border-slate-800 p-4">
       <div class="flex items-center gap-3">
@@ -54,9 +77,12 @@
         <button onclick="toggleSidebar()" class="lg:hidden text-gray-500 hover:text-gray-700 -ml-1 p-1"><i class="fa-solid fa-bars text-xl"></i></button>
         <h1 class="text-lg font-semibold text-gray-800">Dashboard</h1>
       </div>
-      <div class="flex items-center gap-3 text-sm text-gray-500">
-        <i class="fa-solid fa-circle text-green-500 text-xs"></i> Live
-        <span id="live-time"></span>
+      <div class="flex items-center gap-3">
+        <div id="portal-switcher"></div>
+        <div class="hidden sm:flex items-center gap-2 text-sm text-gray-500">
+          <i class="fa-solid fa-circle text-green-500 text-xs"></i> Live
+          <span id="live-time"></span>
+        </div>
       </div>
     </header>
 
@@ -106,11 +132,14 @@
       <!-- Map + Recent Table -->
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <!-- Responder Map -->
-        <div class="card p-0 overflow-hidden" style="isolation:isolate;z-index:0;position:relative;">
-          <div class="px-5 py-4 border-b border-gray-100">
+        <div id="responder-map-card" class="card p-0 overflow-hidden" style="isolation:isolate;z-index:0;position:relative;">
+          <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
             <h2 class="font-semibold text-gray-800">Live Responder Map</h2>
+            <button type="button" id="btn-fs-responder-map" onclick="toggleMapFullscreen('responder-map-card', window._dashMap, 'btn-fs-responder-map')" class="text-gray-600 hover:text-gray-900 text-xs px-2.5 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors flex items-center" title="Full Screen">
+              <i class="fa-solid fa-expand mr-1"></i><span>Fullscreen</span>
+            </button>
           </div>
-          <div id="responder-map" class="h-64"></div>
+          <div id="responder-map" class="w-full" style="height:280px;min-height:280px;"></div>
         </div>
 
         <!-- Recent Incidents -->

@@ -1,8 +1,16 @@
 const db = require('../config/db');
 
-exports.getPuroks = async (_req, res) => {
+exports.getPuroks = async (req, res) => {
   try {
-    const [rows] = await db.query('SELECT * FROM puroks ORDER BY id');
+    const { barangay } = req.query;
+    let sql = 'SELECT * FROM puroks';
+    const params = [];
+    if (barangay) {
+      sql += ' WHERE LOWER(barangay) LIKE LOWER(?)';
+      params.push(`%${barangay.trim()}%`);
+    }
+    sql += ' ORDER BY id';
+    const [rows] = await db.query(sql, params);
     res.json(rows);
   } catch (err) {
     res.status(500).json({ message: 'Server error', error: err.message });

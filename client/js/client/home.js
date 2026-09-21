@@ -150,3 +150,13 @@ function renderAnnouncements(list) {
       </p>
     </div>`).join('');
 }
+
+function toggleHotlinesSection() {
+  const container = document.getElementById('hotlines-container');
+  const icon = document.getElementById('hotlines-toggle-icon');
+  if (!container) return;
+  const isHidden = container.classList.toggle('hidden');
+  if (icon) {
+    icon.classList.toggle('rotate-180', !isHidden);
+  }
+}

@@ -6,11 +6,81 @@ let locationMarker = null;
 let cameraStream   = null;
 let facingMode     = 'environment'; // prefer rear camera for evidence
 
+const LEGEND_TRANSLATIONS = {
+  en: {
+    title: 'Incident Guide & Priority',
+    types: [
+      { name: '🔥 Fire', prio: 'Red (Urgent)', desc: 'Structure fire, grass fire, electrical fire or gas leak.' },
+      { name: '🚑 Rescue', prio: 'Red (Urgent)', desc: 'Severe medical emergency, entrapment, collapse, drowning.' },
+      { name: '🚔 Crime', prio: 'Orange (High)', desc: 'Theft, robbery, vandalism, trespassing, or illegal activities.' },
+      { name: '🥊 Fights', prio: 'Orange (High)', desc: 'Physical brawl, altercation, riot, or domestic violence.' },
+      { name: '🌊 Flood', prio: 'Orange (High)', desc: 'Rising flood waters, blocked drainage overflow, flash flood.' },
+      { name: '🔍 Missing', prio: 'Yellow (Moderate)', desc: 'Lost child, missing person, dementia patient wander.' },
+      { name: '📢 Noise', prio: 'Yellow (Moderate)', desc: 'Loud karaoke, late night disturbances, excessive sound.' },
+      { name: '❗ Others', prio: 'Green (Standard)', desc: 'Garbage/sanitation, fallen trees, road obstruction, or other general concerns.' },
+    ],
+  },
+  ceb: {
+    title: 'Giya sa Insidente ug Priyoridad',
+    types: [
+      { name: '🔥 Sunog (Fire)', prio: 'Pula (Labing dinalian)', desc: 'Sunog sa balay, sagbot, kuryente o gas leak.' },
+      { name: '🚑 Pagluwas (Rescue)', prio: 'Pula (Labing dinalian)', desc: 'Kritikal nga medikal nga emerhensya, natanggong, pagkalumos.' },
+      { name: '🚔 Krimen (Crime)', prio: 'Kahel (Taas)', desc: 'Kawat, pagpanglungkab, pagsulod nga walay pananghid, ilegal nga buhat.' },
+      { name: '🥊 Away / Sumbagay (Fights)', prio: 'Kahel (Taas)', desc: 'Sumbagay, kasamok, away sa dalan o pamilya.' },
+      { name: '🌊 Baha (Flood)', prio: 'Kahel (Taas)', desc: 'Pagsaka sa tubig-baha, baradong kanal, kalit nga pagbaha.' },
+      { name: '🔍 Nawala (Missing)', prio: 'Dalag (Kasagaran)', desc: 'Nawalang bata, paryente, o tigulang.' },
+      { name: '📢 Saba / Kasaba (Noise)', prio: 'Dalag (Kasagaran)', desc: 'Saba nga videoke, kasaba sa gabii, saba nga tambutso.' },
+      { name: '❗ Ubang Kabalaka (Others)', prio: 'Berde (Standard)', desc: 'Basura, nahulog nga kahoy, babag sa dalan, o uban pang kabalaka.' },
+    ],
+  },
+};
+
+let currentLegendLang = 'en';
+
+function setLegendLanguage(lang) {
+  currentLegendLang = lang;
+  const enBtn = document.getElementById('lang-btn-en');
+  const cebBtn = document.getElementById('lang-btn-ceb');
+
+  if (enBtn && cebBtn) {
+    if (lang === 'en') {
+      enBtn.className = 'px-2 py-1 rounded bg-blue-600 text-white transition-colors';
+      cebBtn.className = 'px-2 py-1 rounded text-gray-600 hover:text-gray-900 transition-colors';
+    } else {
+      enBtn.className = 'px-2 py-1 rounded text-gray-600 hover:text-gray-900 transition-colors';
+      cebBtn.className = 'px-2 py-1 rounded bg-blue-600 text-white transition-colors';
+    }
+  }
+
+  renderLegendGuide();
+}
+
+function renderLegendGuide() {
+  const container = document.getElementById('legend-content-list');
+  const titleEl = document.getElementById('legend-guide-title');
+  if (!container) return;
+
+  const data = LEGEND_TRANSLATIONS[currentLegendLang] || LEGEND_TRANSLATIONS.en;
+  if (titleEl) titleEl.textContent = data.title;
+
+  container.innerHTML = data.types.map(t => `
+    <div class="bg-white rounded-lg p-2.5 border border-gray-200 shadow-sm">
+      <div class="flex items-center justify-between mb-1">
+        <span class="font-bold text-gray-800 text-xs">${t.name}</span>
+        <span class="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-gray-100 text-gray-700">${t.prio}</span>
+      </div>
+      <p class="text-gray-500 text-[11px] leading-tight">${t.desc}</p>
+    </div>
+  `).join('');
+}
+
 (async function () {
   const user = requireRole('resident', 'admin', 'responder');
   if (!user) return;
+  setUserUI(user);
 
   await populatePurokSelect(document.getElementById('purok-select'), { placeholder: '-- Select Purok --' });
+  renderLegendGuide();
 
   updateOfflineBanner();
   window.addEventListener('online',  updateOfflineBanner);
@@ -167,11 +237,17 @@ function renderPhotoStrip() {
 // ── Map ──────────────────────────────────────────────────────────────────────
 
 function showLocationMap() {
-  if (locationMap) return;
-  // Starts on the Manay/New Visayas midpoint, then silently recenters on
-  // the resident's actual position if geolocation is already permitted
-  // (the "Auto-detect" button covers the explicit ask).
+  const container = document.getElementById('location-map');
+  if (!container) return;
+  if (locationMap) {
+    setTimeout(() => locationMap.invalidateSize(), 150);
+    return;
+  }
+  if (container._leaflet_id) {
+    container._leaflet_id = null;
+  }
   locationMap = L.map('location-map').setView([7.3269, 125.6352], 12);
+  window.locationMap = locationMap;
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '© OpenStreetMap contributors',
   }).addTo(locationMap);
@@ -179,11 +255,12 @@ function showLocationMap() {
 
   if (navigator.geolocation) {
     navigator.geolocation.getCurrentPosition(
-      pos => { if (!report.latitude) locationMap.setView([pos.coords.latitude, pos.coords.longitude], 15); },
-      () => {}, // permission not yet granted — leave the service-area fallback view
+      pos => { if (!report.latitude && locationMap) locationMap.setView([pos.coords.latitude, pos.coords.longitude], 15); },
+      () => {},
       { maximumAge: 60000 }
     );
   }
+  setTimeout(() => { if (locationMap) locationMap.invalidateSize(); }, 200);
 }
 
 function setLocation(lat, lng) {

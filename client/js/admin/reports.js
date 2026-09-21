@@ -15,7 +15,7 @@ let _cachedIncidents = [];
 let _cachedPerformance = [];
 
 (async function () {
-  const user = requireRole('admin', 'super_admin');
+  const user = requireRole('admin');
   if (!user) return;
   setUserUI(user);
 
@@ -32,10 +32,27 @@ let _cachedPerformance = [];
   document.getElementById('report-period').value = 'annual';
 
   populateWeekSelector();
+  await populatePurokSelector('filter-purok', 'All Puroks');
+  await populateResponderSelector();
   onPeriodChange(false);
 
   await loadReports();
 })();
+
+async function populateResponderSelector() {
+  const sel = document.getElementById('filter-responder');
+  if (!sel) return;
+  const res = await api.get('/responders');
+  if (res && res.ok) {
+    const list = await res.json();
+    list.forEach(r => {
+      const o = document.createElement('option');
+      o.value = r.id;
+      o.textContent = r.full_name;
+      sel.appendChild(o);
+    });
+  }
+}
 
 function populateWeekSelector() {
   const sel = document.getElementById('report-week');
@@ -68,11 +85,13 @@ function onPeriodChange(reload = true) {
 
 function getFilters() {
   return {
-    type:   document.getElementById('filter-type').value,
-    period: document.getElementById('report-period').value,
-    year:   document.getElementById('report-year').value,
-    month:  document.getElementById('report-month').value,
-    week:   document.getElementById('report-week').value,
+    type:      document.getElementById('filter-type').value,
+    responder: document.getElementById('filter-responder')?.value || '',
+    purok_id:  document.getElementById('filter-purok')?.value || '',
+    period:    document.getElementById('report-period').value,
+    year:      document.getElementById('report-year').value,
+    month:     document.getElementById('report-month').value,
+    week:      document.getElementById('report-week').value,
   };
 }
 
@@ -95,6 +114,8 @@ function filterIncidents(all, f) {
     const d = new Date(i.reported_at);
 
     if (f.type && i.incident_type !== f.type) return false;
+    if (f.purok_id && i.purok_id != f.purok_id) return false;
+    if (f.responder && i.assigned_responder_id != f.responder) return false;
 
     if (f.period === 'annual') {
       return d.getFullYear() == f.year;
@@ -139,23 +160,67 @@ async function loadReports() {
   renderIncidentsTable(filtered);
   renderPerformanceTable(perfData);
   plotHotspots(filtered);
-  loadTypeMonthChart(f.year);
+  loadTypeMonthChart(f.year, f.type);
+}
+
+function clearReports() {
+  document.getElementById('filter-type').value = '';
+  if (document.getElementById('filter-responder')) document.getElementById('filter-responder').value = '';
+  if (document.getElementById('filter-purok')) document.getElementById('filter-purok').value = '';
+  document.getElementById('report-period').value = 'annual';
+  onPeriodChange(false);
+
+  _cachedIncidents = [];
+  _cachedPerformance = [];
+
+  document.getElementById('rpt-total').textContent    = '—';
+  document.getElementById('rpt-resolved').textContent = '—';
+  document.getElementById('rpt-pending').textContent  = '—';
+  document.getElementById('rpt-ongoing').textContent  = '—';
+  document.getElementById('incident-period-label').textContent = 'Selection cleared';
+
+  document.getElementById('incidents-body').innerHTML = `
+    <tr><td colspan="6" class="px-4 py-8 text-center text-gray-400">No report data selected. Use the filters above and click Refresh to generate report.</td></tr>`;
+  document.getElementById('performance-body').innerHTML = `
+    <tr><td colspan="5" class="px-4 py-8 text-center text-gray-400">No responder data selected.</td></tr>`;
+
+  if (hotspotMap) {
+    if (hotspotHeatLayer) hotspotMap.removeLayer(hotspotHeatLayer);
+    hotspotMarkers.forEach(m => hotspotMap.removeLayer(m));
+    hotspotMarkers = [];
+    hotspotHeatLayer = null;
+    hotspotMap.setView([7.3269, 125.6352], 12);
+  }
+
+  if (typeMonthChart) {
+    typeMonthChart.destroy();
+    typeMonthChart = null;
+  }
 }
 
 // ── Type-by-month comparison ──────────────────────────────────────────────────
 let typeMonthChart = null;
-const TYPE_MONTH_COLORS = { Fire: '#ef4444', Rescue: '#3b82f6', Crime: '#f97316', Noise: '#eab308', Garbage: '#22c55e', Other: '#6b7280' };
+const TYPE_MONTH_COLORS = {
+  Fire:    '#ef4444',
+  Rescue:  '#3b82f6',
+  Crime:   '#f97316',
+  Fights:  '#991b1b',
+  Flood:   '#06b6d4',
+  Missing: '#a855f7',
+  Noise:   '#eab308',
+  Other:   '#6b7280',
+};
 
-async function loadTypeMonthChart(year) {
+async function loadTypeMonthChart(year, selectedType = '') {
   const res = await api.get(`/reports/type-by-month?year=${year}`);
   if (!res || !res.ok) return;
   const data = await res.json();
 
   const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  const types  = Object.keys(TYPE_MONTH_COLORS);
+  const types  = selectedType ? [selectedType] : Object.keys(TYPE_MONTH_COLORS);
   const datasets = types.map(type => ({
     label: type,
-    backgroundColor: TYPE_MONTH_COLORS[type],
+    backgroundColor: TYPE_MONTH_COLORS[type] || '#6b7280',
     data: months.map((_, i) => {
       const row = data.find(d => d.month === i + 1 && d.incident_type === type);
       return row ? row.count : 0;
@@ -180,47 +245,61 @@ let hotspotHeatLayer = null;
 let hotspotMarkers = [];
 
 function plotHotspots(incidents) {
+  const container = document.getElementById('hotspot-map');
+  if (!container) return;
+
   if (!hotspotMap) {
-    // Starts on the Manay/New Visayas midpoint and zooms to fit whatever
-    // incident data actually exists, below.
+    if (container._leaflet_id) {
+      container._leaflet_id = null;
+    }
     hotspotMap = L.map('hotspot-map').setView([7.3269, 125.6352], 12);
+    window.hotspotMap = hotspotMap;
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '© OpenStreetMap contributors',
     }).addTo(hotspotMap);
+  } else {
+    window.hotspotMap = hotspotMap;
   }
 
-  if (hotspotHeatLayer) hotspotMap.removeLayer(hotspotHeatLayer);
-  hotspotMarkers.forEach(m => hotspotMap.removeLayer(m));
+  if (hotspotHeatLayer) {
+    try { hotspotMap.removeLayer(hotspotHeatLayer); } catch (_) {}
+    hotspotHeatLayer = null;
+  }
+  hotspotMarkers.forEach(m => {
+    try { hotspotMap.removeLayer(m); } catch (_) {}
+  });
   hotspotMarkers = [];
 
-  const points = incidents.filter(i => i.latitude && i.longitude);
+  const points = (incidents || []).filter(i => i && i.latitude && i.longitude);
 
-  // Leaflet.heat's defaults (minOpacity 0.05, max 1.0) are tuned for
-  // thousands of points — with the handful a barangay actually reports,
-  // the result was barely-visible pale blue smudges. Raising minOpacity and
-  // capping `max` low means even a single report reads as a clear warm
-  // blob, and a real cluster still saturates to red.
-  hotspotHeatLayer = L.heatLayer(points.map(i => [i.latitude, i.longitude, 1]), {
-    radius: 35,
-    blur: 22,
-    minOpacity: 0.45,
-    max: Math.max(2, Math.ceil(points.length / 4)),
-  }).addTo(hotspotMap);
-  if (points.length) hotspotMap.fitBounds(points.map(i => [i.latitude, i.longitude]), { padding: [30, 30], maxZoom: 15 });
+  if (points.length) {
+    if (typeof L.heatLayer === 'function') {
+      hotspotHeatLayer = L.heatLayer(points.map(i => [i.latitude, i.longitude, 1]), {
+        radius: 35,
+        blur: 22,
+        minOpacity: 0.45,
+        max: Math.max(2, Math.ceil(points.length / 4)),
+      }).addTo(hotspotMap);
+    }
+    hotspotMap.fitBounds(points.map(i => [i.latitude, i.longitude]), { padding: [30, 30], maxZoom: 15 });
+  } else {
+    hotspotMap.setView([7.3269, 125.6352], 12);
+  }
 
   points.forEach(i => {
-    const color = { Red: '#ef4444', Orange: '#f97316', Yellow: '#eab308', Green: '#22c55e' }[i.triage_color] || '#6b7280';
+    // Match color coding of the incident type with the dots on the map
+    const color = TYPE_MONTH_COLORS[i.incident_type] || '#6b7280';
     const icon = L.divIcon({
-      html: `<div style="background:${color};width:10px;height:10px;border-radius:50%;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.5)"></div>`,
-      className: '', iconSize: [10, 10],
+      html: `<div style="background:${color};width:12px;height:12px;border-radius:50%;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.6)"></div>`,
+      className: '', iconSize: [12, 12],
     });
     const marker = L.marker([i.latitude, i.longitude], { icon })
       .addTo(hotspotMap)
-      .bindPopup(`<b>${i.reference_no}</b><br>${i.incident_type} · ${i.purok_name || '—'}`);
+      .bindPopup(`<b>${i.reference_no}</b><br><span style="color:${color};font-weight:bold;">${i.incident_type}</span> · ${i.purok_name || '—'}<br><span style="font-size:11px;color:#718096;">Status: ${i.status}</span>`);
     hotspotMarkers.push(marker);
   });
 
-  setTimeout(() => hotspotMap.invalidateSize(), 150);
+  setTimeout(() => hotspotMap && hotspotMap.invalidateSize(), 150);
 }
 
 function buildPerfUrl(f) {
@@ -258,12 +337,17 @@ function renderIncidentsTable(data) {
 }
 
 function renderPerformanceTable(data) {
+  const f = getFilters();
+  let list = data;
+  if (f.responder) {
+    list = list.filter(r => r.id == f.responder);
+  }
   const tbody = document.getElementById('performance-body');
-  if (!data.length) {
+  if (!list.length) {
     tbody.innerHTML = `<tr><td colspan="5" class="px-4 py-6 text-center text-gray-400">No responder data available.</td></tr>`;
     return;
   }
-  tbody.innerHTML = data.map(r => {
+  tbody.innerHTML = list.map(r => {
     const responseTime   = fmtMinutes(r.avg_response_time_minutes);
     const resolutionTime = fmtMinutes(r.avg_resolution_minutes);
     const rateColor = r.total_assigned > 0

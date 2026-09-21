@@ -1,15 +1,13 @@
 const bcrypt = require('bcrypt');
 const db     = require('../config/db');
-const { sendVerificationEmail, sendRejectionEmail } = require('../utils/mailer');
+const { sendVerificationEmail, sendRejectionEmail, sendAccountCreatedEmail } = require('../utils/mailer');
 const { logAudit } = require('../utils/audit');
-
-const ADMIN_TIER = ['admin', 'super_admin'];
 
 async function isLastActiveAdmin(userId) {
   const [[target]] = await db.query('SELECT role, is_active FROM users WHERE id = ?', [userId]);
-  if (!target || !ADMIN_TIER.includes(target.role) || !target.is_active) return false;
+  if (!target || target.role !== 'admin' || !target.is_active) return false;
   const [[{ count }]] = await db.query(
-    "SELECT COUNT(*) AS count FROM users WHERE role IN ('admin', 'super_admin') AND is_active = 1"
+    "SELECT COUNT(*) AS count FROM users WHERE role = 'admin' AND is_active = 1"
   );
   return count <= 1;
 }
@@ -80,11 +78,8 @@ exports.getUserById = async (req, res) => {
 exports.createUser = async (req, res) => {
   try {
     const { full_name, email, password, phone, role, purok_id } = req.body;
-    if (!['responder', 'admin', 'super_admin'].includes(role)) {
-      return res.status(400).json({ message: 'Role must be responder, admin, or super_admin' });
-    }
-    if (ADMIN_TIER.includes(role) && req.user.role !== 'super_admin') {
-      return res.status(403).json({ message: 'Only a Super Admin can create admin-level accounts.' });
+    if (!['responder', 'admin', 'resident'].includes(role)) {
+      return res.status(400).json({ message: 'Role must be responder, admin, or resident' });
     }
     const hash = await bcrypt.hash(password, 10);
     const [result] = await db.query(
@@ -97,6 +92,12 @@ exports.createUser = async (req, res) => {
       details: `${full_name} <${email}>`, ip_address: req.ip,
     });
 
+    try {
+      await sendAccountCreatedEmail(email, full_name, role, password);
+    } catch (mailErr) {
+      console.error('Account creation notification email failed:', mailErr.message);
+    }
+
     res.status(201).json({ message: 'User created', id: result.insertId });
   } catch (err) {
     if (err.code === 'ER_DUP_ENTRY') return res.status(409).json({ message: 'Email already exists' });
@@ -108,22 +109,11 @@ exports.updateUser = async (req, res) => {
   try {
     const { full_name, email, phone, role, purok_id, is_active, password } = req.body;
 
-    if (role !== undefined && !['responder', 'admin', 'super_admin'].includes(role)) {
-      return res.status(400).json({ message: 'Role must be responder, admin, or super_admin' });
+    if (role !== undefined && !['responder', 'admin', 'resident'].includes(role)) {
+      return res.status(400).json({ message: 'Role must be responder, admin, or resident' });
     }
 
-    // Only a Super Admin may touch admin-tier accounts — whether that's the
-    // account being edited right now, or promoting someone into that tier.
-    if (req.user.role !== 'super_admin') {
-      const [[target]] = await db.query('SELECT role FROM users WHERE id = ?', [req.params.id]);
-      const targetIsAdminTier = target && ADMIN_TIER.includes(target.role);
-      const promotingToAdminTier = role !== undefined && ADMIN_TIER.includes(role);
-      if (targetIsAdminTier || promotingToAdminTier) {
-        return res.status(403).json({ message: 'Only a Super Admin can manage admin-level accounts.' });
-      }
-    }
-
-    const demotingAdmin  = role !== undefined && !ADMIN_TIER.includes(role);
+    const demotingAdmin  = role !== undefined && role !== 'admin';
     const deactivating   = is_active !== undefined && !is_active;
     if (demotingAdmin || deactivating) {
       if (await isLastActiveAdmin(req.params.id)) {
@@ -157,12 +147,6 @@ exports.updateUser = async (req, res) => {
 
 exports.deleteUser = async (req, res) => {
   try {
-    if (req.user.role !== 'super_admin') {
-      const [[target]] = await db.query('SELECT role FROM users WHERE id = ?', [req.params.id]);
-      if (target && ADMIN_TIER.includes(target.role)) {
-        return res.status(403).json({ message: 'Only a Super Admin can deactivate admin-level accounts.' });
-      }
-    }
     if (await isLastActiveAdmin(req.params.id)) {
       return res.status(400).json({ message: 'Cannot deactivate the only remaining admin account.' });
     }

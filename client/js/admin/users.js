@@ -1,20 +1,11 @@
 let currentTab = 'all';
 let allUsers   = [];
 let viewingUserId = null;
-let isSuperAdmin  = false;
 
 (async function () {
-  const user = requireRole('admin', 'super_admin');
+  const user = requireRole('admin');
   if (!user) return;
   setUserUI(user);
-  isSuperAdmin = user.role === 'super_admin';
-
-  if (isSuperAdmin) {
-    document.getElementById('u-role-admin').classList.remove('hidden');
-    document.getElementById('u-role-super-admin').classList.remove('hidden');
-  } else {
-    document.getElementById('u-role-note').classList.remove('hidden');
-  }
 
   await populatePurokSelect(document.getElementById('u-purok'), { placeholder: 'None' });
 
@@ -34,12 +25,14 @@ async function loadUsers() {
 
 function setTab(tab) {
   currentTab = tab;
-  ['all','responder','resident'].forEach(t => {
+  ['all','admin','responder','resident'].forEach(t => {
     const btn = document.getElementById(`tab-${t}`);
-    if (t === tab) {
-      btn.className = 'px-4 py-2 rounded-lg text-sm font-medium bg-blue-600 text-white';
-    } else {
-      btn.className = 'px-4 py-2 rounded-lg text-sm font-medium bg-gray-100 text-gray-600 hover:bg-gray-200';
+    if (btn) {
+      if (t === tab) {
+        btn.className = 'px-4 py-2 rounded-lg text-sm font-medium bg-blue-600 text-white';
+      } else {
+        btn.className = 'px-4 py-2 rounded-lg text-sm font-medium bg-gray-100 text-gray-600 hover:bg-gray-200';
+      }
     }
   });
   renderUsers();
@@ -58,25 +51,30 @@ function renderUsers() {
   }
 
   const roleBadge = r => {
-    const map   = { super_admin: 'bg-indigo-100 text-indigo-700', admin: 'bg-purple-100 text-purple-700', responder: 'bg-blue-100 text-blue-700', resident: 'bg-gray-100 text-gray-700' };
-    const label = { super_admin: 'Super Admin' }[r] || r;
+    const map   = { admin: 'bg-purple-100 text-purple-700', responder: 'bg-blue-100 text-blue-700', resident: 'bg-gray-100 text-gray-700' };
+    const label = { admin: 'Admin', responder: 'Responder', resident: 'Resident' }[r] || r;
     return `<span class="inline-flex px-2 py-0.5 rounded text-xs font-medium ${map[r] || ''}">${label}</span>`;
   };
 
   tbody.innerHTML = list.map(u => `
     <tr class="table-row">
       <td class="px-4 py-3 text-sm font-medium text-gray-800">
-        ${u.full_name}
+        ${escapeHtml(u.full_name)}
         ${u.fake_report_count > 0 ? `<span class="ml-1 inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700" title="${u.fake_report_count} report(s) flagged as fake"><i class="fa-solid fa-flag mr-1"></i>${u.fake_report_count}</span>` : ''}
       </td>
-      <td class="px-4 py-3 text-sm text-gray-500">${u.email}</td>
+      <td class="px-4 py-3 text-sm text-gray-500">${escapeHtml(u.email)}</td>
       <td class="px-4 py-3">${roleBadge(u.role)}</td>
-      <td class="px-4 py-3 text-sm text-gray-500">${u.purok_name || '—'}</td>
+      <td class="px-4 py-3 text-sm text-gray-500">${escapeHtml(u.purok_name) || '—'}</td>
       <td class="px-4 py-3">
         ${u.is_verified
           ? `<span class="text-green-600 text-xs"><i class="fa-solid fa-check"></i> Verified</span>`
           : u.verification_status === 'Rejected'
-            ? `<button onclick="openViewModal(${u.id})" class="text-red-500 text-xs hover:underline"><i class="fa-solid fa-circle-xmark"></i> Rejected</button>`
+            ? `<div>
+                 <button onclick="openViewModal(${u.id})" class="text-red-500 text-xs font-medium hover:underline flex items-center gap-1">
+                   <i class="fa-solid fa-circle-xmark"></i> Rejected
+                 </button>
+                 ${u.verification_note ? `<p class="text-[11px] text-gray-400 truncate max-w-[140px]" title="${escapeHtml(u.verification_note)}">${escapeHtml(u.verification_note)}</p>` : ''}
+               </div>`
             : `<button onclick="openViewModal(${u.id})" class="text-orange-500 text-xs hover:underline"><i class="fa-solid fa-eye"></i> View</button>`}
       </td>
       <td class="px-4 py-3">
@@ -85,12 +83,10 @@ function renderUsers() {
         </span>
       </td>
       <td class="px-4 py-3 flex gap-2">
-        ${['admin', 'super_admin'].includes(u.role) && !isSuperAdmin
-          ? `<span class="text-xs text-gray-300" title="Only a Super Admin can manage admin-level accounts"><i class="fa-solid fa-lock"></i> Locked</span>`
-          : `<button onclick="openEditModal(${u.id})" class="text-blue-600 hover:text-blue-800 text-xs"><i class="fa-solid fa-pen"></i> Edit</button>
-             <button onclick="toggleActive(${u.id}, ${u.is_active})" class="text-xs ${u.is_active ? 'text-red-500 hover:text-red-700' : 'text-green-500 hover:text-green-700'}">
-               ${u.is_active ? '<i class="fa-solid fa-ban"></i> Deactivate' : '<i class="fa-solid fa-check"></i> Activate'}
-             </button>`}
+        <button onclick="openEditModal(${u.id})" class="text-blue-600 hover:text-blue-800 text-xs"><i class="fa-solid fa-pen"></i> Edit</button>
+        <button onclick="toggleActive(${u.id}, ${u.is_active})" class="text-xs ${u.is_active ? 'text-red-500 hover:text-red-700' : 'text-green-500 hover:text-green-700'}">
+          ${u.is_active ? '<i class="fa-solid fa-ban"></i> Deactivate' : '<i class="fa-solid fa-check"></i> Activate'}
+        </button>
       </td>
     </tr>`).join('');
 }
@@ -129,13 +125,16 @@ async function openViewModal(id) {
   // ID image
   const img  = document.getElementById('view-id-img');
   const none = document.getElementById('view-id-none');
+  const idLink = document.getElementById('view-id-link');
   if (u.id_image) {
     img.src = `/uploads/${u.id_image}`;
     img.classList.remove('hidden');
     none.classList.add('hidden');
+    if (idLink) { idLink.href = `/uploads/${u.id_image}`; idLink.classList.remove('pointer-events-none'); }
   } else {
     img.classList.add('hidden');
     none.classList.remove('hidden');
+    if (idLink) { idLink.removeAttribute('href'); idLink.classList.add('pointer-events-none'); }
   }
 
   document.getElementById('view-id-type').textContent   = u.id_type   || '—';
@@ -144,13 +143,16 @@ async function openViewModal(id) {
   // Proof of residency image
   const porImg  = document.getElementById('view-por-img');
   const porNone = document.getElementById('view-por-none');
+  const porLink = document.getElementById('view-por-link');
   if (u.proof_of_residency_image) {
     porImg.src = `/uploads/${u.proof_of_residency_image}`;
     porImg.classList.remove('hidden');
     porNone.classList.add('hidden');
+    if (porLink) { porLink.href = `/uploads/${u.proof_of_residency_image}`; porLink.classList.remove('pointer-events-none'); }
   } else {
     porImg.classList.add('hidden');
     porNone.classList.remove('hidden');
+    if (porLink) { porLink.removeAttribute('href'); porLink.classList.add('pointer-events-none'); }
   }
 
   // Details
@@ -191,13 +193,22 @@ async function openViewModal(id) {
 
   // Verification status
   const statusEl = document.getElementById('view-status');
+  const remarksWrap = document.getElementById('view-remarks-wrap');
+  const remarksText = document.getElementById('view-remarks-text');
+
   if (u.is_verified) {
     statusEl.innerHTML = `<span class="text-green-600 text-sm font-medium"><i class="fa-solid fa-check-circle mr-1"></i>Verified</span>`;
   } else if (u.verification_status === 'Rejected') {
-    statusEl.innerHTML = `<span class="text-red-500 text-sm font-medium"><i class="fa-solid fa-circle-xmark mr-1"></i>Rejected</span>` +
-      (u.verification_note ? `<br><span class="text-xs text-gray-500">${u.verification_note}</span>` : '');
+    statusEl.innerHTML = `<span class="text-red-500 text-sm font-medium"><i class="fa-solid fa-circle-xmark mr-1"></i>Rejected</span>`;
   } else {
     statusEl.innerHTML = `<span class="text-orange-500 text-sm font-medium"><i class="fa-solid fa-clock mr-1"></i>Pending Verification</span>`;
+  }
+
+  if (u.verification_status === 'Rejected' && u.verification_note) {
+    remarksText.textContent = u.verification_note;
+    remarksWrap.classList.remove('hidden');
+  } else {
+    remarksWrap.classList.add('hidden');
   }
 
   // Duplicate surname warning
