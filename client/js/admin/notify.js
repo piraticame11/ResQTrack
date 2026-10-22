@@ -8,7 +8,12 @@
   window._adminSocket = io();
 
   window._adminSocket.on('incident:new', (inc) => {
-    playAlertSound();
+    // If the report is "Other" or non-urgent (Yellow/Green triage), play a mellow notification sound
+    if (inc.incident_type === 'Other' || inc.triage_color === 'Yellow' || inc.triage_color === 'Green') {
+      playMellowChime();
+    } else {
+      playAlertSound();
+    }
     showAdminNotification(inc);
   });
 
@@ -22,6 +27,39 @@
     showAdminStaleInitiateNotification(inc);
   });
 })();
+
+// Gentle, non-urgent melodic chime for "Other" reports or non-critical notices
+function playMellowChime() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const now = ctx.currentTime;
+
+    // Smooth 2-tone melodic chime (E5 -> G#5, gentle sine wave)
+    const osc1 = ctx.createOscillator();
+    const gain1 = ctx.createGain();
+    osc1.type = 'sine';
+    osc1.frequency.setValueAtTime(659.25, now); // E5
+    gain1.gain.setValueAtTime(0, now);
+    gain1.gain.linearRampToValueAtTime(0.18, now + 0.03);
+    gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+    osc1.connect(gain1);
+    gain1.connect(ctx.destination);
+    osc1.start(now);
+    osc1.stop(now + 0.35);
+
+    const osc2 = ctx.createOscillator();
+    const gain2 = ctx.createGain();
+    osc2.type = 'sine';
+    osc2.frequency.setValueAtTime(830.61, now + 0.12); // G#5
+    gain2.gain.setValueAtTime(0, now + 0.12);
+    gain2.gain.linearRampToValueAtTime(0.20, now + 0.15);
+    gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.65);
+    osc2.connect(gain2);
+    gain2.connect(ctx.destination);
+    osc2.start(now + 0.12);
+    osc2.stop(now + 0.65);
+  } catch (_) {}
+}
 
 function playAlertSound() {
   try {
@@ -114,6 +152,9 @@ const TYPE_COLORS = {
 
 function showAdminNotification(inc) {
   const color = TYPE_COLORS[inc.incident_type] || '#6b7280';
+  const isOther = inc.incident_type === 'Other';
+  const icon = isOther ? '📋' : '🚨';
+  const header = isOther ? 'New Notice / General Report' : 'New Incident Reported';
 
   const el = document.createElement('div');
   el.style.cssText = [
@@ -126,9 +167,9 @@ function showAdminNotification(inc) {
   el.innerHTML = `
     <div style="border-left:4px solid ${color};background:#fff"
          class="rounded-2xl shadow-2xl p-4 flex items-start gap-3">
-      <span class="text-2xl shrink-0 mt-0.5">🚨</span>
+      <span class="text-2xl shrink-0 mt-0.5">${icon}</span>
       <div class="flex-1 min-w-0">
-        <p class="font-bold text-gray-800 text-sm">New Incident Reported</p>
+        <p class="font-bold text-gray-800 text-sm">${header}</p>
         <p class="text-gray-600 text-xs mt-0.5">
           <span class="font-semibold" style="color:${color}">${inc.incident_type}</span>
           · ${inc.purok_name || 'Unknown Purok'}
