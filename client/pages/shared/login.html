@@ -1,12 +1,14 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Login — ResQTrack</title>
   <link rel="icon" type="image/png" href="/public/images/favicon.png">
   <link rel="stylesheet" href="/public/css/output.css">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"
+    crossorigin="anonymous">
   <style>
     .card-header-stripe {
       background: white;
@@ -18,18 +20,42 @@
       justify-content: center;
       align-items: center;
     }
+
     .card-header-stripe img {
       border: 2px solid #bfdbfe;
       border-radius: 1rem;
       padding: 6px;
       background: #eff6ff;
-      box-shadow: 0 4px 16px rgba(59,130,246,0.15), 0 1px 4px rgba(59,130,246,0.10);
+      box-shadow: 0 4px 16px rgba(59, 130, 246, 0.15), 0 1px 4px rgba(59, 130, 246, 0.10);
     }
-    .btn-role { background: #3b82f6; color: white; width: 100%; display: flex; align-items: center; justify-content: center; gap: 0.5rem; padding: 0.625rem 1rem; border-radius: 0.5rem; font-weight: 600; cursor: pointer; border: none; transition: background 0.2s; }
-    .btn-role:hover:not(:disabled) { background: #2563eb; }
-    .btn-role:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    .btn-role {
+      background: #3b82f6;
+      color: white;
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      padding: 0.625rem 1rem;
+      border-radius: 0.5rem;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      transition: background 0.2s;
+    }
+
+    .btn-role:hover:not(:disabled) {
+      background: #2563eb;
+    }
+
+    .btn-role:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
   </style>
 </head>
+
 <body class="min-h-screen bg-gray-50 flex items-center justify-center p-4">
 
   <div class="w-full max-w-md">
@@ -41,26 +67,65 @@
         <img src="/public/images/favicon.png" alt="ResQTrack" class="object-contain drop-shadow-lg">
       </div>
 
-      <div class="mb-5 text-center">
-        <h2 class="text-base font-bold text-gray-800">Sign in to ResQTrack</h2>
-        <p class="text-xs text-gray-400 mt-0.5">Residents, responders, and barangay officials all sign in here — we'll take you to the right place.</p>
+      <!-- Prominent Official Barangay Banner -->
+      <div class="mb-5 -mt-2">
+        <div
+          class="relative overflow-hidden rounded-2xl bg-gradient-to-r from-blue-700 via-blue-600 to-indigo-700 p-3.5 text-white shadow-md border border-blue-500/30">
+          <div class="absolute -right-4 -bottom-4 w-20 h-20 rounded-full bg-white/10 pointer-events-none"></div>
+
+          <div class="relative flex items-center justify-between gap-3">
+            <div class="flex items-center gap-3 min-w-0">
+              <div
+                class="w-9 h-9 rounded-xl bg-white/20 backdrop-blur-xs border border-white/30 flex items-center justify-center shrink-0 shadow-inner">
+                <i class="fa-solid fa-location-dot text-white text-base"></i>
+              </div>
+              <div class="min-w-0 text-left">
+                <div class="flex items-center gap-1.5">
+                  <span class="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                  <span class="text-[10px] font-bold uppercase tracking-wider text-blue-100">Official Portal</span>
+                </div>
+                <h3 class="text-base sm:text-lg font-black text-white leading-tight truncate tracking-tight"
+                  id="tenant-display-name">
+                  Barangay Manay
+                </h3>
+              </div>
+            </div>
+
+            <!-- Quick switch button right in the header -->
+            <a id="switch-tenant-header-btn" href="#"
+              class="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white text-blue-800 hover:bg-blue-50 font-bold text-xs shadow-xs transition-all border border-white/80 group"
+              title="Switch Barangay">
+              <span>Switch</span>
+              <i
+                class="fa-solid fa-arrow-right-arrow-left text-[10px] text-blue-600 group-hover:rotate-180 transition-transform"></i>
+            </a>
+          </div>
+        </div>
       </div>
 
-      <div id="error-msg" class="hidden mb-4 bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-3 text-sm"></div>
+      <div class="mb-5 text-center">
+        <h2 class="text-base font-bold text-gray-800">Sign in to ResQTrack</h2>
+        <!-- <p class="text-xs text-gray-400 mt-0.5" id="login-subtext">Residents, responders, and officials of <span id="tenant-inline-name" class="font-bold text-gray-700">Barangay Manay</span> sign in here — we'll take you to the right place.</p> -->
+      </div>
+
+      <div id="error-msg" class="hidden mb-4 bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-3 text-sm">
+      </div>
 
       <form id="login-form" class="space-y-5" autocomplete="off">
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-1.5">Email address</label>
           <div class="relative">
             <i class="fa-solid fa-envelope absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
-            <input type="email" id="email" required autocomplete="off" class="input-field pl-9" placeholder="you@example.com">
+            <input type="email" id="email" required autocomplete="off" class="input-field pl-9"
+              placeholder="you@example.com">
           </div>
         </div>
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-1.5">Password</label>
           <div class="relative">
             <i class="fa-solid fa-lock absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
-            <input type="password" id="password" required autocomplete="off" class="input-field pl-9" placeholder="••••••••">
+            <input type="password" id="password" required autocomplete="off" class="input-field pl-9"
+              placeholder="••••••••">
           </div>
         </div>
         <button type="submit" id="login-btn" class="btn-role">
@@ -69,59 +134,95 @@
         </button>
       </form>
 
-      <div class="mt-6 pt-5 border-t border-gray-100 text-center">
+      <div class="mt-6 pt-5 border-t border-gray-100 text-center space-y-2">
         <p class="text-sm text-gray-500">New resident?
-          <a href="/pages/shared/register.html" class="text-blue-600 font-medium hover:underline">Create an account</a>
+          <a id="register-link" href="/pages/shared/register.html"
+            class="text-blue-600 font-medium hover:underline">Create an account</a>
         </p>
-        <p class="text-xs text-gray-400 mt-1.5">Responder and official accounts are issued by the barangay.</p>
+        <p class="text-xs text-gray-400">Responder and official accounts are issued by the barangay.</p>
       </div>
     </div>
 
     <p class="text-center text-gray-400 text-xs mt-6">ResQTrack · Barangay Emergency Response System</p>
   </div>
 
+  <script src="/js/shared/auth.js"></script>
   <script>
+    const slug = getTenantSlug();
+    const currentName = getTenantName(slug);
+    const otherSlug = slug === 'new-visayas' ? 'manay' : 'new-visayas';
+    const otherName = getTenantName(otherSlug);
+
+    document.title = `Login — ${currentName} · ResQTrack`;
+    document.getElementById('tenant-display-name').textContent = currentName;
+    const inlineEl = document.getElementById('tenant-inline-name');
+    if (inlineEl) inlineEl.textContent = currentName;
+    document.getElementById('register-link').href = `/${slug}/register`;
+
+    const switchHeaderBtn = document.getElementById('switch-tenant-header-btn');
+    if (switchHeaderBtn) {
+      switchHeaderBtn.href = `/${otherSlug}/login`;
+      switchHeaderBtn.title = `Switch to ${otherName} portal`;
+    }
+
     const REDIRECTS = {
-      admin:       '/pages/admin/dashboard.html',
-      responder:   '/pages/responder/dashboard.html',
-      resident:    '/pages/client/home.html',
+      admin: `/${slug}/admin/dashboard`,
+      responder: `/${slug}/responder/dashboard`,
+      resident: `/${slug}/client/home`,
     };
+
+    // Check URL parameters (e.g. error messages)
+    const urlParams = new URLSearchParams(window.location.search);
+    const errEl = document.getElementById('error-msg');
+    if (urlParams.get('error') === 'cross_tenant') {
+      errEl.textContent = `You were redirected because your account belongs to another barangay. Please sign in with your ${currentName} account.`;
+      errEl.classList.remove('hidden');
+    } else if (urlParams.get('registered') === '1') {
+      errEl.className = 'mb-4 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-lg px-4 py-3 text-sm';
+      errEl.textContent = 'Registration successful! You can now sign in.';
+      errEl.classList.remove('hidden');
+    }
 
     // Always start with a blank form — guards against the browser restoring
     // stale values from bfcache when navigating back to this page after logout.
     document.getElementById('login-form').reset();
     window.addEventListener('pageshow', () => document.getElementById('login-form').reset());
 
-    // Redirect if already logged in
+    // Redirect if already logged in with matching tenant
     const token = localStorage.getItem('accessToken');
-    const user  = (() => { try { return JSON.parse(localStorage.getItem('user')); } catch { return null; } })();
-    if (token && user) {
+    const user = getUser();
+    if (token && user && user.version === slug) {
       window.location.href = REDIRECTS[user.role] || REDIRECTS.resident;
     }
 
     document.getElementById('login-form').addEventListener('submit', async (e) => {
       e.preventDefault();
-      const btn   = document.getElementById('login-btn');
-      const errEl = document.getElementById('error-msg');
+      const btn = document.getElementById('login-btn');
+      errEl.className = 'hidden mb-4 bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-3 text-sm';
       errEl.classList.add('hidden');
       btn.disabled = true;
       btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Signing in…';
 
       try {
-        const res  = await fetch('/api/auth/login', {
+        const res = await fetch('/api/auth/login', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Barangay-Version': slug
+          },
           body: JSON.stringify({
-            email:    document.getElementById('email').value.trim(),
+            email: document.getElementById('email').value.trim(),
             password: document.getElementById('password').value,
+            version: slug,
           }),
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.message || 'Login failed');
 
-        localStorage.setItem('accessToken',  data.accessToken);
+        localStorage.setItem('accessToken', data.accessToken);
         localStorage.setItem('refreshToken', data.refreshToken);
-        localStorage.setItem('user',         JSON.stringify(data.user));
+        localStorage.setItem('user', JSON.stringify(data.user));
+        localStorage.setItem('tenant_version', data.user.version || slug);
 
         window.location.href = REDIRECTS[data.user.role] || REDIRECTS.resident;
       } catch (err) {
@@ -133,4 +234,5 @@
     });
   </script>
 </body>
+
 </html>

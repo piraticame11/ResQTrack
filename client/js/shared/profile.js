@@ -1,6 +1,10 @@
 const ROLE_COLORS = { admin: 'bg-blue-600', responder: 'bg-green-600', resident: 'bg-blue-500' };
 const ROLE_BADGE  = { admin: 'bg-purple-100 text-purple-700', responder: 'bg-green-100 text-green-700', resident: 'bg-blue-100 text-blue-700' };
-const ROLE_HOME   = { admin: '/pages/admin/dashboard.html', responder: '/pages/responder/dashboard.html', resident: '/pages/client/home.html' };
+const ROLE_HOME   = {
+  get admin()     { return `/${typeof getTenantSlug === 'function' ? getTenantSlug() : 'manay'}/admin/dashboard`; },
+  get responder() { return `/${typeof getTenantSlug === 'function' ? getTenantSlug() : 'manay'}/responder/dashboard`; },
+  get resident()  { return `/${typeof getTenantSlug === 'function' ? getTenantSlug() : 'manay'}/client/home`; },
+};
 
 let currentProfile = null;
 
@@ -157,5 +161,6 @@ function setLoading(btn, loading, html) {
 
 function goBack() {
   const user = getUser();
-  window.location.href = ROLE_HOME[user?.role] || '/pages/shared/login.html';
+  const slug = typeof getTenantSlug === 'function' ? getTenantSlug() : 'manay';
+  window.location.href = ROLE_HOME[user?.role] || `/${slug}/login`;
 }

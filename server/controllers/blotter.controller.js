@@ -13,6 +13,7 @@ function generateEntryNo() {
 
 exports.getEntries = async (req, res) => {
   try {
+    const version = req.user?.version || req.tenantVersion || 'manay';
     const { status, purok_id, search } = req.query;
     let q = `
       SELECT b.*, p.name AS purok_name, u.full_name AS filed_by_name,
@@ -22,8 +23,8 @@ exports.getEntries = async (req, res) => {
       LEFT JOIN users u  ON b.filed_by = u.id
       LEFT JOIN users cu ON b.complainant_user_id = cu.id
       LEFT JOIN users ru ON b.respondent_user_id = ru.id
-      WHERE 1=1`;
-    const params = [];
+      WHERE b.version = ?`;
+    const params = [version];
 
     if (status)   { q += ' AND b.status = ?';   params.push(status); }
     if (purok_id) { q += ' AND b.purok_id = ?'; params.push(purok_id); }
@@ -42,6 +43,7 @@ exports.getEntries = async (req, res) => {
 
 exports.getEntryById = async (req, res) => {
   try {
+    const version = req.user?.version || req.tenantVersion || 'manay';
     const [[entry]] = await db.query(`
       SELECT b.*, p.name AS purok_name, u.full_name AS filed_by_name,
              cu.full_name AS complainant_user_name, cu.email AS complainant_linked_email,
@@ -51,7 +53,7 @@ exports.getEntryById = async (req, res) => {
       LEFT JOIN users u  ON b.filed_by = u.id
       LEFT JOIN users cu ON b.complainant_user_id = cu.id
       LEFT JOIN users ru ON b.respondent_user_id = ru.id
-      WHERE b.id = ?`, [req.params.id]);
+      WHERE b.id = ? AND b.version = ?`, [req.params.id, version]);
     if (!entry) return res.status(404).json({ message: 'Blotter entry not found' });
 
     const [logs] = await db.query(`
@@ -69,6 +71,7 @@ exports.getEntryById = async (req, res) => {
 
 exports.createEntry = async (req, res) => {
   try {
+    const version = req.user?.version || req.tenantVersion || 'manay';
     const {
       complainant_user_id, complainant_name, complainant_email, complainant_address, complainant_contact,
       respondent_user_id, respondent_name, respondent_address, respondent_contact,
@@ -91,8 +94,8 @@ exports.createEntry = async (req, res) => {
       `INSERT INTO blotter_entries
          (entry_no, complainant_user_id, complainant_name, complainant_email, complainant_address, complainant_contact,
           respondent_user_id, respondent_name, respondent_address, respondent_contact,
-          nature, narrative, purok_id, filed_by, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Open')`,
+          nature, narrative, purok_id, filed_by, status, version)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Open', ?)`,
       [
         entry_no,
         complainant_user_id || null,
@@ -108,6 +111,7 @@ exports.createEntry = async (req, res) => {
         narrative.trim(),
         purok_id || null,
         req.user.id,
+        version,
       ]
     );
 
@@ -131,7 +135,8 @@ exports.createEntry = async (req, res) => {
 
 exports.updateEntry = async (req, res) => {
   try {
-    const [[existing]] = await db.query('SELECT is_locked FROM blotter_entries WHERE id = ?', [req.params.id]);
+    const version = req.user?.version || req.tenantVersion || 'manay';
+    const [[existing]] = await db.query('SELECT is_locked, version FROM blotter_entries WHERE id = ? AND version = ?', [req.params.id, version]);
     if (!existing) return res.status(404).json({ message: 'Blotter entry not found' });
     if (existing.is_locked) {
       return res.status(403).json({ message: 'This entry is locked and can no longer be edited.' });
@@ -151,8 +156,8 @@ exports.updateEntry = async (req, res) => {
     }
     if (!updates.length) return res.status(400).json({ message: 'No fields to update' });
 
-    params.push(req.params.id);
-    await db.query(`UPDATE blotter_entries SET ${updates.join(', ')} WHERE id = ?`, params);
+    params.push(req.params.id, version);
+    await db.query(`UPDATE blotter_entries SET ${updates.join(', ')} WHERE id = ? AND version = ?`, params);
 
     await db.query(
       'INSERT INTO blotter_logs (blotter_id, actor_id, action) VALUES (?, ?, ?)',
@@ -167,6 +172,7 @@ exports.updateEntry = async (req, res) => {
 
 exports.updateStatus = async (req, res) => {
   try {
+    const version = req.user?.version || req.tenantVersion || 'manay';
     const { status, note } = req.body;
     if (!STATUSES.includes(status)) return res.status(400).json({ message: 'Invalid status' });
 
@@ -174,8 +180,8 @@ exports.updateStatus = async (req, res) => {
       `SELECT b.*, cu.email AS linked_email
        FROM blotter_entries b
        LEFT JOIN users cu ON b.complainant_user_id = cu.id
-       WHERE b.id = ?`,
-      [req.params.id]
+       WHERE b.id = ? AND b.version = ?`,
+      [req.params.id, version]
     );
     if (!existing) return res.status(404).json({ message: 'Blotter entry not found' });
     if (existing.is_locked) {
@@ -191,9 +197,9 @@ exports.updateStatus = async (req, res) => {
     const values = [status, willLock ? 1 : 0];
     if (status === 'Resolved' || status === 'Endorsed to Court') { cols.push('resolved_at = ?'); values.push(new Date()); }
     if (note?.trim()) { cols.push('action_taken = ?'); values.push(note.trim()); }
-    values.push(req.params.id);
+    values.push(req.params.id, version);
 
-    await db.query(`UPDATE blotter_entries SET ${cols.join(', ')} WHERE id = ?`, values);
+    await db.query(`UPDATE blotter_entries SET ${cols.join(', ')} WHERE id = ? AND version = ?`, values);
 
     await db.query(
       'INSERT INTO blotter_logs (blotter_id, actor_id, action, note) VALUES (?, ?, ?, ?)',
@@ -203,6 +209,7 @@ exports.updateStatus = async (req, res) => {
     // Notify Complainant via Email and SMS
     const targetEmail = existing.complainant_email || existing.linked_email;
     const targetPhone = existing.complainant_contact;
+    const brgyName = existing.version === 'new-visayas' ? 'Brgy. New Visayas' : 'Brgy. Manay';
 
     if (targetEmail) {
       sendBlotterStatusEmail(targetEmail, existing.complainant_name, existing.entry_no, existing.nature, status, note?.trim())
@@ -210,7 +217,7 @@ exports.updateStatus = async (req, res) => {
     }
 
     if (targetPhone) {
-      const smsMsg = `ResQTrack: Blotter Entry ${existing.entry_no} (${existing.nature}) status has been updated to "${status}". Note: ${note?.trim() || 'No remarks'}. - Brgy. Manay`;
+      const smsMsg = `ResQTrack: Blotter Entry ${existing.entry_no} (${existing.nature}) status has been updated to "${status}". Note: ${note?.trim() || 'No remarks'}. - ${brgyName}`;
       sendSMS(targetPhone, smsMsg)
         .catch(err => console.error('[Blotter SMS Error]:', err.message));
     }
@@ -223,19 +230,21 @@ exports.updateStatus = async (req, res) => {
 
 exports.notifyComplainant = async (req, res) => {
   try {
+    const version = req.user?.version || req.tenantVersion || 'manay';
     const { custom_message } = req.body;
     const [[entry]] = await db.query(
       `SELECT b.*, cu.email AS linked_email
        FROM blotter_entries b
        LEFT JOIN users cu ON b.complainant_user_id = cu.id
-       WHERE b.id = ?`,
-      [req.params.id]
+       WHERE b.id = ? AND b.version = ?`,
+      [req.params.id, version]
     );
     if (!entry) return res.status(404).json({ message: 'Blotter entry not found' });
 
     const targetEmail = entry.complainant_email || entry.linked_email;
     const targetPhone = entry.complainant_contact;
     const dispatched = [];
+    const brgyName = entry.version === 'new-visayas' ? 'Brgy. New Visayas' : 'Brgy. Manay';
 
     const note = custom_message?.trim() || entry.action_taken || `Status: ${entry.status}`;
 
@@ -246,7 +255,7 @@ exports.notifyComplainant = async (req, res) => {
     }
 
     if (targetPhone) {
-      const smsMsg = `ResQTrack: Update on Blotter Entry ${entry.entry_no} (${entry.nature}): ${note} - Brgy. Manay`;
+      const smsMsg = `ResQTrack: Update on Blotter Entry ${entry.entry_no} (${entry.nature}): ${note} - ${brgyName}`;
       await sendSMS(targetPhone, smsMsg)
         .then(result => { if (result.sent) dispatched.push(`SMS (${targetPhone})`); })
         .catch(err => console.error('[Blotter Manual SMS Error]:', err.message));

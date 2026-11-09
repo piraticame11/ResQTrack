@@ -42,7 +42,7 @@ const staleInitiateNotified = new Map();
 cron.schedule('*/2 * * * *', async () => {
   try {
     const [staleList] = await db.query(`
-      SELECT i.id, i.reference_no, i.incident_type, p.name AS purok_name,
+      SELECT i.id, i.reference_no, i.incident_type, i.version, p.name AS purok_name,
              TIMESTAMPDIFF(MINUTE, i.updated_at, NOW()) AS elapsed_minutes
       FROM incidents i
       LEFT JOIN puroks p ON i.purok_id = p.id
@@ -57,13 +57,18 @@ cron.schedule('*/2 * * * *', async () => {
         // Notify once every 60 minutes
         if (now - lastNotif >= 60 * 60 * 1000) {
           staleInitiateNotified.set(inc.id, now);
-          global.__resqtrack_io.emit('incident:stale_initiate', {
+          const v = inc.version || 'manay';
+          const defaultBrgy = v === 'new-visayas' ? 'Barangay New Visayas' : 'Barangay Manay';
+          const payload = {
             id: inc.id,
             reference_no: inc.reference_no,
             incident_type: inc.incident_type,
-            purok_name: inc.purok_name || 'Barangay Manay',
+            purok_name: inc.purok_name || defaultBrgy,
             elapsed_minutes: inc.elapsed_minutes,
-          });
+            version: v,
+          };
+          global.__resqtrack_io.to(`barangay:${v}`).emit('incident:stale_initiate', payload);
+          global.__resqtrack_io.emit('incident:stale_initiate', payload);
           console.log(`[Initiate Monitor] Emitted stale initiate alert for incident ${inc.reference_no} (${inc.elapsed_minutes} min overdue)`);
         }
       }

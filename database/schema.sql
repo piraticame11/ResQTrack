@@ -4,13 +4,14 @@ USE resqtrack;
 CREATE TABLE IF NOT EXISTS puroks (
   id   INT PRIMARY KEY,
   name VARCHAR(50)  NOT NULL,
-  barangay VARCHAR(100) NOT NULL DEFAULT 'Barangay Manay'
+  barangay VARCHAR(100) NOT NULL DEFAULT 'Barangay Manay',
+  version VARCHAR(50) NOT NULL DEFAULT 'manay'
 );
 
 CREATE TABLE IF NOT EXISTS users (
   id            INT          PRIMARY KEY AUTO_INCREMENT,
   full_name     VARCHAR(150) NOT NULL,
-  email         VARCHAR(150) NOT NULL UNIQUE,
+  email         VARCHAR(150) NOT NULL,
   password_hash VARCHAR(255) NOT NULL,
   phone         VARCHAR(20)  DEFAULT NULL,
   birthdate     DATE         DEFAULT NULL,
@@ -34,7 +35,9 @@ CREATE TABLE IF NOT EXISTS users (
   verification_note   VARCHAR(255) DEFAULT NULL,
   is_active     TINYINT(1)   NOT NULL DEFAULT 1,
   fake_report_count INT      NOT NULL DEFAULT 0,
+  version       VARCHAR(50)  NOT NULL DEFAULT 'manay',
   created_at    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY unique_email_version (email, version),
   FOREIGN KEY (purok_id) REFERENCES puroks(id) ON DELETE SET NULL
 );
 
@@ -58,6 +61,7 @@ CREATE TABLE IF NOT EXISTS incidents (
   duplicate_of_id       INT           DEFAULT NULL,
   flagged_by            INT           DEFAULT NULL,
   flagged_at            TIMESTAMP     NULL DEFAULT NULL,
+  version               VARCHAR(50)   NOT NULL DEFAULT 'manay',
   reported_at           TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   resolved_at           TIMESTAMP     NULL DEFAULT NULL,
   archived_at           TIMESTAMP     NULL DEFAULT NULL,
@@ -118,6 +122,7 @@ CREATE TABLE IF NOT EXISTS announcements (
   is_published TINYINT(1)   NOT NULL DEFAULT 0,
   scheduled_at TIMESTAMP    NULL DEFAULT NULL,
   published_at TIMESTAMP    NULL DEFAULT NULL,
+  version      VARCHAR(50)  NOT NULL DEFAULT 'manay',
   created_at   TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (admin_id) REFERENCES users(id)
 );
@@ -126,6 +131,7 @@ CREATE TABLE IF NOT EXISTS emergency_contacts (
   id         INT          PRIMARY KEY AUTO_INCREMENT,
   label      VARCHAR(100) NOT NULL,
   phone      VARCHAR(20)  NOT NULL,
+  version    VARCHAR(50)  NOT NULL DEFAULT 'manay',
   updated_by INT          DEFAULT NULL,
   updated_at TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   FOREIGN KEY (updated_by) REFERENCES users(id) ON DELETE SET NULL
@@ -153,6 +159,7 @@ CREATE TABLE IF NOT EXISTS blotter_entries (
   status               ENUM('Open','Under Mediation','Resolved','Endorsed to Court','Voided') NOT NULL DEFAULT 'Open',
   filed_by             INT           NOT NULL,
   is_locked            TINYINT(1)    NOT NULL DEFAULT 0,
+  version              VARCHAR(50)   NOT NULL DEFAULT 'manay',
   filed_at             TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   resolved_at          TIMESTAMP     NULL DEFAULT NULL,
   FOREIGN KEY (incident_id)         REFERENCES incidents(id) ON DELETE SET NULL,
@@ -186,6 +193,7 @@ CREATE TABLE IF NOT EXISTS audit_logs (
   action      VARCHAR(150) NOT NULL,
   details     TEXT         DEFAULT NULL,
   ip_address  VARCHAR(45)  DEFAULT NULL,
+  version     VARCHAR(50)  NOT NULL DEFAULT 'manay',
   logged_at   TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (actor_id) REFERENCES users(id) ON DELETE SET NULL
 );

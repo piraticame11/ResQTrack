@@ -453,6 +453,9 @@ async function generateBlotterPDF(id, cachedData = null) {
   container.style.padding = '40px 50px';
   container.style.lineHeight = '1.4';
 
+  const tenantName = (typeof getTenantName === 'function' ? getTenantName() : 'Barangay Manay');
+  const tenantUpper = tenantName.toUpperCase();
+
   const filedDate = entry.filed_at ? new Date(entry.filed_at).toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' }) : '—';
   const filedTime = entry.filed_at ? new Date(entry.filed_at).toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit' }) : '—';
 
@@ -460,7 +463,7 @@ async function generateBlotterPDF(id, cachedData = null) {
     <div style="text-align: center; border-bottom: 2px solid #2d3748; padding-bottom: 15px; margin-bottom: 20px;">
       <p style="margin: 0; font-size: 13px; text-transform: uppercase; letter-spacing: 1px;">Republic of the Philippines</p>
       <p style="margin: 2px 0; font-size: 13px;">Province of Davao del Norte · City of Panabo</p>
-      <h2 style="margin: 4px 0 2px 0; font-size: 20px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; color: #1a365d;">BARANGAY MANAY</h2>
+      <h2 style="margin: 4px 0 2px 0; font-size: 20px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; color: #1a365d;">${tenantUpper}</h2>
       <p style="margin: 0; font-size: 12px; font-style: italic; color: #4a5568;">Office of the Lupong Tagapamayapa / Barangay Peace and Order Council</p>
       <h1 style="margin: 15px 0 0 0; font-size: 18px; font-weight: bold; text-transform: uppercase; text-decoration: underline; letter-spacing: 1.5px;">BARANGAY BLOTTER INCIDENT REPORT</h1>
     </div>
@@ -475,7 +478,7 @@ async function generateBlotterPDF(id, cachedData = null) {
         <td style="padding: 4px 0; text-align: right;"><strong>STATUS:</strong> <span style="text-transform: uppercase; font-weight: bold;">${escapeHtml(entry.status)}</span></td>
       </tr>
       <tr>
-        <td style="padding: 4px 0;" colspan="2"><strong>PUROK / LOCATION:</strong> ${escapeHtml(entry.purok_name || 'Barangay Manay')}</td>
+        <td style="padding: 4px 0;" colspan="2"><strong>PUROK / LOCATION:</strong> ${escapeHtml(entry.purok_name || tenantName)}</td>
       </tr>
     </table>
 
@@ -484,7 +487,7 @@ async function generateBlotterPDF(id, cachedData = null) {
       <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px;">
         <p style="margin: 2px 0;"><strong>Full Name:</strong> ${escapeHtml(entry.complainant_name)}</p>
         <p style="margin: 2px 0;"><strong>Contact Number:</strong> ${escapeHtml(entry.complainant_contact || 'N/A')}</p>
-        <p style="margin: 2px 0; grid-column: span 2;"><strong>Address:</strong> ${escapeHtml(entry.complainant_address || 'Barangay Manay, Panabo City')}</p>
+        <p style="margin: 2px 0; grid-column: span 2;"><strong>Address:</strong> ${escapeHtml(entry.complainant_address || `${tenantName}, Panabo City`)}</p>
         ${entry.complainant_email ? `<p style="margin: 2px 0; grid-column: span 2;"><strong>Email Address:</strong> ${escapeHtml(entry.complainant_email)}</p>` : ''}
       </div>
     </div>
@@ -494,7 +497,7 @@ async function generateBlotterPDF(id, cachedData = null) {
       <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px;">
         <p style="margin: 2px 0;"><strong>Full Name:</strong> ${escapeHtml(entry.respondent_name)}</p>
         <p style="margin: 2px 0;"><strong>Contact Number:</strong> ${escapeHtml(entry.respondent_contact || 'N/A')}</p>
-        <p style="margin: 2px 0; grid-column: span 2;"><strong>Address:</strong> ${escapeHtml(entry.respondent_address || 'Barangay Manay, Panabo City')}</p>
+        <p style="margin: 2px 0; grid-column: span 2;"><strong>Address:</strong> ${escapeHtml(entry.respondent_address || `${tenantName}, Panabo City`)}</p>
       </div>
     </div>
 
@@ -540,7 +543,7 @@ async function generateBlotterPDF(id, cachedData = null) {
     </div>
 
     <div style="margin-top: 30px; border-top: 1px dashed #cbd5e0; padding-top: 8px; text-align: center; font-size: 10px; color: #a0aec0;">
-      ResQTrack Digital Blotter Record Management System · Official Copy · Barangay Manay, Panabo City, Davao del Norte
+      ResQTrack Digital Blotter Record Management System · Official Copy · ${tenantName}, Panabo City, Davao del Norte
     </div>
   `;
 

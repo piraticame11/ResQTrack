@@ -2,13 +2,25 @@ const db = require('../config/db');
 
 exports.getPuroks = async (req, res) => {
   try {
-    const { barangay } = req.query;
+    const { barangay, all } = req.query;
+    let version = req.query.version || req.headers['x-barangay-version'] || req.tenantVersion;
+    if (!version && barangay) {
+      version = barangay.toLowerCase().includes('visayas') ? 'new-visayas' : 'manay';
+    }
+
     let sql = 'SELECT * FROM puroks';
     const params = [];
-    if (barangay) {
-      sql += ' WHERE LOWER(barangay) LIKE LOWER(?)';
-      params.push(`%${barangay.trim()}%`);
+
+    if (!all) {
+      if (version) {
+        sql += ' WHERE version = ?';
+        params.push(version);
+      } else if (barangay) {
+        sql += ' WHERE LOWER(barangay) LIKE LOWER(?)';
+        params.push(`%${barangay.trim()}%`);
+      }
     }
+
     sql += ' ORDER BY id';
     const [rows] = await db.query(sql, params);
     res.json(rows);
@@ -22,10 +34,13 @@ exports.createPurok = async (req, res) => {
     const { name, barangay } = req.body;
     if (!name?.trim()) return res.status(400).json({ message: 'Purok name is required' });
 
+    const brgyName = barangay?.trim() || (req.tenantVersion === 'new-visayas' ? 'Barangay New Visayas' : 'Barangay Manay');
+    const version = req.body.version || (brgyName.toLowerCase().includes('visayas') ? 'new-visayas' : 'manay');
+
     const [[{ next_id }]] = await db.query('SELECT COALESCE(MAX(id), 0) + 1 AS next_id FROM puroks');
     await db.query(
-      'INSERT INTO puroks (id, name, barangay) VALUES (?, ?, ?)',
-      [next_id, name.trim(), barangay?.trim() || 'Barangay Manay']
+      'INSERT INTO puroks (id, name, barangay, version) VALUES (?, ?, ?, ?)',
+      [next_id, name.trim(), brgyName, version]
     );
     res.status(201).json({ message: 'Purok added', id: next_id });
   } catch (err) {
@@ -35,10 +50,18 @@ exports.createPurok = async (req, res) => {
 
 exports.updatePurok = async (req, res) => {
   try {
-    const { name, barangay } = req.body;
+    const { name, barangay, version } = req.body;
     const updates = [], params = [];
     if (name !== undefined)     { updates.push('name = ?');     params.push(name.trim()); }
-    if (barangay !== undefined) { updates.push('barangay = ?'); params.push(barangay.trim()); }
+    if (barangay !== undefined) {
+      updates.push('barangay = ?');
+      params.push(barangay.trim());
+      if (version === undefined) {
+        updates.push('version = ?');
+        params.push(barangay.toLowerCase().includes('visayas') ? 'new-visayas' : 'manay');
+      }
+    }
+    if (version !== undefined)  { updates.push('version = ?');  params.push(version.trim()); }
     if (!updates.length) return res.status(400).json({ message: 'No fields to update' });
     params.push(req.params.id);
     await db.query(`UPDATE puroks SET ${updates.join(', ')} WHERE id = ?`, params);

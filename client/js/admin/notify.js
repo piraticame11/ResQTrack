@@ -6,8 +6,14 @@
   if (typeof io === 'undefined') return;
 
   window._adminSocket = io();
+  const slug = typeof getTenantSlug === 'function' ? getTenantSlug() : 'manay';
+
+  // Join tenant room and admin room for this tenant
+  window._adminSocket.emit('join:barangay', slug);
+  window._adminSocket.emit('join:admin', { version: slug });
 
   window._adminSocket.on('incident:new', (inc) => {
+    if (inc.version && inc.version !== slug) return;
     // If the report is "Other" or non-urgent (Yellow/Green triage), play a mellow notification sound
     if (inc.incident_type === 'Other' || inc.triage_color === 'Yellow' || inc.triage_color === 'Green') {
       playMellowChime();
@@ -18,11 +24,13 @@
   });
 
   window._adminSocket.on('incident:delayed', (inc) => {
+    if (inc.version && inc.version !== slug) return;
     playDelayedAlertSound();
     showAdminDelayedNotification(inc);
   });
 
   window._adminSocket.on('incident:stale_initiate', (inc) => {
+    if (inc.version && inc.version !== slug) return;
     playSoftChime();
     showAdminStaleInitiateNotification(inc);
   });
@@ -151,6 +159,7 @@ const TYPE_COLORS = {
 };
 
 function showAdminNotification(inc) {
+  const slug = typeof getTenantSlug === 'function' ? getTenantSlug() : 'manay';
   const color = TYPE_COLORS[inc.incident_type] || '#6b7280';
   const isOther = inc.incident_type === 'Other';
   const icon = isOther ? '📋' : '🚨';
@@ -172,11 +181,11 @@ function showAdminNotification(inc) {
         <p class="font-bold text-gray-800 text-sm">${header}</p>
         <p class="text-gray-600 text-xs mt-0.5">
           <span class="font-semibold" style="color:${color}">${inc.incident_type}</span>
-          · ${inc.purok_name || 'Unknown Purok'}
+          · ${inc.purok_name || (typeof getTenantName === 'function' ? getTenantName() : 'Barangay')}
         </p>
         <p class="font-mono text-xs text-gray-400 mt-0.5">${inc.reference_no}</p>
         <p class="text-gray-500 text-xs mt-1 line-clamp-2">${inc.description || ''}</p>
-        <a href="/pages/admin/incidents.html"
+        <a href="/${slug}/admin/incidents"
            class="text-blue-600 text-xs font-medium mt-1.5 inline-block hover:underline">
           View Incidents →
         </a>
@@ -200,6 +209,7 @@ function showAdminNotification(inc) {
 }
 
 function showAdminDelayedNotification(inc) {
+  const slug = typeof getTenantSlug === 'function' ? getTenantSlug() : 'manay';
   const el = document.createElement('div');
   el.style.cssText = [
     'position:fixed', 'top:1rem', 'right:1rem',
@@ -215,13 +225,13 @@ function showAdminDelayedNotification(inc) {
       <div class="flex-1 min-w-0">
         <p class="font-bold text-yellow-800 text-sm">Incident Marked as Delayed</p>
         <p class="text-gray-600 text-xs mt-0.5">
-          <span class="font-semibold text-gray-800">${inc.reference_no}</span> · ${inc.incident_type} (${inc.purok_name || 'Manay'})
+          <span class="font-semibold text-gray-800">${inc.reference_no}</span> · ${inc.incident_type} (${inc.purok_name || (typeof getTenantName === 'function' ? getTenantName() : 'Barangay')})
         </p>
         <p class="text-gray-700 text-xs mt-1">
           <span class="font-medium text-gray-900">Responder:</span> ${inc.responder_name || 'Assigned Responder'}
         </p>
         ${inc.note ? `<p class="text-yellow-700 bg-yellow-50 rounded p-1.5 text-xs mt-1 border border-yellow-100 italic">"${inc.note}"</p>` : ''}
-        <a href="/pages/admin/incidents.html"
+        <a href="/${slug}/admin/incidents"
            class="text-blue-600 text-xs font-medium mt-1.5 inline-block hover:underline">
           Open Incident Details →
         </a>
@@ -245,6 +255,7 @@ function showAdminDelayedNotification(inc) {
 }
 
 function showAdminStaleInitiateNotification(inc) {
+  const slug = typeof getTenantSlug === 'function' ? getTenantSlug() : 'manay';
   const el = document.createElement('div');
   el.style.cssText = [
     'position:fixed', 'top:1rem', 'right:1rem',
@@ -262,9 +273,9 @@ function showAdminStaleInitiateNotification(inc) {
         <p class="text-gray-600 text-xs mt-0.5">
           <span class="font-semibold text-gray-800">${inc.reference_no}</span> (${inc.incident_type}) has been in <b>Initiate</b> status for over 1 hour without an update.
         </p>
-        <p class="text-gray-500 text-xs mt-1">Location: ${inc.purok_name || 'Manay'}</p>
+        <p class="text-gray-500 text-xs mt-1">Location: ${inc.purok_name || (typeof getTenantName === 'function' ? getTenantName() : 'Barangay')}</p>
         <div class="flex items-center gap-3 mt-1.5">
-          <a href="/pages/admin/incidents.html"
+          <a href="/${slug}/admin/incidents"
              class="text-blue-600 text-xs font-semibold hover:underline">
             View Incident →
           </a>

@@ -7,7 +7,9 @@ const { geocodeAddress } = require('../utils/geocode');
 const { extractIdText, parseIdFields } = require('../utils/ocr');
 
 function generateTokens(user) {
-  const payload = { id: user.id, role: user.role, name: user.full_name };
+  const version = user.version || 'manay';
+  const barangay = version === 'new-visayas' ? 'Barangay New Visayas' : 'Barangay Manay';
+  const payload = { id: user.id, role: user.role, name: user.full_name, version, barangay };
   const accessToken   = jwt.sign(payload, process.env.JWT_SECRET,         { expiresIn: process.env.JWT_EXPIRES_IN         || '15m' });
   const refreshToken  = jwt.sign(payload, process.env.JWT_REFRESH_SECRET,  { expiresIn: process.env.JWT_REFRESH_EXPIRES_IN  || '3y'  });
   return { accessToken, refreshToken };
@@ -76,8 +78,14 @@ exports.register = async (req, res) => {
       return res.status(400).json({ message: 'Tenants/boarders must provide their landlord\'s name, contact number, and address as proof of residency.' });
     }
 
-    const [existing] = await db.query('SELECT id FROM users WHERE email = ?', [email]);
-    if (existing.length) return res.status(409).json({ message: 'Email already registered' });
+    let version = req.body.version || req.headers['x-barangay-version'] || req.tenantVersion;
+    if (!version && req.body.barangay) {
+      version = req.body.barangay.toLowerCase().includes('visayas') ? 'new-visayas' : 'manay';
+    }
+    version = version === 'new-visayas' ? 'new-visayas' : 'manay';
+
+    const [existing] = await db.query('SELECT id FROM users WHERE email = ? AND version = ?', [email, version]);
+    if (existing.length) return res.status(409).json({ message: 'Email already registered in this barangay' });
 
     const id_image = req.files?.id_image?.[0]?.filename || null;
     const proof_of_residency_image = req.files?.proof_of_residency?.[0]?.filename || null;
@@ -97,6 +105,9 @@ exports.register = async (req, res) => {
       const [[purok]] = await db.query('SELECT barangay FROM puroks WHERE id = ?', [purok_id]);
       purokBarangay = purok?.barangay || null;
     }
+    if (!purokBarangay) {
+      purokBarangay = version === 'new-visayas' ? 'Barangay New Visayas' : 'Barangay Manay';
+    }
     const geo = await geocodeAddress(address_line.trim(), purokBarangay);
 
     const hash = await bcrypt.hash(password, 10);
@@ -106,8 +117,8 @@ exports.register = async (req, res) => {
           address_line, address_lat, address_lng, address_match_status,
           residency_type, landlord_name, landlord_contact, landlord_address,
           id_type, id_number,
-          id_image, proof_of_residency_image, is_verified, verification_status, is_active)
-       VALUES (?, ?, ?, ?, ?, "resident", ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 'Pending', 1)`,
+          id_image, proof_of_residency_image, is_verified, verification_status, is_active, version)
+       VALUES (?, ?, ?, ?, ?, "resident", ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 'Pending', 1, ?)`,
       [
         full_name, email, hash, phone || null, birthdate || null, purok_id || null,
         address_line.trim(), geo.lat, geo.lng, geo.status, residency,
@@ -116,6 +127,7 @@ exports.register = async (req, res) => {
         residency === 'Tenant' ? landlord_address.trim() : null,
         id_type.trim(), id_number.trim(),
         id_image, proof_of_residency_image,
+        version,
       ]
     );
     res.status(201).json({ message: 'Registration submitted successfully. Your account is under review and will be activated once verified by the Barangay Administrator.' });
@@ -127,10 +139,25 @@ exports.register = async (req, res) => {
 exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;
+    let tenantVersion = req.headers['x-barangay-version'] || req.body.version || req.query.version || req.tenantVersion;
+    if (tenantVersion) {
+      tenantVersion = tenantVersion.toLowerCase().includes('visayas') ? 'new-visayas' : 'manay';
+    }
+
     const [rows] = await db.query('SELECT * FROM users WHERE email = ? AND is_active = 1', [email]);
     if (!rows.length) return res.status(401).json({ message: 'Invalid credentials' });
 
-    const user  = rows[0];
+    let user = rows.find(r => r.version === tenantVersion) || rows[0];
+
+    // If logging into a specific barangay portal and account is in another:
+    if (tenantVersion && user.version && user.version !== tenantVersion) {
+      const otherBrgy = user.version === 'new-visayas' ? 'Barangay New Visayas' : 'Barangay Manay';
+      const otherPath = user.version === 'new-visayas' ? '/new-visayas/login' : '/manay/login';
+      return res.status(403).json({
+        message: `This account is registered under ${otherBrgy}. Please sign in at ${otherPath}`,
+      });
+    }
+
     const valid = await bcrypt.compare(password, user.password_hash);
     if (!valid) return res.status(401).json({ message: 'Invalid credentials' });
 
@@ -149,13 +176,22 @@ exports.login = async (req, res) => {
 
     logAudit({
       actor_id: user.id, actor_name: user.full_name, action: 'Login',
-      details: `role: ${user.role}`, ip_address: req.ip,
+      details: `role: ${user.role}, barangay: ${user.version}`, ip_address: req.ip,
+      version: user.version,
     });
 
     res.json({
       accessToken,
       refreshToken,
-      user: { id: user.id, name: user.full_name, role: user.role, email: user.email, profile_photo: user.profile_photo || null },
+      user: {
+        id: user.id,
+        name: user.full_name,
+        role: user.role,
+        email: user.email,
+        profile_photo: user.profile_photo || null,
+        version: user.version || 'manay',
+        barangay: user.version === 'new-visayas' ? 'Barangay New Visayas' : 'Barangay Manay',
+      },
     });
   } catch (err) {
     res.status(500).json({ message: 'Server error', error: err.message });
@@ -199,7 +235,7 @@ exports.verifyPassword = async (req, res) => {
 
 exports.logout = (req, res) => {
   if (req.user) {
-    logAudit({ actor_id: req.user.id, actor_name: req.user.name, action: 'Logout', ip_address: req.ip });
+    logAudit({ actor_id: req.user.id, actor_name: req.user.name, action: 'Logout', ip_address: req.ip, version: req.user.version });
   }
   res.json({ message: 'Logged out successfully' });
 };

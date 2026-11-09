@@ -2,9 +2,10 @@ const db = require('../config/db');
 
 exports.getAuditLogs = async (req, res) => {
   try {
+    const version = req.user?.version || req.tenantVersion || 'manay';
     const { search, action } = req.query;
-    let q = 'SELECT * FROM audit_logs WHERE 1=1';
-    const params = [];
+    let q = 'SELECT * FROM audit_logs WHERE version = ?';
+    const params = [version];
     if (action) { q += ' AND action = ?'; params.push(action); }
     if (search) {
       q += ' AND (actor_name LIKE ? OR details LIKE ? OR ip_address LIKE ?)';

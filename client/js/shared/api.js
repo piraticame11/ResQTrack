@@ -1,8 +1,22 @@
 const API_BASE = '/api';
 
+function getTenantSlugFallback() {
+  if (typeof getTenantSlug === 'function') return getTenantSlug();
+  const seg = window.location.pathname.split('/').filter(Boolean)[0];
+  if (seg === 'new-visayas' || seg === 'manay') return seg;
+  try {
+    const u = JSON.parse(localStorage.getItem('user'));
+    if (u?.version) return u.version;
+  } catch {}
+  return 'manay';
+}
+
 async function apiRequest(method, endpoint, data = null, isFormData = false) {
-  const token   = localStorage.getItem('accessToken');
-  const headers = {};
+  const token      = localStorage.getItem('accessToken');
+  const tenantSlug = getTenantSlugFallback();
+  const headers    = {
+    'X-Barangay-Version': tenantSlug,
+  };
   if (token) headers['Authorization'] = `Bearer ${token}`;
   if (!isFormData && data) headers['Content-Type'] = 'application/json';
 
@@ -16,7 +30,7 @@ async function apiRequest(method, endpoint, data = null, isFormData = false) {
     if (refreshToken) {
       const rr = await fetch(`${API_BASE}/auth/refresh-token`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-Barangay-Version': tenantSlug },
         body: JSON.stringify({ refreshToken }),
       });
       if (rr.ok) {
@@ -26,11 +40,11 @@ async function apiRequest(method, endpoint, data = null, isFormData = false) {
         options.headers['Authorization'] = `Bearer ${tokens.accessToken}`;
         res = await fetch(`${API_BASE}${endpoint}`, options);
       } else {
-        logout();
+        if (typeof logout === 'function') logout();
         return null;
       }
     } else {
-      logout();
+      if (typeof logout === 'function') logout();
       return null;
     }
   }

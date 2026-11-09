@@ -1,4 +1,4 @@
-﻿const db = require('../config/db');
+const db = require('../config/db');
 const { sendSMS } = require('../utils/sms');
 
 function generateRefNo() {
@@ -108,20 +108,26 @@ exports.inbound = async (req, res) => {
 
     // 5. Resident matching
     let [[reporter]] = await db.query(
-      "SELECT id, purok_id, full_name, phone FROM users WHERE phone LIKE ? AND is_active = 1 LIMIT 1",
+      "SELECT id, purok_id, full_name, phone, version FROM users WHERE phone LIKE ? AND is_active = 1 LIMIT 1",
       [`%${normalizedPhone}`]
     );
 
     let isGuest = false;
+    let smsVersion = reporter?.version;
+    if (!smsVersion) {
+      smsVersion = message.toLowerCase().includes('visayas') ? 'new-visayas' : 'manay';
+    }
+
     if (!reporter) {
-      // Fallback: assign to primary active admin so emergency reports from unregistered numbers are not lost
+      // Fallback: assign to primary active admin for this barangay
       const [[adminUser]] = await db.query(
-        "SELECT id, full_name FROM users WHERE role = 'admin' AND is_active = 1 ORDER BY id ASC LIMIT 1"
+        "SELECT id, full_name, version FROM users WHERE role = 'admin' AND is_active = 1 AND version = ? ORDER BY id ASC LIMIT 1",
+        [smsVersion]
       );
       if (!adminUser) {
         return res.status(404).json({ message: 'No registered resident or system admin found to receive report.' });
       }
-      reporter = { id: adminUser.id, purok_id: null, full_name: `SMS Reporter (${from})` };
+      reporter = { id: adminUser.id, purok_id: null, full_name: `SMS Reporter (${from})`, version: smsVersion };
       isGuest = true;
     }
 
@@ -130,7 +136,7 @@ exports.inbound = async (req, res) => {
     const purokMatch = message.match(/(?:purok|prk|p-|\bp\b)[\s#]*([0-9]{1,2})\b/i);
     if (purokMatch) {
       const pNum = parseInt(purokMatch[1], 10);
-      const [[foundPurok]] = await db.query('SELECT id FROM puroks WHERE id = ? LIMIT 1', [pNum]);
+      const [[foundPurok]] = await db.query('SELECT id FROM puroks WHERE id = ? AND version = ? LIMIT 1', [pNum, smsVersion]);
       if (foundPurok) {
         targetPurokId = foundPurok.id;
       }
@@ -144,9 +150,9 @@ exports.inbound = async (req, res) => {
     const fullDescription = `${descriptionPrefix} ${message}`;
 
     const [result] = await db.query(
-      `INSERT INTO incidents (reference_no, reporter_id, incident_type, description, purok_id, status, triage_color)
-       VALUES (?, ?, ?, ?, ?, 'Pending', ?)`,
-      [reference_no, reporter.id, incidentType, fullDescription, targetPurokId, triageColor]
+      `INSERT INTO incidents (reference_no, reporter_id, incident_type, description, purok_id, status, triage_color, version)
+       VALUES (?, ?, ?, ?, ?, 'Pending', ?, ?)`,
+      [reference_no, reporter.id, incidentType, fullDescription, targetPurokId, triageColor, smsVersion]
     );
 
     await db.query(
@@ -162,11 +168,15 @@ exports.inbound = async (req, res) => {
       WHERE i.id = ?`, [result.insertId]);
 
     const io = req.app.get('io') || global.__resqtrack_io;
-    if (io) io.emit('incident:new', inc[0]);
+    if (io) {
+      io.to(`barangay:${smsVersion}`).emit('incident:new', inc[0]);
+      io.emit('incident:new', inc[0]);
+    }
 
-    // 8. Notify barangay admins and active responders by SMS (excluding the reporter)
+    // 8. Notify barangay admins and active responders by SMS (within the same barangay, excluding reporter)
     const [notifyTargets] = await db.query(
-      "SELECT phone FROM users WHERE phone IS NOT NULL AND is_active = 1 AND (role = 'admin' OR role = 'responder')"
+      "SELECT phone FROM users WHERE phone IS NOT NULL AND is_active = 1 AND version = ? AND (role = 'admin' OR role = 'responder')",
+      [smsVersion]
     );
     const purokLabel = inc[0]?.purok_name ? ` (${inc[0].purok_name})` : '';
     const alertMsg = `ResQTrack Alert [${incidentType}]: SMS report ${reference_no}${purokLabel} needs review â€” "${message.slice(0, 60)}"`;

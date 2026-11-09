@@ -24,8 +24,16 @@ let responderGpsMarker = null;
   await loadActive();
 
   const socket = io();
-  socket.on('incident:status_update', () => loadActive());
-  socket.on('incident:new',           () => loadActive());
+  const slug = typeof getTenantSlug === 'function' ? getTenantSlug() : 'manay';
+  socket.emit('join:barangay', slug);
+  socket.on('incident:status_update', (data) => {
+    if (data && data.version && data.version !== slug) return;
+    loadActive();
+  });
+  socket.on('incident:new', (data) => {
+    if (data && data.version && data.version !== slug) return;
+    loadActive();
+  });
 })();
 
 async function loadActive() {

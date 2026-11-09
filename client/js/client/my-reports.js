@@ -7,7 +7,10 @@
 
   // Real-time status updates
   const socket = io();
-  socket.on('incident:status_update', ({ id, status, reporter_id, reference_no, responder_name }) => {
+  const slug = typeof getTenantSlug === 'function' ? getTenantSlug() : 'manay';
+  socket.emit('join:barangay', slug);
+  socket.on('incident:status_update', ({ id, status, reporter_id, reference_no, responder_name, version }) => {
+    if (version && version !== slug) return;
     // Only notify the incident's owner
     if (reporter_id && reporter_id !== user.id) return;
 

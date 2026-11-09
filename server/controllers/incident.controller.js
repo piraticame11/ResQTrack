@@ -32,6 +32,7 @@ async function attachPhotosAndLogs(incidentId, files) {
 
 exports.getIncidents = async (req, res) => {
   try {
+    const version = req.user?.version || req.tenantVersion || 'manay';
     const { status, incident_type, purok_id, search } = req.query;
     let q = `
       SELECT i.*, u.full_name AS reporter_name,
@@ -40,8 +41,8 @@ exports.getIncidents = async (req, res) => {
       LEFT JOIN users u  ON i.reporter_id = u.id
       LEFT JOIN users r  ON i.assigned_responder_id = r.id
       LEFT JOIN puroks p ON i.purok_id = p.id
-      WHERE 1=1`;
-    const params = [];
+      WHERE i.version = ?`;
+    const params = [version];
 
     if (req.user.role === 'resident') {
       q += ' AND i.reporter_id = ?'; params.push(req.user.id);
@@ -64,6 +65,7 @@ exports.getIncidents = async (req, res) => {
 
 exports.getIncidentById = async (req, res) => {
   try {
+    const version = req.user?.version || req.tenantVersion || 'manay';
     const [[incident]] = await db.query(`
       SELECT i.*, u.full_name AS reporter_name, u.phone AS reporter_phone,
              r.full_name AS responder_name, p.name AS purok_name
@@ -71,7 +73,7 @@ exports.getIncidentById = async (req, res) => {
       LEFT JOIN users u  ON i.reporter_id = u.id
       LEFT JOIN users r  ON i.assigned_responder_id = r.id
       LEFT JOIN puroks p ON i.purok_id = p.id
-      WHERE i.id = ?`, [req.params.id]);
+      WHERE i.id = ? AND i.version = ?`, [req.params.id, version]);
 
     if (!incident) return res.status(404).json({ message: 'Incident not found' });
     if (req.user.role === 'resident' && incident.reporter_id !== req.user.id) {
@@ -96,6 +98,7 @@ exports.getIncidentById = async (req, res) => {
 
 exports.createIncident = async (req, res) => {
   try {
+    const version = req.user?.version || req.tenantVersion || 'manay';
     const { incident_type, description, purok_id, latitude, longitude } = req.body;
     if (!incident_type || !description) {
       return res.status(400).json({ message: 'incident_type and description are required' });
@@ -110,10 +113,10 @@ exports.createIncident = async (req, res) => {
 
     const [result] = await db.query(
       `INSERT INTO incidents
-         (reference_no, reporter_id, incident_type, description, purok_id, latitude, longitude, photo_path, status, triage_color)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Pending', ?)`,
+         (reference_no, reporter_id, incident_type, description, purok_id, latitude, longitude, photo_path, status, triage_color, version)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Pending', ?, ?)`,
       [reference_no, req.user.id, incident_type, description,
-       purok_id || null, latitude || null, longitude || null, photo_path, triage_color]
+       purok_id || null, latitude || null, longitude || null, photo_path, triage_color, version]
     );
 
     const incidentId = result.insertId;
@@ -131,7 +134,10 @@ exports.createIncident = async (req, res) => {
       WHERE i.id = ?`, [incidentId]);
 
     const io = req.app.get('io');
-    if (io) io.emit('incident:new', created);
+    if (io) {
+      io.to(`barangay:${version}`).emit('incident:new', created);
+      io.emit('incident:new', created);
+    }
 
     res.status(201).json({ message: 'Incident reported successfully', incident: created });
   } catch (err) {
@@ -141,18 +147,22 @@ exports.createIncident = async (req, res) => {
 
 exports.updateStatus = async (req, res) => {
   try {
+    const version = req.user?.version || req.tenantVersion || 'manay';
     const { status, note } = req.body;
     if (!VALID_STATUSES.includes(status)) {
       return res.status(400).json({ message: 'Invalid status' });
     }
+
+    const [[existingInc]] = await db.query('SELECT id, version FROM incidents WHERE id = ? AND version = ?', [req.params.id, version]);
+    if (!existingInc) return res.status(404).json({ message: 'Incident not found' });
 
     const extra = {};
     if (status === 'Resolved') extra.resolved_at = new Date();
     if (status === 'Archived') extra.archived_at = new Date();
 
     const cols   = ['status = ?', ...Object.keys(extra).map(k => `${k} = ?`)];
-    const values = [status, ...Object.values(extra), req.params.id];
-    await db.query(`UPDATE incidents SET ${cols.join(', ')} WHERE id = ?`, values);
+    const values = [status, ...Object.values(extra), req.params.id, version];
+    await db.query(`UPDATE incidents SET ${cols.join(', ')} WHERE id = ? AND version = ?`, values);
 
     await db.query(
       'INSERT INTO incident_logs (incident_id, actor_id, action, note) VALUES (?, ?, ?, ?)',
@@ -160,29 +170,37 @@ exports.updateStatus = async (req, res) => {
     );
 
     const [[incInfo]] = await db.query(
-      `SELECT i.reference_no, i.reporter_id, i.incident_type, p.name AS purok_name
+      `SELECT i.reference_no, i.reporter_id, i.incident_type, i.version, p.name AS purok_name
        FROM incidents i
        LEFT JOIN puroks p ON i.purok_id = p.id
        WHERE i.id = ?`, [req.params.id]
     );
+    const brgyName = incInfo.version === 'new-visayas' ? 'Brgy. New Visayas' : 'Brgy. Manay';
     const io = req.app.get('io');
     if (io) {
-      io.emit('incident:status_update', {
+      const updatePayload = {
         id: parseInt(req.params.id),
         status,
         reporter_id: incInfo.reporter_id,
         reference_no: incInfo.reference_no,
         updated_by: req.user.name,
-      });
+        version,
+      };
+      io.to(`barangay:${version}`).emit('incident:status_update', updatePayload);
+      io.emit('incident:status_update', updatePayload);
+
       if (status === 'Delayed') {
-        io.emit('incident:delayed', {
+        const delayedPayload = {
           id: parseInt(req.params.id),
           reference_no: incInfo.reference_no,
           incident_type: incInfo.incident_type,
-          purok_name: incInfo.purok_name || 'Barangay Manay',
+          purok_name: incInfo.purok_name || brgyName,
           responder_name: req.user.name,
           note: note || '',
-        });
+          version,
+        };
+        io.to(`barangay:${version}`).emit('incident:delayed', delayedPayload);
+        io.emit('incident:delayed', delayedPayload);
       }
     }
 
@@ -196,7 +214,7 @@ exports.updateStatus = async (req, res) => {
       } else if (status === 'Delayed') {
         msg = `[ResQTrack] Advisory on ${incInfo.reference_no}: Responder reported a delay${note ? ` (${note})` : ''}. They are on their way.`;
       } else if (status === 'Resolved') {
-        msg = `[ResQTrack] Update on ${incInfo.reference_no}: Your incident report has been resolved. Thank you for your vigilance. - Brgy. Manay`;
+        msg = `[ResQTrack] Update on ${incInfo.reference_no}: Your incident report has been resolved. Thank you for your vigilance. - ${brgyName}`;
       }
       if (msg) {
         sendSMS(reporter.phone, msg).catch(err => console.error('[SMS status error]:', err.message));
@@ -211,6 +229,7 @@ exports.updateStatus = async (req, res) => {
 
 exports.reclassify = async (req, res) => {
   try {
+    const version = req.user?.version || req.tenantVersion || 'manay';
     const { incident_type, triage_color } = req.body;
     if (incident_type !== undefined && !VALID_TYPES.includes(incident_type)) {
       return res.status(400).json({ message: 'Invalid incident type' });
@@ -225,8 +244,9 @@ exports.reclassify = async (req, res) => {
     const cols = [], values = [];
     if (incident_type !== undefined) { cols.push('incident_type = ?'); values.push(incident_type); }
     if (triage_color  !== undefined) { cols.push('triage_color = ?');  values.push(triage_color); }
-    values.push(req.params.id);
-    await db.query(`UPDATE incidents SET ${cols.join(', ')} WHERE id = ?`, values);
+    values.push(req.params.id, version);
+    const [result] = await db.query(`UPDATE incidents SET ${cols.join(', ')} WHERE id = ? AND version = ?`, values);
+    if (!result.affectedRows) return res.status(404).json({ message: 'Incident not found' });
 
     const noteParts = [];
     if (incident_type !== undefined) noteParts.push(`type -> ${incident_type}`);
@@ -244,16 +264,17 @@ exports.reclassify = async (req, res) => {
 
 exports.flagFake = async (req, res) => {
   try {
+    const version = req.user?.version || req.tenantVersion || 'manay';
     const { reason } = req.body;
     if (!reason?.trim()) return res.status(400).json({ message: 'A reason is required to flag a report as fake.' });
 
-    const [[inc]] = await db.query('SELECT reporter_id, is_fake FROM incidents WHERE id = ?', [req.params.id]);
+    const [[inc]] = await db.query('SELECT reporter_id, is_fake FROM incidents WHERE id = ? AND version = ?', [req.params.id, version]);
     if (!inc) return res.status(404).json({ message: 'Incident not found' });
 
     await db.query(
       `UPDATE incidents SET is_fake = 1, status = 'Archived', incident_type = 'Flagged as Fake',
-       fake_reason = ?, flagged_by = ?, flagged_at = NOW(), archived_at = NOW() WHERE id = ?`,
-      [reason.trim(), req.user.id, req.params.id]
+       fake_reason = ?, flagged_by = ?, flagged_at = NOW(), archived_at = NOW() WHERE id = ? AND version = ?`,
+      [reason.trim(), req.user.id, req.params.id, version]
     );
 
     if (!inc.is_fake) {
@@ -266,7 +287,11 @@ exports.flagFake = async (req, res) => {
     );
 
     const io = req.app.get('io');
-    if (io) io.emit('incident:status_update', { id: parseInt(req.params.id), status: 'Archived', is_fake: 1 });
+    if (io) {
+      const payload = { id: parseInt(req.params.id), status: 'Archived', is_fake: 1, version };
+      io.to(`barangay:${version}`).emit('incident:status_update', payload);
+      io.emit('incident:status_update', payload);
+    }
 
     res.json({ message: 'Incident flagged as fake and archived' });
   } catch (err) {
@@ -276,14 +301,15 @@ exports.flagFake = async (req, res) => {
 
 exports.unflagFake = async (req, res) => {
   try {
-    const [[inc]] = await db.query('SELECT reporter_id, is_fake FROM incidents WHERE id = ?', [req.params.id]);
+    const version = req.user?.version || req.tenantVersion || 'manay';
+    const [[inc]] = await db.query('SELECT reporter_id, is_fake FROM incidents WHERE id = ? AND version = ?', [req.params.id, version]);
     if (!inc) return res.status(404).json({ message: 'Incident not found' });
     if (!inc.is_fake) return res.status(400).json({ message: 'This incident is not flagged.' });
 
     await db.query(
       `UPDATE incidents SET is_fake = 0, status = 'Pending', incident_type = 'Other',
-       fake_reason = NULL, flagged_by = NULL, flagged_at = NULL WHERE id = ?`,
-      [req.params.id]
+       fake_reason = NULL, flagged_by = NULL, flagged_at = NULL WHERE id = ? AND version = ?`,
+      [req.params.id, version]
     );
     await db.query('UPDATE users SET fake_report_count = GREATEST(fake_report_count - 1, 0) WHERE id = ?', [inc.reporter_id]);
 
@@ -293,7 +319,11 @@ exports.unflagFake = async (req, res) => {
     );
 
     const io = req.app.get('io');
-    if (io) io.emit('incident:status_update', { id: parseInt(req.params.id), status: 'Pending', is_fake: 0 });
+    if (io) {
+      const payload = { id: parseInt(req.params.id), status: 'Pending', is_fake: 0, version };
+      io.to(`barangay:${version}`).emit('incident:status_update', payload);
+      io.emit('incident:status_update', payload);
+    }
 
     res.json({ message: 'Fake flag removed' });
   } catch (err) {
@@ -303,9 +333,10 @@ exports.unflagFake = async (req, res) => {
 
 exports.getDuplicates = async (req, res) => {
   try {
+    const version = req.user?.version || req.tenantVersion || 'manay';
     const [[inc]] = await db.query(
-      'SELECT id, incident_type, purok_id, latitude, longitude, reported_at FROM incidents WHERE id = ?',
-      [req.params.id]
+      'SELECT id, incident_type, purok_id, latitude, longitude, reported_at, version FROM incidents WHERE id = ? AND version = ?',
+      [req.params.id, version]
     );
     if (!inc) return res.status(404).json({ message: 'Incident not found' });
 
@@ -317,6 +348,7 @@ exports.getDuplicates = async (req, res) => {
       LEFT JOIN users u  ON i.reporter_id = u.id
       LEFT JOIN puroks p ON i.purok_id = p.id
       WHERE i.id != ?
+        AND i.version = ?
         AND i.is_spam = 0
         AND i.is_fake = 0
         AND (
@@ -328,6 +360,7 @@ exports.getDuplicates = async (req, res) => {
 
     const [dupes] = await db.query(q, [
       inc.id,
+      inc.version || version,
       inc.purok_id || 0,
       inc.latitude,
       inc.latitude || 0,
@@ -344,18 +377,19 @@ exports.getDuplicates = async (req, res) => {
 
 exports.flagSpam = async (req, res) => {
   try {
+    const version = req.user?.version || req.tenantVersion || 'manay';
     const { reason, duplicate_of_id } = req.body;
     if (!reason?.trim()) {
       return res.status(400).json({ message: 'A reason for marking as spam/duplicate is required.' });
     }
 
-    const [[inc]] = await db.query('SELECT reporter_id, reference_no FROM incidents WHERE id = ?', [req.params.id]);
+    const [[inc]] = await db.query('SELECT reporter_id, reference_no, version FROM incidents WHERE id = ? AND version = ?', [req.params.id, version]);
     if (!inc) return res.status(404).json({ message: 'Incident not found' });
 
     await db.query(
       `UPDATE incidents SET is_spam = 1, status = 'Archived', incident_type = 'Spam',
-       spam_reason = ?, duplicate_of_id = ?, flagged_by = ?, flagged_at = NOW(), archived_at = NOW() WHERE id = ?`,
-      [reason.trim(), duplicate_of_id || null, req.user.id, req.params.id]
+       spam_reason = ?, duplicate_of_id = ?, flagged_by = ?, flagged_at = NOW(), archived_at = NOW() WHERE id = ? AND version = ?`,
+      [reason.trim(), duplicate_of_id || null, req.user.id, req.params.id, version]
     );
 
     const dupNote = duplicate_of_id ? ` (Linked as duplicate of #${duplicate_of_id})` : '';
@@ -365,7 +399,11 @@ exports.flagSpam = async (req, res) => {
     );
 
     const io = req.app.get('io');
-    if (io) io.emit('incident:status_update', { id: parseInt(req.params.id), status: 'Archived', is_spam: 1, incident_type: 'Spam' });
+    if (io) {
+      const payload = { id: parseInt(req.params.id), status: 'Archived', is_spam: 1, incident_type: 'Spam', version };
+      io.to(`barangay:${version}`).emit('incident:status_update', payload);
+      io.emit('incident:status_update', payload);
+    }
 
     res.json({ message: 'Incident flagged as spam/duplicate and archived' });
   } catch (err) {
@@ -375,10 +413,14 @@ exports.flagSpam = async (req, res) => {
 
 exports.assignResponder = async (req, res) => {
   try {
+    const version = req.user?.version || req.tenantVersion || 'manay';
     const { responder_ids } = req.body;
     if (!Array.isArray(responder_ids) || !responder_ids.length) {
       return res.status(400).json({ message: 'Select at least one responder.' });
     }
+
+    const [[incExists]] = await db.query('SELECT id, version FROM incidents WHERE id = ? AND version = ?', [req.params.id, version]);
+    if (!incExists) return res.status(404).json({ message: 'Incident not found' });
 
     // Replace existing assignments for this incident
     await db.query('DELETE FROM incident_responders WHERE incident_id = ?', [req.params.id]);
@@ -387,14 +429,14 @@ exports.assignResponder = async (req, res) => {
 
     // Keep assigned_responder_id pointing to the first (lead) responder
     await db.query(
-      'UPDATE incidents SET assigned_responder_id = ?, status = "Assigned" WHERE id = ?',
-      [responder_ids[0], req.params.id]
+      'UPDATE incidents SET assigned_responder_id = ?, status = "Assigned" WHERE id = ? AND version = ?',
+      [responder_ids[0], req.params.id, version]
     );
 
     // Fetch names and phone numbers for the log and SMS
     const [responders] = await db.query(
-      `SELECT id, full_name, phone FROM users WHERE id IN (${responder_ids.map(() => '?').join(',')})`,
-      responder_ids
+      `SELECT id, full_name, phone FROM users WHERE id IN (${responder_ids.map(() => '?').join(',')}) AND version = ?`,
+      [...responder_ids, version]
     );
     const nameList = responders.map(n => n.full_name).join(', ');
 
@@ -405,22 +447,28 @@ exports.assignResponder = async (req, res) => {
 
     const [[incData]] = await db.query(`
       SELECT i.reference_no, i.reporter_id, i.incident_type, i.triage_color,
-             i.description, p.name AS purok_name
+             i.description, i.version, p.name AS purok_name
       FROM incidents i
       LEFT JOIN puroks p ON i.purok_id = p.id
       WHERE i.id = ?`, [req.params.id]);
 
+    const brgyName = incData.version === 'new-visayas' ? 'Brgy. New Visayas' : 'Brgy. Manay';
     const io = req.app.get('io');
-    if (io) io.emit('incident:status_update', {
-      id: parseInt(req.params.id),
-      status: 'Assigned',
-      reporter_id: incData.reporter_id,
-      reference_no: incData.reference_no,
-      responder_name: nameList,
-    });
+    if (io) {
+      const payload = {
+        id: parseInt(req.params.id),
+        status: 'Assigned',
+        reporter_id: incData.reporter_id,
+        reference_no: incData.reference_no,
+        responder_name: nameList,
+        version,
+      };
+      io.to(`barangay:${version}`).emit('incident:status_update', payload);
+      io.emit('incident:status_update', payload);
+    }
 
     // Notify assigned responders via SMS
-    const purokStr = incData.purok_name ? `Purok ${incData.purok_name}` : 'Brgy. Manay';
+    const purokStr = incData.purok_name ? `Purok ${incData.purok_name}` : brgyName;
     for (const r of responders) {
       if (r.phone) {
         const smsMsg = `[ResQTrack] DISPATCH ALERT: You have been assigned to Incident ${incData.reference_no} (${incData.incident_type} - ${incData.triage_color}) at ${purokStr}. Please check your responder dashboard immediately.`;
@@ -456,11 +504,12 @@ exports.getIncidentLogs = async (req, res) => {
 
 exports.askUpdate = async (req, res) => {
   try {
+    const version = req.user?.version || req.tenantVersion || 'manay';
     const [[inc]] = await db.query(`
       SELECT i.*, p.name AS purok_name
       FROM incidents i
       LEFT JOIN puroks p ON i.purok_id = p.id
-      WHERE i.id = ?`, [req.params.id]);
+      WHERE i.id = ? AND i.version = ?`, [req.params.id, version]);
     if (!inc) return res.status(404).json({ message: 'Incident not found' });
 
     if (!['Initiate', 'Delayed'].includes(inc.status)) {
@@ -482,8 +531,9 @@ exports.askUpdate = async (req, res) => {
       return res.status(400).json({ message: 'No assigned responder with a valid phone number found.' });
     }
 
+    const brgyName = inc.version === 'new-visayas' ? 'Brgy. New Visayas' : 'Brgy. Manay';
     const customNote = req.body.note?.trim();
-    const smsBody = `ResQTrack Alert: Admin is requesting an immediate update on Incident ${inc.reference_no} (${inc.incident_type}, Purok: ${inc.purok_name || 'N/A'}). ${customNote ? `Note: ${customNote} ` : ''}Please update status or report in immediately. - Brgy. Manay`;
+    const smsBody = `ResQTrack Alert: Admin is requesting an immediate update on Incident ${inc.reference_no} (${inc.incident_type}, Purok: ${inc.purok_name || 'N/A'}). ${customNote ? `Note: ${customNote} ` : ''}Please update status or report in immediately. - ${brgyName}`;
 
     for (const r of responders) {
       sendSMS(r.phone, smsBody).catch(err => console.error(`[SMS ask-update Error]:`, err.message));

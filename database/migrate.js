@@ -29,6 +29,13 @@ const requiredColumns = [
   { table: 'users', column: 'proof_of_residency_image', definition: 'VARCHAR(255) DEFAULT NULL',                                      after: 'id_image' },
   { table: 'users', column: 'id_type',   definition: 'VARCHAR(50) DEFAULT NULL', after: 'landlord_address' },
   { table: 'users', column: 'id_number', definition: 'VARCHAR(50) DEFAULT NULL', after: 'id_type' },
+  { table: 'puroks', column: 'version',  definition: "VARCHAR(50) NOT NULL DEFAULT 'manay'", after: 'barangay' },
+  { table: 'users', column: 'version',   definition: "VARCHAR(50) NOT NULL DEFAULT 'manay'", after: 'fake_report_count' },
+  { table: 'incidents', column: 'version', definition: "VARCHAR(50) NOT NULL DEFAULT 'manay'", after: 'duplicate_of_id' },
+  { table: 'announcements', column: 'version', definition: "VARCHAR(50) NOT NULL DEFAULT 'manay'", after: 'created_at' },
+  { table: 'emergency_contacts', column: 'version', definition: "VARCHAR(50) NOT NULL DEFAULT 'manay'", after: 'phone' },
+  { table: 'blotter_entries', column: 'version', definition: "VARCHAR(50) NOT NULL DEFAULT 'manay'", after: 'is_locked' },
+  { table: 'audit_logs', column: 'version', definition: "VARCHAR(50) NOT NULL DEFAULT 'manay'", after: 'ip_address' },
 ];
 
 async function migrate() {
@@ -45,10 +52,6 @@ async function migrate() {
     await conn.query(schema);
     console.log('✅ Schema applied');
 
-    console.log('Running seed…');
-    await conn.query(seed);
-    console.log('✅ Seed applied');
-
     // Add any missing columns without touching existing ones
     console.log('Checking for missing columns…');
     for (const { table, column, definition, after } of requiredColumns) {
@@ -64,6 +67,36 @@ async function migrate() {
         console.log(`  ⏭  Skipped (already exists): ${table}.${column}`);
       }
     }
+
+    // Backfill version column across all tables
+    console.log('Backfilling barangay version column…');
+    await conn.query("UPDATE puroks SET version = 'manay' WHERE (id <= 15 OR barangay LIKE '%Manay%')");
+    await conn.query("UPDATE puroks SET version = 'new-visayas' WHERE id > 15 OR barangay LIKE '%Visayas%'");
+    await conn.query("UPDATE users SET version = 'manay' WHERE version IS NULL OR version = ''");
+    await conn.query("UPDATE incidents SET version = 'manay' WHERE version IS NULL OR version = ''");
+    await conn.query("UPDATE announcements SET version = 'manay' WHERE version IS NULL OR version = ''");
+    await conn.query("UPDATE emergency_contacts SET version = 'manay' WHERE version IS NULL OR version = ''");
+    await conn.query("UPDATE blotter_entries SET version = 'manay' WHERE version IS NULL OR version = ''");
+    await conn.query("UPDATE audit_logs SET version = 'manay' WHERE version IS NULL OR version = ''");
+
+    // Check unique index on users.email
+    const [emailIdxRows] = await conn.query(
+      `SELECT INDEX_NAME, COLUMN_NAME FROM information_schema.STATISTICS
+       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND NON_UNIQUE = 0`
+    );
+    const hasCompositeEmail = emailIdxRows.some(r => r.INDEX_NAME === 'unique_email_version');
+    const hasOldEmailIdx = emailIdxRows.some(r => r.INDEX_NAME === 'email');
+    if (!hasCompositeEmail) {
+      if (hasOldEmailIdx) {
+        await conn.query('ALTER TABLE users DROP INDEX `email`');
+      }
+      await conn.query('ALTER TABLE users ADD UNIQUE KEY `unique_email_version` (`email`, `version`)');
+      console.log('  ✅ Updated users unique index to (email, version)');
+    }
+
+    console.log('Running seed…');
+    await conn.query(seed);
+    console.log('✅ Seed applied');
 
     // Backfill verification_status for users that were already verified
     // under the old boolean-only is_verified flag

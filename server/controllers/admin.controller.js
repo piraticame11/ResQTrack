@@ -3,28 +3,31 @@ const db     = require('../config/db');
 const { sendVerificationEmail, sendRejectionEmail, sendAccountCreatedEmail } = require('../utils/mailer');
 const { logAudit } = require('../utils/audit');
 
-async function isLastActiveAdmin(userId) {
-  const [[target]] = await db.query('SELECT role, is_active FROM users WHERE id = ?', [userId]);
+async function isLastActiveAdmin(userId, version) {
+  const [[target]] = await db.query('SELECT role, is_active, version FROM users WHERE id = ?', [userId]);
   if (!target || target.role !== 'admin' || !target.is_active) return false;
+  const v = version || target.version || 'manay';
   const [[{ count }]] = await db.query(
-    "SELECT COUNT(*) AS count FROM users WHERE role = 'admin' AND is_active = 1"
+    "SELECT COUNT(*) AS count FROM users WHERE role = 'admin' AND is_active = 1 AND version = ?",
+    [v]
   );
   return count <= 1;
 }
 
 exports.getUsers = async (req, res) => {
   try {
+    const version = req.user?.version || req.tenantVersion || 'manay';
     const { role, purok_id } = req.query;
     let q = `SELECT u.id, u.full_name, u.email, u.phone, u.birthdate, u.role, u.purok_id,
                     u.address_line, u.address_lat, u.address_lng, u.address_match_status,
                     u.residency_type, u.landlord_name, u.landlord_contact, u.landlord_address,
                     u.id_type, u.id_number,
                     u.id_image, u.proof_of_residency_image, u.is_verified, u.verification_status, u.verification_note,
-                    u.is_active, u.fake_report_count, u.created_at, p.name AS purok_name
+                    u.is_active, u.fake_report_count, u.version, u.created_at, p.name AS purok_name
              FROM users u
              LEFT JOIN puroks p ON u.purok_id = p.id
-             WHERE 1=1`;
-    const params = [];
+             WHERE u.version = ?`;
+    const params = [version];
     if (role)     { q += ' AND u.role = ?';     params.push(role); }
     if (purok_id) { q += ' AND u.purok_id = ?'; params.push(purok_id); }
     q += ' ORDER BY u.created_at DESC';
@@ -38,35 +41,36 @@ exports.getUsers = async (req, res) => {
 // Households can legitimately share a surname (parent/child, siblings), so this
 // only ever flags matches for the admin's manual review — it never blocks
 // registration or verification on its own.
-async function findSurnameMatches(id, full_name) {
+async function findSurnameMatches(id, full_name, version) {
   const surname = (full_name || '').split(',')[0].trim();
   if (!surname) return [];
   const [rows] = await db.query(
     `SELECT u.id, u.full_name, u.address_line, u.is_verified, u.verification_status, p.name AS purok_name
      FROM users u LEFT JOIN puroks p ON u.purok_id = p.id
-     WHERE u.id != ? AND u.role = 'resident' AND TRIM(SUBSTRING_INDEX(u.full_name, ',', 1)) = ?`,
-    [id, surname]
+     WHERE u.id != ? AND u.role = 'resident' AND u.version = ? AND TRIM(SUBSTRING_INDEX(u.full_name, ',', 1)) = ?`,
+    [id, version, surname]
   );
   return rows;
 }
 
 exports.getUserById = async (req, res) => {
   try {
+    const version = req.user?.version || req.tenantVersion || 'manay';
     const [rows] = await db.query(
       `SELECT u.id, u.full_name, u.email, u.phone, u.birthdate, u.role, u.purok_id,
               u.address_line, u.address_lat, u.address_lng, u.address_match_status,
               u.residency_type, u.landlord_name, u.landlord_contact, u.landlord_address,
               u.id_type, u.id_number,
               u.id_image, u.proof_of_residency_image, u.is_verified, u.verification_status, u.verification_note,
-              u.is_active, u.fake_report_count, u.created_at, p.name AS purok_name
-       FROM users u LEFT JOIN puroks p ON u.purok_id = p.id WHERE u.id = ?`,
-      [req.params.id]
+              u.is_active, u.fake_report_count, u.version, u.created_at, p.name AS purok_name
+       FROM users u LEFT JOIN puroks p ON u.purok_id = p.id WHERE u.id = ? AND u.version = ?`,
+      [req.params.id, version]
     );
     if (!rows.length) return res.status(404).json({ message: 'User not found' });
 
     const user = rows[0];
     user.duplicate_matches = user.role === 'resident'
-      ? await findSurnameMatches(user.id, user.full_name)
+      ? await findSurnameMatches(user.id, user.full_name, version)
       : [];
 
     res.json(user);
@@ -77,19 +81,20 @@ exports.getUserById = async (req, res) => {
 
 exports.createUser = async (req, res) => {
   try {
+    const version = req.user?.version || req.tenantVersion || 'manay';
     const { full_name, email, password, phone, role, purok_id } = req.body;
     if (!['responder', 'admin', 'resident'].includes(role)) {
       return res.status(400).json({ message: 'Role must be responder, admin, or resident' });
     }
     const hash = await bcrypt.hash(password, 10);
     const [result] = await db.query(
-      'INSERT INTO users (full_name, email, password_hash, phone, role, purok_id, is_verified, is_active) VALUES (?, ?, ?, ?, ?, ?, 1, 1)',
-      [full_name, email, hash, phone || null, role, purok_id || null]
+      'INSERT INTO users (full_name, email, password_hash, phone, role, purok_id, is_verified, is_active, version) VALUES (?, ?, ?, ?, ?, ?, 1, 1, ?)',
+      [full_name, email, hash, phone || null, role, purok_id || null, version]
     );
 
     logAudit({
       actor_id: req.user.id, actor_name: req.user.name, action: `Created ${role} account`,
-      details: `${full_name} <${email}>`, ip_address: req.ip,
+      details: `${full_name} <${email}>`, ip_address: req.ip, version,
     });
 
     try {
@@ -107,7 +112,11 @@ exports.createUser = async (req, res) => {
 
 exports.updateUser = async (req, res) => {
   try {
+    const version = req.user?.version || req.tenantVersion || 'manay';
     const { full_name, email, phone, role, purok_id, is_active, password } = req.body;
+
+    const [[targetUser]] = await db.query('SELECT id, version FROM users WHERE id = ? AND version = ?', [req.params.id, version]);
+    if (!targetUser) return res.status(404).json({ message: 'User not found' });
 
     if (role !== undefined && !['responder', 'admin', 'resident'].includes(role)) {
       return res.status(400).json({ message: 'Role must be responder, admin, or resident' });
@@ -116,7 +125,7 @@ exports.updateUser = async (req, res) => {
     const demotingAdmin  = role !== undefined && role !== 'admin';
     const deactivating   = is_active !== undefined && !is_active;
     if (demotingAdmin || deactivating) {
-      if (await isLastActiveAdmin(req.params.id)) {
+      if (await isLastActiveAdmin(req.params.id, version)) {
         return res.status(400).json({ message: 'Cannot change or deactivate the only remaining admin account.' });
       }
     }
@@ -130,13 +139,14 @@ exports.updateUser = async (req, res) => {
     if (is_active   !== undefined) { updates.push('is_active = ?');     params.push(is_active ? 1 : 0); }
     if (password)                  { updates.push('password_hash = ?'); params.push(await bcrypt.hash(password, 10)); }
     if (!updates.length) return res.status(400).json({ message: 'No fields to update' });
-    params.push(req.params.id);
-    await db.query(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`, params);
+    params.push(req.params.id, version);
+    await db.query(`UPDATE users SET ${updates.join(', ')} WHERE id = ? AND version = ?`, params);
 
     logAudit({
       actor_id: req.user.id, actor_name: req.user.name,
       action: deactivating ? 'Deactivated user' : is_active ? 'Reactivated user' : 'Updated user',
       details: `user #${req.params.id}: ${Object.keys(req.body).join(', ')}`, ip_address: req.ip,
+      version,
     });
 
     res.json({ message: 'User updated' });
@@ -147,13 +157,17 @@ exports.updateUser = async (req, res) => {
 
 exports.deleteUser = async (req, res) => {
   try {
-    if (await isLastActiveAdmin(req.params.id)) {
+    const version = req.user?.version || req.tenantVersion || 'manay';
+    const [[targetUser]] = await db.query('SELECT id FROM users WHERE id = ? AND version = ?', [req.params.id, version]);
+    if (!targetUser) return res.status(404).json({ message: 'User not found' });
+
+    if (await isLastActiveAdmin(req.params.id, version)) {
       return res.status(400).json({ message: 'Cannot deactivate the only remaining admin account.' });
     }
-    await db.query('UPDATE users SET is_active = 0 WHERE id = ?', [req.params.id]);
+    await db.query('UPDATE users SET is_active = 0 WHERE id = ? AND version = ?', [req.params.id, version]);
     logAudit({
       actor_id: req.user.id, actor_name: req.user.name, action: 'Deactivated user',
-      details: `user #${req.params.id}`, ip_address: req.ip,
+      details: `user #${req.params.id}`, ip_address: req.ip, version,
     });
     res.json({ message: 'User deactivated' });
   } catch (err) {
@@ -163,17 +177,18 @@ exports.deleteUser = async (req, res) => {
 
 exports.verifyUser = async (req, res) => {
   try {
-    const [[user]] = await db.query('SELECT email, full_name FROM users WHERE id = ?', [req.params.id]);
+    const version = req.user?.version || req.tenantVersion || 'manay';
+    const [[user]] = await db.query('SELECT email, full_name FROM users WHERE id = ? AND version = ?', [req.params.id, version]);
     if (!user) return res.status(404).json({ message: 'User not found' });
 
     await db.query(
-      "UPDATE users SET is_verified = 1, verification_status = 'Verified', verification_note = NULL WHERE id = ?",
-      [req.params.id]
+      "UPDATE users SET is_verified = 1, verification_status = 'Verified', verification_note = NULL WHERE id = ? AND version = ?",
+      [req.params.id, version]
     );
 
     logAudit({
       actor_id: req.user.id, actor_name: req.user.name, action: 'Verified resident',
-      details: `${user.full_name} <${user.email}>`, ip_address: req.ip,
+      details: `${user.full_name} <${user.email}>`, ip_address: req.ip, version,
     });
 
     try {
@@ -190,21 +205,22 @@ exports.verifyUser = async (req, res) => {
 
 exports.rejectUser = async (req, res) => {
   try {
+    const version = req.user?.version || req.tenantVersion || 'manay';
     const { reason } = req.body;
     if (!reason || !reason.trim()) {
       return res.status(400).json({ message: 'A reason is required so the resident knows what to correct.' });
     }
-    const [[user]] = await db.query('SELECT id, email, full_name FROM users WHERE id = ?', [req.params.id]);
+    const [[user]] = await db.query('SELECT id, email, full_name FROM users WHERE id = ? AND version = ?', [req.params.id, version]);
     if (!user) return res.status(404).json({ message: 'User not found' });
 
     await db.query(
-      "UPDATE users SET is_verified = 0, verification_status = 'Rejected', verification_note = ? WHERE id = ?",
-      [reason.trim(), req.params.id]
+      "UPDATE users SET is_verified = 0, verification_status = 'Rejected', verification_note = ? WHERE id = ? AND version = ?",
+      [reason.trim(), req.params.id, version]
     );
 
     logAudit({
       actor_id: req.user.id, actor_name: req.user.name, action: 'Rejected resident registration',
-      details: `user #${req.params.id}: ${reason.trim()}`, ip_address: req.ip,
+      details: `user #${req.params.id}: ${reason.trim()}`, ip_address: req.ip, version,
     });
 
     try {

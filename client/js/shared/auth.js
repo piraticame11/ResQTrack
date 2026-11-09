@@ -2,6 +2,34 @@ function getUser() {
   try { return JSON.parse(localStorage.getItem('user')); } catch { return null; }
 }
 
+function getTenantSlug() {
+  const seg = window.location.pathname.split('/').filter(Boolean)[0];
+  if (seg === 'new-visayas' || seg === 'manay') return seg;
+  const user = getUser();
+  if (user && user.version) return user.version;
+  const saved = localStorage.getItem('tenant_version');
+  if (saved === 'new-visayas' || saved === 'manay') return saved;
+  return 'manay';
+}
+
+function getTenantName(slug = getTenantSlug()) {
+  return slug === 'new-visayas' ? 'Barangay New Visayas' : 'Barangay Manay';
+}
+
+function getTenantShortName(slug = getTenantSlug()) {
+  return slug === 'new-visayas' ? 'New Visayas' : 'Manay';
+}
+
+function getTenantBaseUrl() {
+  return '/' + getTenantSlug();
+}
+
+function tenantUrl(path) {
+  const slug = getTenantSlug();
+  const clean = String(path || '').replace(/^\/(manay|new-visayas)/, '').replace(/^\/+/, '');
+  return `/${slug}/${clean}`;
+}
+
 // Escape user-supplied text before interpolating it into innerHTML — without
 // this, anything a resident/admin typed into a name, narrative, etc. field
 // renders as live HTML for whoever views it next.
@@ -15,8 +43,16 @@ function escapeHtml(str) {
 function requireAuth() {
   const token = localStorage.getItem('accessToken');
   const user  = getUser();
+  const slug  = getTenantSlug();
   if (!token || !user) {
-    window.location.href = '/pages/shared/login.html';
+    window.location.href = `/${slug}/login`;
+    return null;
+  }
+  if (user.version && user.version !== slug) {
+    localStorage.removeItem('accessToken');
+    localStorage.removeItem('refreshToken');
+    localStorage.removeItem('user');
+    window.location.href = `/${slug}/login?error=cross_tenant`;
     return null;
   }
   return user;
@@ -25,23 +61,27 @@ function requireAuth() {
 function requireRole(...roles) {
   const user = requireAuth();
   if (!user) return null;
+  const slug = getTenantSlug();
   if (!roles.includes(user.role)) {
-    window.location.href = '/pages/shared/login.html';
+    window.location.href = `/${slug}/login`;
     return null;
   }
   return user;
 }
 
 function logout() {
+  const slug  = getTenantSlug();
   const token = localStorage.getItem('accessToken');
   if (token) {
-    fetch('/api/auth/logout', { method: 'POST', headers: { Authorization: `Bearer ${token}` } })
-      .catch(() => {}); // best-effort — don't block logout on network failure
+    fetch('/api/auth/logout', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'X-Barangay-Version': slug },
+    }).catch(() => {}); // best-effort — don't block logout on network failure
   }
   localStorage.removeItem('accessToken');
   localStorage.removeItem('refreshToken');
   localStorage.removeItem('user');
-  window.location.href = '/pages/shared/login.html';
+  window.location.href = `/${slug}/login`;
 }
 
 function setUserUI(user) {
@@ -63,10 +103,11 @@ function setUserUI(user) {
 function renderPortalSwitcher(user) {
   if (!user) return;
 
+  const slug = getTenantSlug();
   const path = window.location.pathname;
   let currentPortal = 'resident';
-  if (path.includes('/pages/admin/')) currentPortal = 'admin';
-  else if (path.includes('/pages/responder/')) currentPortal = 'responder';
+  if (path.includes('/admin')) currentPortal = 'admin';
+  else if (path.includes('/responder')) currentPortal = 'responder';
 
   // 1. Configure Responder Sidebar Dock (if present)
   const respToAdminBtn  = document.getElementById('resp-to-admin-btn');
@@ -118,7 +159,7 @@ function renderPortalSwitcher(user) {
         </div>`;
     } else {
       optionsHtml += `
-        <a href="/pages/admin/dashboard.html" class="flex items-center justify-between p-2.5 rounded-xl hover:bg-blue-50 text-gray-700 hover:text-blue-700 transition-colors group">
+        <a href="/${slug}/admin/dashboard" class="flex items-center justify-between p-2.5 rounded-xl hover:bg-blue-50 text-gray-700 hover:text-blue-700 transition-colors group">
           <div class="flex items-center gap-3">
             <div class="w-8 h-8 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center text-sm group-hover:scale-105 transition-transform">
               <i class="fa-solid fa-shield-halved"></i>
@@ -151,7 +192,7 @@ function renderPortalSwitcher(user) {
         </div>`;
     } else {
       optionsHtml += `
-        <a href="/pages/responder/dashboard.html" class="flex items-center justify-between p-2.5 rounded-xl hover:bg-emerald-50 text-gray-700 hover:text-emerald-700 transition-colors group">
+        <a href="/${slug}/responder/dashboard" class="flex items-center justify-between p-2.5 rounded-xl hover:bg-emerald-50 text-gray-700 hover:text-emerald-700 transition-colors group">
           <div class="flex items-center gap-3">
             <div class="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-600 flex items-center justify-center text-sm group-hover:scale-105 transition-transform">
               <i class="fa-solid fa-truck-medical"></i>
@@ -183,7 +224,7 @@ function renderPortalSwitcher(user) {
       </div>`;
   } else {
     optionsHtml += `
-      <a href="/pages/client/home.html" class="flex items-center justify-between p-2.5 rounded-xl hover:bg-cyan-50 text-gray-700 hover:text-cyan-700 transition-colors group">
+      <a href="/${slug}/client/home" class="flex items-center justify-between p-2.5 rounded-xl hover:bg-cyan-50 text-gray-700 hover:text-cyan-700 transition-colors group">
         <div class="flex items-center gap-3">
           <div class="w-8 h-8 rounded-lg bg-cyan-100 text-cyan-600 flex items-center justify-center text-sm group-hover:scale-105 transition-transform">
             <i class="fa-solid fa-house"></i>
@@ -223,7 +264,7 @@ function renderPortalSwitcher(user) {
     // Clear in-navbar shortcuts to prevent mobile navbar overflow
     if (targetEl) targetEl.innerHTML = '';
 
-    const exitTarget = user.role === 'admin' ? '/pages/admin/dashboard.html' : '/pages/responder/dashboard.html';
+    const exitTarget = user.role === 'admin' ? `/${slug}/admin/dashboard` : `/${slug}/responder/dashboard`;
     const exitRole   = user.role === 'admin' ? 'Admin' : 'Responder';
     const exitIcon   = user.role === 'admin' ? 'fa-shield-halved text-blue-300' : 'fa-truck-medical text-emerald-300';
     const exitBtnBg  = user.role === 'admin' ? 'bg-blue-600 hover:bg-blue-500' : 'bg-emerald-600 hover:bg-emerald-500';
@@ -509,21 +550,23 @@ async function flushOfflineQueue() {
 window.addEventListener('online', flushOfflineQueue);
 if (navigator.onLine) setTimeout(flushOfflineQueue, 1500);
 
-let _puroksCache = null;
-async function fetchPuroks(force = false) {
-  if (_puroksCache && !force) return _puroksCache;
+let _puroksCache = {};
+async function fetchPuroks(force = false, version = null) {
+  const slug = version || getTenantSlug();
+  if (_puroksCache[slug] && !force) return _puroksCache[slug];
   try {
-    const res = await fetch('/api/puroks');
-    _puroksCache = res.ok ? await res.json() : [];
+    const res = await fetch(`/api/puroks?version=${encodeURIComponent(slug)}`);
+    _puroksCache[slug] = res.ok ? await res.json() : [];
   } catch {
-    _puroksCache = [];
+    _puroksCache[slug] = [];
   }
-  return _puroksCache;
+  return _puroksCache[slug];
 }
 
 async function populatePurokSelect(selectEl, { placeholder = '— Select Purok —', barangay = '' } = {}) {
   if (!selectEl) return;
-  const puroks = await fetchPuroks();
+  const slug = getTenantSlug();
+  const puroks = await fetchPuroks(false, slug);
   const cleanSel = (barangay || '').toLowerCase().replace(/^(barangay|brgy\.?)\s+/i, '').trim();
   const filtered = cleanSel
     ? puroks.filter(p => {
@@ -533,7 +576,7 @@ async function populatePurokSelect(selectEl, { placeholder = '— Select Purok �
     : puroks;
   const current = selectEl.value;
   selectEl.innerHTML = `<option value="">${placeholder}</option>` +
-    filtered.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+    filtered.map(p => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join('');
   if (current && filtered.some(p => String(p.id) === String(current))) selectEl.value = current;
 }
 
@@ -605,3 +648,92 @@ function toggleMapFullscreen(cardOrContainerId, mapInstanceOrGetter, btnId) {
     document.addEventListener('keydown', escHandler);
   }
 }
+
+function normalizeTenantLinks() {
+  const slug = getTenantSlug();
+  const name = getTenantName(slug);
+  const shortName = getTenantShortName(slug);
+
+  // Update branding texts across pages
+  document.querySelectorAll('.tenant-name, [data-tenant-name]').forEach(el => {
+    el.textContent = name;
+  });
+  document.querySelectorAll('.tenant-name-short').forEach(el => {
+    el.textContent = shortName;
+  });
+  document.querySelectorAll('.tenant-slug').forEach(el => {
+    el.textContent = slug;
+  });
+  const badgeName = document.getElementById('barangay-badge-name');
+  if (badgeName) badgeName.textContent = name;
+  const badgeText = document.getElementById('tenant-badge-text');
+  if (badgeText) badgeText.textContent = name;
+  const tenantDisplay = document.getElementById('tenant-display-name');
+  if (tenantDisplay) tenantDisplay.textContent = name;
+  const tenantInline = document.getElementById('tenant-inline-name');
+  if (tenantInline) tenantInline.textContent = name;
+
+  // Rewrite in-app relative links to stay within tenant prefix
+  document.querySelectorAll('a[href]').forEach(link => {
+    const href = link.getAttribute('href');
+    if (!href || href.startsWith('#') || href.startsWith('javascript:') || href.startsWith('http://') || href.startsWith('https://') || href.startsWith('//') || href.startsWith('mailto:') || href.startsWith('tel:') || href.startsWith('/api/')) {
+      return;
+    }
+
+    // Match pages/admin
+    const adminMatch = href.match(/^\/pages\/admin\/([^?#]+?)(?:\.html)?([?#].*)?$/);
+    if (adminMatch) {
+      link.setAttribute('href', `/${slug}/admin/${adminMatch[1]}${adminMatch[2] || ''}`);
+      return;
+    }
+
+    // Match pages/responder
+    const respMatch = href.match(/^\/pages\/responder\/([^?#]+?)(?:\.html)?([?#].*)?$/);
+    if (respMatch) {
+      link.setAttribute('href', `/${slug}/responder/${respMatch[1]}${respMatch[2] || ''}`);
+      return;
+    }
+
+    // Match pages/client
+    const clientMatch = href.match(/^\/pages\/client\/([^?#]+?)(?:\.html)?([?#].*)?$/);
+    if (clientMatch) {
+      link.setAttribute('href', `/${slug}/client/${clientMatch[1]}${clientMatch[2] || ''}`);
+      return;
+    }
+
+    // Match shared login/register
+    const loginMatch = href.match(/^\/pages\/shared\/login(?:\.html)?([?#].*)?$/);
+    if (loginMatch) {
+      link.setAttribute('href', `/${slug}/login${loginMatch[1] || ''}`);
+      return;
+    }
+    const regMatch = href.match(/^\/pages\/shared\/register(?:\.html)?([?#].*)?$/);
+    if (regMatch) {
+      link.setAttribute('href', `/${slug}/register${regMatch[1] || ''}`);
+      return;
+    }
+
+    // Bare routes without /pages/
+    if (href.startsWith('/admin/')) {
+      link.setAttribute('href', `/${slug}${href}`);
+    } else if (href.startsWith('/responder/')) {
+      link.setAttribute('href', `/${slug}${href}`);
+    } else if (href.startsWith('/client/')) {
+      link.setAttribute('href', `/${slug}${href}`);
+    } else if (href === '/login' || href.startsWith('/login?')) {
+      link.setAttribute('href', `/${slug}${href}`);
+    } else if (href === '/register' || href.startsWith('/register?')) {
+      link.setAttribute('href', `/${slug}${href}`);
+    } else if (href === '/dashboard' || href.startsWith('/dashboard?')) {
+      link.setAttribute('href', `/${slug}${href}`);
+    }
+  });
+}
+
+// Auto-run on DOMContentLoaded and on load
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', normalizeTenantLinks);
+} else {
+  normalizeTenantLinks();
+}
+

@@ -17,7 +17,10 @@
   // Real-time incident notifications for residents on the home page
   if (typeof io !== 'undefined') {
     const socket = io();
-    socket.on('incident:status_update', ({ reporter_id, reference_no, status, responder_name }) => {
+    const slug = typeof getTenantSlug === 'function' ? getTenantSlug() : 'manay';
+    socket.emit('join:barangay', slug);
+    socket.on('incident:status_update', ({ reporter_id, reference_no, status, responder_name, version }) => {
+      if (version && version !== slug) return;
       if (reporter_id && reporter_id !== user.id) return;
       const ref = reference_no ? ` [${reference_no}]` : '';
       const messages = {
