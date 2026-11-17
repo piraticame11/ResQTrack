@@ -32,6 +32,48 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// ── Subdomain Brand / Tenant Extractor ──
+function getSubdomainBrand(host) {
+  if (!host) return null;
+  const h = String(host).toLowerCase().split(':')[0]; // strip port if any
+  if (h.startsWith('new-visayas.') || h.startsWith('newvisayas.')) {
+    return 'new-visayas';
+  }
+  if (h.startsWith('manay.')) {
+    return 'manay';
+  }
+  return null;
+}
+
+// ── Subdomain Routing & Tenant Prepending Middleware ──
+// When accessed via manay.resqtrack.online or new-visayas.resqtrack.online:
+// 1. Pass x-tenant-version / x-barangay-version header
+// 2. Prepend /${brand} internally so existing /:barangay routes and APIs work seamlessly
+app.use((req, res, next) => {
+  const host = req.headers['x-forwarded-host'] || req.headers.host || req.hostname;
+  const brand = getSubdomainBrand(host);
+  if (brand) {
+    req.headers['x-tenant-version'] = brand;
+    req.headers['x-barangay-version'] = brand;
+    req.tenantVersion = brand;
+
+    const url = req.url;
+    // Don't rewrite socket.io or paths that already specify a tenant
+    if (
+      !url.startsWith('/socket.io') &&
+      !url.startsWith('/manay') &&
+      !url.startsWith('/new-visayas')
+    ) {
+      if (url === '/' || url === '') {
+        req.url = `/${brand}/login`;
+      } else {
+        req.url = `/${brand}${url.startsWith('/') ? '' : '/'}${url}`;
+      }
+    }
+  }
+  next();
+});
+
 // Serve uploaded files
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use('/:barangay(manay|new-visayas)/uploads', express.static(path.join(__dirname, 'uploads')));
@@ -40,17 +82,17 @@ app.use('/:barangay(manay|new-visayas)/*/uploads', express.static(path.join(__di
 // Serve client assets (css, images, js)
 app.use(express.static(path.join(__dirname, '../client')));
 app.use('/client', express.static(path.join(__dirname, '../client')));
+app.use('/public', express.static(path.join(__dirname, '../client/public')));
+app.use('/js', express.static(path.join(__dirname, '../client/js')));
 app.use('/:barangay(manay|new-visayas)/client', express.static(path.join(__dirname, '../client')));
 app.use('/:barangay(manay|new-visayas)/public', express.static(path.join(__dirname, '../client/public')));
 app.use('/:barangay(manay|new-visayas)/js', express.static(path.join(__dirname, '../client/js')));
 app.use('/:barangay(manay|new-visayas)/*/public', express.static(path.join(__dirname, '../client/public')));
 app.use('/:barangay(manay|new-visayas)/*/js', express.static(path.join(__dirname, '../client/js')));
 
-// Tenant middleware on API
-app.use('/api', tenantMiddleware);
-
-// API routes
+// API routes router with tenant middleware
 const apiRouter = express.Router();
+apiRouter.use(tenantMiddleware);
 apiRouter.use('/auth',          authRoutes);
 apiRouter.use('/user',          userRoutes);
 apiRouter.use('/admin',         adminRoutes);
@@ -63,15 +105,15 @@ apiRouter.use('/puroks',        purokRoutes);
 apiRouter.use('/audit',         auditRoutes);
 apiRouter.use('/sms',           smsRoutes);
 
+// Mount API on /api and /:barangay/api
 app.use('/api', apiRouter);
-
-// Also allow /:barangay/api/* requests
 app.use('/:barangay(manay|new-visayas)/api', (req, res, next) => {
   req.tenantVersion = req.params.barangay;
   next();
 }, apiRouter);
 
 // ── Smart dashboard dispatcher ──
+// Checks window.location.hostname first before falling back to the URL path
 const DASHBOARD_DISPATCHER = `<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="UTF-8"><title>Redirecting — ResQTrack</title></head>
@@ -79,24 +121,37 @@ const DASHBOARD_DISPATCHER = `<!DOCTYPE html>
   <p>Loading dashboard…</p>
   <script>
     (function() {
-      var segs = window.location.pathname.split('/').filter(Boolean);
-      var b = (segs[0] === 'new-visayas') ? 'new-visayas' : 'manay';
+      var host = (window.location.hostname || '').toLowerCase();
+      var b = null;
+      if (host.indexOf('new-visayas') !== -1 || host.indexOf('newvisayas') !== -1) {
+        b = 'new-visayas';
+      } else if (host.indexOf('manay') !== -1) {
+        b = 'manay';
+      }
+      if (!b) {
+        var segs = window.location.pathname.split('/').filter(Boolean);
+        b = (segs[0] === 'new-visayas') ? 'new-visayas' : 'manay';
+      }
+
+      var isSubdomain = host.indexOf('new-visayas.') !== -1 || host.indexOf('newvisayas.') !== -1 || host.indexOf('manay.') !== -1;
+      var prefix = isSubdomain ? '' : '/' + b;
+
       try {
         var user = JSON.parse(localStorage.getItem('user'));
         var token = localStorage.getItem('accessToken');
         if (!token || !user) {
-          window.location.replace('/' + b + '/login');
+          window.location.replace(prefix + '/login');
         } else if (user.version && user.version !== b) {
-          window.location.replace('/' + b + '/login?error=cross_tenant');
+          window.location.replace(prefix + '/login?error=cross_tenant');
         } else if (user.role === 'admin') {
-          window.location.replace('/' + b + '/admin/dashboard');
+          window.location.replace(prefix + '/admin/dashboard');
         } else if (user.role === 'responder') {
-          window.location.replace('/' + b + '/responder/dashboard');
+          window.location.replace(prefix + '/responder/dashboard');
         } else {
-          window.location.replace('/' + b + '/client/home');
+          window.location.replace(prefix + '/client/home');
         }
       } catch (e) {
-        window.location.replace('/' + b + '/login');
+        window.location.replace(prefix + '/login');
       }
     })();
   </script>
@@ -170,7 +225,7 @@ app.get('/:barangay(manay|new-visayas)/*', (req, res) => {
   res.sendFile(path.join(__dirname, '../client/pages/shared/login.html'));
 });
 
-// Root → redirect to /manay/login
+// Root → redirect to /manay/login (for bare non-subdomain host)
 app.get('/', (_req, res) => {
   res.redirect('/manay/login');
 });
@@ -182,7 +237,10 @@ app.use(['/api/*', '/:barangay(manay|new-visayas)/api/*'], (_req, res) => {
 
 // Catch-all fallback
 app.get('*', (req, res) => {
-  // Check if starts with a known tenant
+  const brand = getSubdomainBrand(req.headers.host || req.hostname);
+  if (brand) {
+    return res.redirect(`/${brand}/login`);
+  }
   if (req.path.startsWith('/new-visayas')) {
     return res.redirect('/new-visayas/login');
   }

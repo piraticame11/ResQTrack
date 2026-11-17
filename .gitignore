@@ -6,3 +6,10 @@ client/public/css/output.css
 
 # Tesseract.js downloads its language model to cwd on first OCR run
 *.traineddata
+
+# Python ML OCR training environment, generated datasets, and runs
+ml_ocr/.venv/
+ml_ocr/dataset/
+ml_ocr/runs/
+ml_ocr/__pycache__/
+yolov8*.pt

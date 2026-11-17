@@ -13,6 +13,12 @@ function normalizeTenant(slug) {
 }
 
 function resolveTenant(req) {
+  // 0. If already determined by subdomain middleware:
+  if (req.tenantVersion) {
+    const t = normalizeTenant(req.tenantVersion);
+    if (t) return t;
+  }
+
   // 1. If path param :barangay is present:
   if (req.params && req.params.barangay) {
     const t = normalizeTenant(req.params.barangay);
@@ -25,11 +31,19 @@ function resolveTenant(req) {
     if (t) return t;
   }
 
-  // 3. Header X-Barangay-Version or X-Tenant:
-  const header = req.headers['x-barangay-version'] || req.headers['x-tenant'];
+  // 3. Header X-Tenant-Version, X-Barangay-Version or X-Tenant:
+  const header = req.headers['x-tenant-version'] || req.headers['x-barangay-version'] || req.headers['x-tenant'];
   if (header) {
     const t = normalizeTenant(header);
     if (t) return t;
+  }
+
+  // 4. Hostname / subdomain check (e.g. manay.resqtrack.online, new-visayas.resqtrack.online)
+  const host = (req.headers && req.headers.host) || (req.hostname || '');
+  if (host) {
+    const h = String(host).toLowerCase().split(':')[0];
+    if (h.startsWith('new-visayas.') || h.startsWith('newvisayas.')) return 'new-visayas';
+    if (h.startsWith('manay.')) return 'manay';
   }
 
   // 4. Query param ?version= or ?barangay=:

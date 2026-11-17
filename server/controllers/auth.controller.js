@@ -4,7 +4,7 @@ const fs     = require('fs');
 const db     = require('../config/db');
 const { logAudit } = require('../utils/audit');
 const { geocodeAddress } = require('../utils/geocode');
-const { extractIdText, parseIdFields } = require('../utils/ocr');
+const { scanIdImage } = require('../utils/ocr');
 
 function generateTokens(user) {
   const version = user.version || 'manay';
@@ -22,9 +22,7 @@ function generateTokens(user) {
 exports.scanId = async (req, res) => {
   if (!req.file) return res.status(400).json({ message: 'No ID image provided' });
   try {
-    const buffer    = fs.readFileSync(req.file.path);
-    const text      = await extractIdText(buffer);
-    const extracted = parseIdFields(text);
+    const extracted = await scanIdImage(req.file.path);
     res.json({ extracted });
   } catch (err) {
     res.status(500).json({ message: 'Could not read ID', error: err.message });

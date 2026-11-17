@@ -458,6 +458,84 @@
     // landlord's address. Fed by a static PSGC-derived dataset since PH
     // provinces/cities don't change often enough to warrant an API call.
     let fillCitiesGlobal = null;
+    let pendingOcrLocation = null;
+
+    function normLocToken(s) {
+      return String(s || '').toUpperCase().replace(/\s*\([^)]*\)/g, '').replace(/[^A-Z0-9]+/g, ' ').trim();
+    }
+
+    function matchSelectValue(selectEl, target) {
+      if (!selectEl || !target) return null;
+      const want = normLocToken(target);
+      const wantStripped = want.replace(/^CITY OF\s+/, '').replace(/\s+CITY$/, '');
+      for (const opt of selectEl.options) {
+        if (!opt.value) continue;
+        const cand = normLocToken(opt.value || opt.textContent);
+        if (cand === want) return opt.value;
+        const candStripped = cand.replace(/^CITY OF\s+/, '').replace(/\s+CITY$/, '');
+        if (wantStripped && candStripped === wantStripped) return opt.value;
+      }
+      return null;
+    }
+
+    function applyOcrLocation(ex) {
+      if (!ex) return false;
+      const provEl = document.getElementById('province');
+      const cityEl = document.getElementById('city');
+      const brgyEl = document.getElementById('barangay');
+      const purokSel = document.getElementById('purok_id');
+
+      if (!fillCitiesGlobal || !provEl || provEl.options.length <= 1) {
+        pendingOcrLocation = ex;
+        return false;
+      }
+
+      let changed = false;
+      if (ex.province && (!provEl.value || provEl.dataset.userEdited !== '1')) {
+        const matchedProv = matchSelectValue(provEl, ex.province);
+        if (matchedProv && (provEl.value !== matchedProv || cityEl.options.length <= 1)) {
+          provEl.value = matchedProv;
+          fillCitiesGlobal(provEl, cityEl);
+          changed = true;
+        }
+      }
+      if (ex.city && (!cityEl.value || cityEl.dataset.userEdited !== '1')) {
+        const matchedCity = matchSelectValue(cityEl, ex.city);
+        if (matchedCity) {
+          cityEl.value = matchedCity;
+          changed = true;
+        }
+      }
+      if (ex.barangay && brgyEl && (!brgyEl.value || brgyEl.dataset.userEdited !== '1')) {
+        const matchedBrgy = matchSelectValue(brgyEl, ex.barangay);
+        if (matchedBrgy) {
+          brgyEl.value = matchedBrgy;
+          updatePurokSelect(brgyEl, purokSel);
+          changed = true;
+        }
+      }
+      if (ex.purok && purokSel && !purokSel.value) {
+        const wantPurok = normLocToken(ex.purok);
+        for (const opt of purokSel.options) {
+          if (opt.value && normLocToken(opt.textContent) === wantPurok) {
+            purokSel.value = opt.value;
+            changed = true;
+            break;
+          }
+        }
+      }
+      return changed;
+    }
+
+    ['province', 'city', 'barangay', 'purok_id'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) {
+        el.addEventListener('change', (e) => {
+          if (e.isTrusted) el.dataset.userEdited = '1';
+        });
+      }
+    });
+
     function applyLocationDefaults() {
       const prov = document.getElementById('province');
       const city = document.getElementById('city');
@@ -467,7 +545,7 @@
       const lBrgy = document.getElementById('landlord_barangay');
 
       const defaultBrgy = slug === 'new-visayas' ? 'New Visayas' : 'Manay';
-      if (brgy) brgy.value = defaultBrgy;
+      if (brgy) { brgy.value = defaultBrgy; delete brgy.dataset.userEdited; }
       if (lBrgy) lBrgy.value = defaultBrgy;
 
       updatePurokSelect(brgy, document.getElementById('purok_id'));
@@ -476,14 +554,22 @@
       if (fillCitiesGlobal) {
         if (prov && prov.options.length) {
           prov.value = 'Davao del Norte';
+          delete prov.dataset.userEdited;
           fillCitiesGlobal(prov, city);
           city.value = 'City of Panabo';
+          delete city.dataset.userEdited;
         }
         if (lProv && lProv.options.length) {
           lProv.value = 'Davao del Norte';
           fillCitiesGlobal(lProv, lCity);
           lCity.value = 'City of Panabo';
         }
+      }
+
+      if (pendingOcrLocation) {
+        const queued = pendingOcrLocation;
+        pendingOcrLocation = null;
+        applyOcrLocation(queued);
       }
     }
 
@@ -685,15 +771,17 @@
         if (!res.ok) throw new Error(data.message || 'Could not read ID');
 
         const ex = data.extracted || {};
-        fillIfEmpty('last_name',   ex.last_name?.toUpperCase());
-        fillIfEmpty('first_name',  ex.first_name);
-        fillIfEmpty('middle_name', ex.middle_name);
-        fillIfEmpty('birthdate',   ex.birthdate);
-        fillIfEmpty('id_number',   ex.id_number);
+        fillIfEmpty('last_name',    ex.last_name?.toUpperCase());
+        fillIfEmpty('first_name',   ex.first_name);
+        fillIfEmpty('middle_name',  ex.middle_name);
+        fillIfEmpty('birthdate',    ex.birthdate);
+        fillIfEmpty('id_number',    ex.id_number);
+        fillIfEmpty('address_line', ex.address_line);
+        const locChanged = applyOcrLocation(ex);
         const idTypeSel = document.getElementById('id_type');
         if (ex.id_type && idTypeSel && !idTypeSel.value) idTypeSel.value = ex.id_type;
 
-        const anyFilled = ex.last_name || ex.first_name || ex.birthdate || ex.id_number || ex.id_type;
+        const anyFilled = ex.last_name || ex.first_name || ex.birthdate || ex.id_number || ex.id_type || ex.address_line || locChanged;
         bannerIcon.className = anyFilled ? 'fa-solid fa-wand-magic-sparkles' : 'fa-solid fa-circle-info';
         bannerText.textContent = anyFilled
           ? 'Auto-filled from your ID — please check the details below are correct.'

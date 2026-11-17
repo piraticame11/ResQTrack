@@ -2,6 +2,9 @@ const API_BASE = '/api';
 
 function getTenantSlugFallback() {
   if (typeof getTenantSlug === 'function') return getTenantSlug();
+  const host = (window.location.hostname || '').toLowerCase();
+  if (host.startsWith('new-visayas.') || host.startsWith('newvisayas.') || host.includes('new-visayas')) return 'new-visayas';
+  if (host.startsWith('manay.') || host.includes('manay')) return 'manay';
   const seg = window.location.pathname.split('/').filter(Boolean)[0];
   if (seg === 'new-visayas' || seg === 'manay') return seg;
   try {
@@ -16,6 +19,7 @@ async function apiRequest(method, endpoint, data = null, isFormData = false) {
   const tenantSlug = getTenantSlugFallback();
   const headers    = {
     'X-Barangay-Version': tenantSlug,
+    'X-Tenant-Version': tenantSlug,
   };
   if (token) headers['Authorization'] = `Bearer ${token}`;
   if (!isFormData && data) headers['Content-Type'] = 'application/json';
