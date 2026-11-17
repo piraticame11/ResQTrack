@@ -751,24 +751,74 @@
     // typed) and always leaves them editable — this is a convenience, not a
     // verification; the admin still checks the photo manually.
     async function scanIdAndAutofill(blob) {
+      const modal = document.getElementById('ocr-modal');
+      const modalIconWrap = document.getElementById('ocr-modal-icon-wrap');
+      const modalIcon = document.getElementById('ocr-modal-icon');
+      const modalTitle = document.getElementById('ocr-modal-title');
+      const modalDesc = document.getElementById('ocr-modal-desc');
+      const stepSeal = document.getElementById('ocr-step-seal');
+      const stepFields = document.getElementById('ocr-step-fields');
+      const actions = document.getElementById('ocr-modal-actions');
+      const btnClose = document.getElementById('btn-ocr-close');
       const banner     = document.getElementById('ocr-banner');
       const bannerIcon = document.getElementById('ocr-banner-icon');
       const bannerText = document.getElementById('ocr-banner-text');
-      banner.classList.remove('hidden');
-      bannerIcon.className = 'fa-solid fa-circle-notch fa-spin';
-      bannerText.textContent = 'Reading your ID…';
+
+      // Show loading modal and grey out background
+      modal.classList.remove('hidden');
+      modalIconWrap.className = 'w-16 h-16 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center mx-auto mb-4 border border-blue-100 shadow-inner';
+      modalIcon.className = 'fa-solid fa-circle-notch fa-spin text-2xl';
+      modalTitle.textContent = 'Scanning National ID';
+      modalDesc.textContent = 'Verifying PhilSys security identifier (PHL seal) and reading details…';
+      stepSeal.className = 'flex items-center gap-2 text-blue-600 font-medium';
+      stepSeal.innerHTML = '<i class="fa-solid fa-spinner fa-spin text-blue-500 w-4 text-center"></i><span>Verifying PhilSys Security Identifier (PHL Seal)…</span>';
+      stepFields.className = 'flex items-center gap-2 text-slate-400';
+      stepFields.innerHTML = '<i class="fa-regular fa-circle text-slate-300 w-4 text-center"></i><span>Reading ID Number, Name, Birthdate & Address</span>';
+      actions.classList.add('hidden');
 
       const fillIfEmpty = (id, val) => {
         const el = document.getElementById(id);
         if (val && el && !el.value.trim()) el.value = val;
       };
 
+      const closeModal = () => modal.classList.add('hidden');
+      btnClose.onclick = closeModal;
+
       try {
         const fd = new FormData();
         fd.append('id_image', blob, 'id_image.jpg');
         const res  = await fetch('/api/auth/ocr-id', { method: 'POST', body: fd });
         const data = await res.json();
-        if (!res.ok) throw new Error(data.message || 'Could not read ID');
+
+        if (!res.ok || !data.success || !data.extracted) {
+          const errMsg = data.message || "Couldn't automatically read your ID. Please ensure the PhilSys security identifier (PHL seal) is visible and clear.";
+          modalIconWrap.className = 'w-16 h-16 rounded-full bg-red-50 text-red-600 flex items-center justify-center mx-auto mb-4 border border-red-100 shadow-inner';
+          modalIcon.className = 'fa-solid fa-circle-xmark text-2xl';
+          modalTitle.textContent = 'National ID Not Verified';
+          modalDesc.textContent = errMsg;
+          stepSeal.className = 'flex items-center gap-2 text-red-600 font-medium';
+          stepSeal.innerHTML = '<i class="fa-solid fa-circle-xmark text-red-500 w-4 text-center"></i><span>PhilSys Security Identifier Not Detected</span>';
+          stepFields.className = 'flex items-center gap-2 text-slate-400';
+          stepFields.innerHTML = '<i class="fa-solid fa-ban text-slate-300 w-4 text-center"></i><span>Extraction stopped (ID not processed)</span>';
+          actions.classList.remove('hidden');
+
+          banner.classList.remove('hidden');
+          bannerIcon.className = 'fa-solid fa-circle-exclamation text-red-500';
+          bannerText.textContent = errMsg;
+          setTimeout(() => banner.classList.add('hidden'), 8000);
+          return;
+        }
+
+        // Successfully verified and extracted
+        stepSeal.className = 'flex items-center gap-2 text-emerald-600 font-medium';
+        stepSeal.innerHTML = '<i class="fa-solid fa-circle-check text-emerald-500 w-4 text-center"></i><span>PhilSys Security Identifier Verified</span>';
+        stepFields.className = 'flex items-center gap-2 text-emerald-600 font-medium';
+        stepFields.innerHTML = '<i class="fa-solid fa-circle-check text-emerald-500 w-4 text-center"></i><span>Details extracted successfully</span>';
+
+        modalIconWrap.className = 'w-16 h-16 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto mb-4 border border-emerald-100 shadow-inner';
+        modalIcon.className = 'fa-solid fa-check text-2xl';
+        modalTitle.textContent = 'National ID Verified!';
+        modalDesc.textContent = 'Details read successfully. Auto-filling form fields…';
 
         const ex = data.extracted || {};
         fillIfEmpty('last_name',    ex.last_name?.toUpperCase());
@@ -781,16 +831,26 @@
         const idTypeSel = document.getElementById('id_type');
         if (ex.id_type && idTypeSel && !idTypeSel.value) idTypeSel.value = ex.id_type;
 
-        const anyFilled = ex.last_name || ex.first_name || ex.birthdate || ex.id_number || ex.id_type || ex.address_line || locChanged;
-        bannerIcon.className = anyFilled ? 'fa-solid fa-wand-magic-sparkles' : 'fa-solid fa-circle-info';
-        bannerText.textContent = anyFilled
-          ? 'Auto-filled from your ID — please check the details below are correct.'
-          : "Couldn't automatically read your ID — please fill in the fields manually.";
-      } catch {
+        banner.classList.remove('hidden');
+        bannerIcon.className = 'fa-solid fa-wand-magic-sparkles text-emerald-600';
+        bannerText.textContent = 'Auto-filled from your National ID — please verify the details below are correct.';
+        setTimeout(() => banner.classList.add('hidden'), 7000);
+
+        setTimeout(closeModal, 1100);
+      } catch (err) {
+        modalIconWrap.className = 'w-16 h-16 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center mx-auto mb-4 border border-amber-100 shadow-inner';
+        modalIcon.className = 'fa-solid fa-triangle-exclamation text-2xl';
+        modalTitle.textContent = 'Could Not Read ID';
+        modalDesc.textContent = err.message || "Couldn't connect to ID reader. Please fill in the fields manually.";
+        stepSeal.className = 'flex items-center gap-2 text-amber-600';
+        stepSeal.innerHTML = '<i class="fa-solid fa-triangle-exclamation text-amber-500 w-4 text-center"></i><span>OCR processing encountered an issue</span>';
+        actions.classList.remove('hidden');
+
+        banner.classList.remove('hidden');
         bannerIcon.className = 'fa-solid fa-circle-info';
         bannerText.textContent = "Couldn't automatically read your ID — please fill in the fields manually.";
+        setTimeout(() => banner.classList.add('hidden'), 7000);
       }
-      setTimeout(() => banner.classList.add('hidden'), 7000);
     }
 
     const idCapture = setupCameraCapture({
@@ -926,5 +986,35 @@
       }
     });
   </script>
+  <!-- ── PhilSys OCR Processing Modal (Grey out background) ── -->
+  <div id="ocr-modal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 transition-opacity duration-200">
+    <div class="bg-white rounded-2xl shadow-2xl border border-slate-100 max-w-sm sm:max-w-md w-full p-6 text-center transform transition-all duration-200 scale-100">
+      <div id="ocr-modal-icon-wrap" class="w-16 h-16 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center mx-auto mb-4 border border-blue-100 shadow-inner">
+        <i class="fa-solid fa-circle-notch fa-spin text-2xl" id="ocr-modal-icon"></i>
+      </div>
+      <h3 id="ocr-modal-title" class="text-base font-bold text-slate-800 mb-1">Scanning National ID</h3>
+      <p id="ocr-modal-desc" class="text-xs text-slate-500 leading-relaxed mb-4">
+        Verifying PhilSys security identifier (PHL seal) and reading details…
+      </p>
+
+      <!-- Checklist / Step pills -->
+      <div class="space-y-2 mb-4 text-left bg-slate-50 p-3.5 rounded-xl border border-slate-100 text-xs">
+        <div id="ocr-step-seal" class="flex items-center gap-2 text-slate-600">
+          <i class="fa-solid fa-spinner fa-spin text-blue-500 w-4 text-center"></i>
+          <span>Checking PhilSys Security Identifier (PHL Seal)</span>
+        </div>
+        <div id="ocr-step-fields" class="flex items-center gap-2 text-slate-400">
+          <i class="fa-regular fa-circle text-slate-300 w-4 text-center"></i>
+          <span>Reading ID Number, Name, Birthdate &amp; Address</span>
+        </div>
+      </div>
+
+      <div id="ocr-modal-actions" class="hidden flex gap-2">
+        <button type="button" id="btn-ocr-close" class="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold py-2.5 rounded-xl transition-colors">
+          Close &amp; Fill Manually
+        </button>
+      </div>
+    </div>
+  </div>
 </body>
 </html>

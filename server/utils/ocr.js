@@ -301,12 +301,23 @@ async function scanIdImage(filePath) {
   if (isPythonOcrReady()) {
     try {
       const mlRes = await runPythonOcr(filePath);
-      if (mlRes && mlRes.ok && mlRes.is_philsys && mlRes.extracted) {
-        return {
-          ...mlRes.extracted,
-          engine: 'philsys-ml',
-          rotation_applied: mlRes.rotation_applied ?? 0,
-        };
+      if (mlRes && mlRes.ok) {
+        if (!mlRes.is_philsys) {
+          return {
+            is_philsys: false,
+            error: mlRes.error || 'PhilSys security identifier (PHL seal) was not detected. Please upload a clear photo of a valid Philippine National ID.',
+            engine: 'philsys-ml',
+            rotation_applied: mlRes.rotation_applied ?? 0,
+          };
+        }
+        if (mlRes.extracted) {
+          return {
+            is_philsys: true,
+            ...mlRes.extracted,
+            engine: 'philsys-ml',
+            rotation_applied: mlRes.rotation_applied ?? 0,
+          };
+        }
       }
     } catch (err) {
       console.warn('[ocr] Python ML OCR failed, falling back to Tesseract.js:', err.message);

@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageFont
+from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageFont, ImageOps
 
 from philsys_config import (
     BARANGAY_SAMPLES,
@@ -430,9 +430,14 @@ def render_synthetic_card(
             max(b[3] for b in addr_boxes),
         )
 
-    # Bottom-right PHL badge + fingerprint / QR graphic
-    f_phl = load_font(BOLD_FONTS, 30)
-    draw.text((802 + jx, 540 + jy), "PHL", font=f_phl, fill=(135, 138, 145))
+    # Bottom-right PHL badge + globe emblem (PhilSys identifier)
+    f_phl = load_font(BOLD_FONTS, 28)
+    draw.text((802 + jx, 520 + jy), "PHL", font=f_phl, fill=(125, 128, 135))
+    cx, cy, cr = 835 + jx, 574 + jy, 22
+    draw.ellipse((cx - cr, cy - cr, cx + cr, cy + cr), fill=(185, 215, 240, 220), outline=(100, 150, 200), width=2)
+    draw.arc((cx - cr + 4, cy - cr + 4, cx + cr - 4, cy + cr - 4), 30, 200, fill=(220, 130, 40), width=3)
+    draw.arc((cx - cr + 4, cy - cr + 4, cx + cr - 4, cy + cr - 4), 210, 340, fill=(205, 50, 60), width=3)
+    boxes["phl_seal"] = (795 + jx, 515 + jy, 905 + jx, 610 + jy)
     if variant == "ephilid":
         # Stylized QR block on right
         qx, qy, qs = 770 + jx, 220 + jy, 175
@@ -744,6 +749,81 @@ def generate_all(
             neg_img.save(det_root / "images" / split / neg_name, quality=88)
             (det_root / "labels" / split / f"neg_{n_i:04d}.txt").write_text("", encoding="utf-8")
     print("[generate_dataset] Negative non-PhilSys examples added.")
+
+    _inject_real_card_samples(det_root, rng)
+    print("[generate_dataset] Real annotated card samples injected.")
+
+
+def _inject_real_card_samples(det_root: Path, rng: random.Random) -> None:
+    """Inject augmented versions of real annotated National ID images so the detector learns real-world perspective & PHL seal."""
+    real_configs = [
+        {
+            "path": Path(r"C:/Users/howar/.gemini/antigravity/brain/6f042b32-e1b2-4b18-a34a-bb25d2acc82f/.user_uploaded/media_1794949081082_16397163.jpg"),
+            "rotate_ccw": 0,
+            "boxes": {
+                "card": (0, 240, 768, 770),
+                "header": (180, 270, 575, 368),
+                "pcn": (38, 376, 304, 425),
+                "last_name": (344, 438, 471, 474),
+                "first_name": (340, 492, 579, 533),
+                "middle_name": (344, 568, 577, 602),
+                "birthdate": (346, 616, 611, 650),
+                "address": (50, 655, 622, 732),
+                "phl_seal": (651, 607, 737, 718),
+            },
+        },
+        {
+            "path": Path(r"C:/Users/howar/.gemini/antigravity/brain/6f042b32-e1b2-4b18-a34a-bb25d2acc82f/.user_uploaded/media_1794404307791_164398f4.jpg"),
+            "rotate_ccw": 90,
+            "boxes": {
+                "card": (0, 0, 1024, 644),
+                "header": (260, 18, 760, 145),
+                "pcn": (48, 165, 395, 202),
+                "last_name": (455, 238, 605, 276),
+                "first_name": (455, 312, 735, 350),
+                "middle_name": (455, 414, 612, 456),
+                "birthdate": (458, 490, 805, 526),
+                "address": (50, 555, 835, 625),
+                "phl_seal": (900, 505, 1020, 635),
+            },
+        },
+    ]
+
+    for cfg in real_configs:
+        if not cfg["path"].exists():
+            continue
+        im = ImageOps.exif_transpose(Image.open(cfg["path"])).convert("RGB")
+        if cfg["rotate_ccw"] != 0:
+            im = im.rotate(cfg["rotate_ccw"], expand=True)
+
+        w, h = im.size
+        # Generate 40 train augs and 10 val augs per real card
+        for split, count in [("train", 40), ("val", 10)]:
+            for i in range(count):
+                aug_im = im.copy()
+                b_mult = rng.uniform(0.85, 1.15)
+                c_mult = rng.uniform(0.85, 1.20)
+                aug_im = ImageEnhance.Brightness(aug_im).enhance(b_mult)
+                aug_im = ImageEnhance.Contrast(aug_im).enhance(c_mult)
+                if rng.random() < 0.35:
+                    aug_im = aug_im.filter(ImageFilter.GaussianBlur(radius=rng.uniform(0.3, 0.8)))
+
+                img_name = f"real_{cfg['path'].stem[:8]}_{split}_{i:03d}.jpg"
+                aug_im.save(det_root / "images" / split / img_name, quality=92)
+
+                yolo_lines: list[str] = []
+                for cls_name, (x0, y0, x1, y1) in cfg["boxes"].items():
+                    if cls_name not in CLASS_TO_ID:
+                        continue
+                    cls_id = CLASS_TO_ID[cls_name]
+                    xc = ((x0 + x1) / 2.0) / w
+                    yc = ((y0 + y1) / 2.0) / h
+                    bw = (x1 - x0) / w
+                    bh = (y1 - y0) / h
+                    yolo_lines.append(f"{cls_id} {xc:.6f} {yc:.6f} {bw:.6f} {bh:.6f}")
+
+                txt_name = f"real_{cfg['path'].stem[:8]}_{split}_{i:03d}.txt"
+                (det_root / "labels" / split / txt_name).write_text("\n".join(yolo_lines) + "\n", encoding="utf-8")
 
 
 def main() -> None:

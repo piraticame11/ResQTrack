@@ -38,6 +38,10 @@ import torch
 from rapidocr_onnxruntime import RapidOCR
 from ultralytics import YOLO
 
+ROOT_DIR = Path(__file__).resolve().parent
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
+
 from crnn_model import PhilSysCRNN, decode_ctc_greedy, preprocess_crop_for_crnn
 from philsys_config import (
     CRNN_IMG_HEIGHT,
@@ -180,7 +184,7 @@ class PhilSysOcrEngine:
         best_dets = self._detect_fields(best_img)
 
         def score_dets(dets: dict[str, dict[str, Any]]) -> tuple[int, float]:
-            field_keys = ("header", "pcn", "last_name", "first_name", "middle_name", "birthdate", "address")
+            field_keys = ("header", "pcn", "last_name", "first_name", "middle_name", "birthdate", "address", "phl_seal")
             count = sum(1 for k in field_keys if k in dets)
             avg_c = sum(dets[k]["conf"] for k in field_keys if k in dets)
             return (count, avg_c)
@@ -321,7 +325,7 @@ class PhilSysOcrEngine:
             ns = _norm_nospace(it["text"])
             if cls._is_philsys_label(it["text"]) or re.fullmatch(rf"(?:{month_pat})\d{{1,4}}", ns):
                 continue
-            if b_scaled is not None:
+            if b_scaled is not None and anchor_cutoff_y is None:
                 xc = (it["x0"] + it["x1"]) / 2.0
                 if b_scaled[0] <= xc <= b_scaled[2] and b_scaled[1] <= it["yc"] <= b_scaled[3]:
                     continue
@@ -363,6 +367,19 @@ class PhilSysOcrEngine:
             ly1 = min(uh, int(max(it["y1"] for it in line_items) + 4))
             crnn_line, crnn_conf = self._run_crnn(up.crop((lx0, ly0, lx1, ly1)))
 
+            # Unpack concatenated address prefixes & words that RapidOCR sometimes merges
+            rapid_line = re.sub(r"(?<=\.)(?=[A-Z])", " ", rapid_line)
+            rapid_line = re.sub(r"\b(PRK|PUROK)(?=[A-Z0-9])", r"\1. ", rapid_line)
+            rapid_line = re.sub(r"\b(VILLA)(?=[A-Z])", r"\1 ", rapid_line)
+            rapid_line = re.sub(r"\b(ROSAL)(?=[A-Z])", r"\1 ", rapid_line)
+            rapid_line = re.sub(r"\b(MAGUGPO)(?=[A-Z])", r"\1 ", rapid_line)
+            rapid_line = re.sub(r"(?<=[A-Z])(SOUT[AH]?)\b", r" SOUTH", rapid_line)
+            rapid_line = re.sub(r"(?<=[A-Z])(SOUTH|NORTH|EAST|WEST|POBLACION|CENTRAL)\b", r" \1", rapid_line)
+            rapid_line = re.sub(r"\bCITYOF(?=[A-Z])", "CITY OF ", rapid_line)
+            rapid_line = re.sub(r"\bDEL(?=[A-Z])", "DEL ", rapid_line)
+            rapid_line = re.sub(r"\bDAVAO(?=[A-Z])", "DAVAO ", rapid_line)
+            rapid_line = re.sub(r"\s+", " ", rapid_line).strip()
+
             chosen = self._choose_address_line(crnn_line, crnn_conf, rapid_line, rapid_conf)
             if chosen:
                 merged_lines.append(chosen)
@@ -380,8 +397,9 @@ class PhilSysOcrEngine:
         def score(txt: str, conf: float) -> float:
             blobs = sum(1 for tok in re.split(r"[\s,./\-]+", txt) if len(tok) > 13)
             stray = len(re.findall(r"[^A-Z0-9.,\-\sÑ/']", txt))
+            digits_in_word = sum(1 for tok in txt.split() if re.search(r"[A-Z]\d|\d[A-Z]", tok))
             space_bonus = 0.04 if (len(txt) >= 12 and " " in txt) else 0.0
-            return conf + (0.08 if "," in txt else 0.0) + space_bonus - 0.05 * stray - 0.09 * blobs
+            return conf + (0.08 if "," in txt else 0.0) + space_bonus - 0.25 * stray - 0.20 * digits_in_word - 0.09 * blobs
 
         return crnn_txt if score(crnn_txt, crnn_conf) >= score(rapid_txt, rapid_conf) else rapid_txt
 
@@ -406,9 +424,19 @@ class PhilSysOcrEngine:
         s = raw.upper()
         # Strip stray non-letter noise at edges (e.g. from seal/hair/frame artifacts)
         s = re.sub(r"[^A-ZÑ\s.\-']", " ", s)
+        s = re.sub(r"\bGLE\s+EN\b", "GLEN", s)
         s = re.sub(r"\s+", " ", s).strip(" .-")
+
+        # Strip field label tokens that might leak into the name crop (e.g. "APELYIDO", "GITNANG", "PANGALAN", "MGA")
+        label_tokens = {
+            "APELYIDO", "APELYID", "APELY", "APEL",
+            "GITNANG", "GITNAN", "GITNA",
+            "MGA", "PANGALAN", "PANGAL",
+            "LAST", "LASTNAME", "GIVEN", "GIVENNAMES", "MIDDLE", "MIDDLENAME", "NAME", "NAMES",
+        }
+        tokens = [tok for tok in s.split() if tok not in label_tokens]
+
         # Drop single stray digit/1-char artifact tokens at start/end unless valid initial like 'J.'
-        tokens = s.split()
         while tokens and len(tokens[0]) == 1 and tokens[0] not in ("J", "A", "E", "O"):
             tokens.pop(0)
         while tokens and len(tokens[-1]) == 1 and tokens[-1] not in ("A", "I"):
@@ -472,6 +500,18 @@ class PhilSysOcrEngine:
 
         cleaned = re.sub(r"\s+", " ", raw_address.upper()).strip(" ,.-")
         cleaned = re.sub(r"(?<=[A-Z])0(?=[A-Z])", "O", cleaned)
+
+        # Unpack commonly concatenated address words & prefixes
+        cleaned = re.sub(r"\bPRK\.?(?=[A-Z])", "PRK. ", cleaned)
+        cleaned = re.sub(r"\bPUROK(?=[A-Z0-9])", "PUROK ", cleaned)
+        cleaned = re.sub(r"\bVILLAROSAL\b", "VILLA ROSAL", cleaned)
+        cleaned = re.sub(r"\bMAGUGPOSOUTH?\b", "MAGUGPO SOUTH", cleaned)
+        cleaned = re.sub(r"\bMAGUGPO\s+SOUT[AH]?\b", "MAGUGPO SOUTH", cleaned)
+        cleaned = re.sub(r"\bSOUTA\b", "SOUTH", cleaned)
+        cleaned = re.sub(r"\bCITYOFTAGUM\b", "CITY OF TAGUM", cleaned)
+        cleaned = re.sub(r"\bCITYOF([A-Z]+)\b", r"CITY OF \1", cleaned)
+        cleaned = re.sub(r"\bDAVAODELNORTE\b", "DAVAO DEL NORTE", cleaned)
+        cleaned = re.sub(r"\bDELNORTE\b", "DEL NORTE", cleaned)
         norm_full = _norm_token(cleaned)
 
         # 1. Match Province (exact word boundary -> comma-segment fuzzy -> compact spaceless)
@@ -589,18 +629,50 @@ class PhilSysOcrEngine:
             "purok": purok_str,
         }
 
+    def _verify_philsys_seal(self, upright_img: Image.Image, dets: dict[str, dict[str, Any]]) -> tuple[bool, float]:
+        """
+        Verify the PhilSys security identifier (Maroon icon in bottom-right with 'PHL' + globe emblem).
+        Returns (is_verified, confidence).
+        Rule: If that icon is not seen then don't read the ID.
+        """
+        if "phl_seal" in dets and dets["phl_seal"]["conf"] >= 0.22:
+            return True, float(dets["phl_seal"]["conf"])
+
+        # Backup verification on bottom-right quadrant (x: 60%..100%, y: 50%..100%)
+        uw, uh = upright_img.size
+        br_crop = upright_img.crop((int(uw * 0.60), int(uh * 0.50), uw, uh))
+        br_bgr = cv2.cvtColor(np.asarray(br_crop), cv2.COLOR_RGB2BGR)
+        res, _ = self.rapid_ocr(br_bgr)
+        if res:
+            for item in res:
+                txt = re.sub(r"[^A-Z]", "", item[1].upper())
+                c = float(item[2])
+                if ("PHL" in txt or txt == "PH" or "PHIL" in txt) and c >= 0.65:
+                    return True, c
+
+        return False, 0.0
+
     def recognize_image(self, image_path: str | Path) -> dict[str, Any]:
         raw_img = ImageOps.exif_transpose(Image.open(image_path)).convert("RGB")
         upright_img, dets, applied_rot = self._orient_and_detect(raw_img)
         uw, uh = upright_img.size
 
+        # Rule: Maroon icon is the identifier if the ID is a PhilSys National ID.
+        # "if that icon is not seen then dont read the id."
+        seal_verified, seal_conf = self._verify_philsys_seal(upright_img, dets)
         field_keys = ("pcn", "last_name", "first_name", "middle_name", "birthdate", "address")
         detected_count = sum(1 for k in field_keys if k in dets)
-        is_philsys = ("header" in dets and detected_count >= 1) or detected_count >= 3
+        is_philsys = seal_verified and (("header" in dets and detected_count >= 1) or detected_count >= 2)
 
         if not is_philsys:
+            err_msg = (
+                "PhilSys security identifier (PHL seal) was not detected. Please upload a clear photo of a valid Philippine National ID."
+                if not seal_verified
+                else "Card fields could not be clearly identified. Please ensure the ID is well-lit and not blurry."
+            )
             return {
                 "is_philsys": False,
+                "error": err_msg,
                 "rotation_applied": applied_rot,
                 "extracted": {
                     "id_type": None,
@@ -617,7 +689,7 @@ class PhilSysOcrEngine:
                     "raw_address": None,
                 },
                 "raw_fields": {},
-                "detections": {k: v["conf"] for k, v in dets.items()},
+                "detections": {k: round(v["conf"], 4) for k, v in dets.items()},
             }
 
         raw_fields: dict[str, dict[str, Any]] = {}

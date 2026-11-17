@@ -16,9 +16,9 @@ from philsys_config import DATASET_DIR, RUNS_DIR, WEIGHTS_DIR
 
 
 def train_detector(
-    epochs: int = 35,
+    epochs: int = 22,
     imgsz: int = 640,
-    batch: int = 8,
+    batch: int = 16,
     device: str | None = None,
 ) -> Path:
     data_yaml = DATASET_DIR / "field_det" / "data.yaml"
@@ -42,7 +42,7 @@ def train_detector(
         project=str(RUNS_DIR),
         name="field_det",
         exist_ok=True,
-        workers=2,
+        workers=0,
         # Keep fliplr=0 because text orientation & PhilSys left/right layout are asymmetric!
         fliplr=0.0,
         flipud=0.0,
@@ -67,9 +67,9 @@ def train_detector(
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Train PhilSys card & field detector.")
-    parser.add_argument("--epochs", type=int, default=35)
+    parser.add_argument("--epochs", type=int, default=22)
     parser.add_argument("--imgsz", type=int, default=640)
-    parser.add_argument("--batch", type=int, default=8)
+    parser.add_argument("--batch", type=int, default=16)
     parser.add_argument("--device", type=str, default=None)
     args = parser.parse_args()
     train_detector(epochs=args.epochs, imgsz=args.imgsz, batch=args.batch, device=args.device)

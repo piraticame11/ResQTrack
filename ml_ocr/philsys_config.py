@@ -34,6 +34,7 @@ DETECTOR_CLASSES = [
     "middle_name", # 5: Gitnang Apelyido / Middle Name value
     "birthdate",   # 6: Petsa ng Kapanganakan / Date of Birth value
     "address",     # 7: Tirahan / Address value (may wrap 1-3 lines)
+    "phl_seal",    # 8: Bottom-right PHL badge + globe emblem (PhilSys identifier)
 ]
 
 CLASS_TO_ID = {name: idx for idx, name in enumerate(DETECTOR_CLASSES)}

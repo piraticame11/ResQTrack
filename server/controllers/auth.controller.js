@@ -23,7 +23,14 @@ exports.scanId = async (req, res) => {
   if (!req.file) return res.status(400).json({ message: 'No ID image provided' });
   try {
     const extracted = await scanIdImage(req.file.path);
-    res.json({ extracted });
+    if (extracted && extracted.is_philsys === false) {
+      return res.status(422).json({
+        success: false,
+        message: extracted.error || 'PhilSys security identifier (PHL seal) was not detected. Please upload a clear photo of a valid Philippine National ID.',
+        extracted: null,
+      });
+    }
+    res.json({ success: true, extracted });
   } catch (err) {
     res.status(500).json({ message: 'Could not read ID', error: err.message });
   } finally {
