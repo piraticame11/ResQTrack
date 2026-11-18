@@ -1,5 +1,6 @@
 const db = require('../config/db');
 const { sendSMS } = require('../utils/sms');
+const { normalizeTenant } = require('../middleware/tenant');
 
 function generateRefNo() {
   const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
@@ -106,14 +107,27 @@ exports.inbound = async (req, res) => {
       }
     }
 
-    // 5. Resident matching
-    let [[reporter]] = await db.query(
-      "SELECT id, purok_id, full_name, phone, version FROM users WHERE phone LIKE ? AND is_active = 1 LIMIT 1",
-      [`%${normalizedPhone}`]
-    );
+    // 5. Resident matching & Barangay Tenant determination
+    const tenantFromRoute = req.tenantVersion || (req.query?.tenant ? normalizeTenant(req.query.tenant) : null) || (req.query?.version ? normalizeTenant(req.query.version) : null);
+
+    let reporter = null;
+    if (tenantFromRoute) {
+      const [[userMatch]] = await db.query(
+        "SELECT id, purok_id, full_name, phone, version FROM users WHERE phone LIKE ? AND version = ? AND is_active = 1 LIMIT 1",
+        [`%${normalizedPhone}`, tenantFromRoute]
+      );
+      reporter = userMatch;
+    }
+    if (!reporter) {
+      const [[userMatch]] = await db.query(
+        "SELECT id, purok_id, full_name, phone, version FROM users WHERE phone LIKE ? AND is_active = 1 LIMIT 1",
+        [`%${normalizedPhone}`]
+      );
+      reporter = userMatch;
+    }
 
     let isGuest = false;
-    let smsVersion = reporter?.version;
+    let smsVersion = tenantFromRoute || reporter?.version;
     if (!smsVersion) {
       smsVersion = message.toLowerCase().includes('visayas') ? 'new-visayas' : 'manay';
     }

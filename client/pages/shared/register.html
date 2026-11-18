@@ -255,8 +255,13 @@
 
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3 mt-1">
                   <div>
-                    <label class="block text-xs font-medium text-gray-600 mb-1">ID Type <span class="text-blue-500">*</span></label>
-                    <select id="id_type" required class="input-field text-sm">
+                    <div class="flex items-center justify-between mb-1">
+                      <label class="block text-xs font-medium text-gray-600">ID Type <span class="text-blue-500">*</span></label>
+                      <span id="id-type-locked-badge" class="hidden text-[10px] text-emerald-600 font-semibold items-center gap-1">
+                        <i class="fa-solid fa-lock text-[9px]"></i> Auto-detected
+                      </span>
+                    </div>
+                    <select id="id_type" required class="input-field text-sm transition-colors">
                       <option value="">Select ID Type</option>
                       <option>PhilSys National ID</option>
                       <option>Driver's License</option>
@@ -285,22 +290,6 @@
                   </div>
                 </div>
 
-                <!-- Live camera viewfinder -->
-                <div id="cam-live" class="hidden flex-col items-center gap-3">
-                  <video id="cam-video" autoplay playsinline
-                         class="w-full rounded-xl border border-gray-200 bg-black max-h-52 object-cover"></video>
-                  <div class="flex gap-2 w-full">
-                    <button type="button" id="btn-capture"
-                            class="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold py-2 rounded-lg flex items-center justify-center gap-1.5 transition-colors">
-                      <i class="fa-solid fa-circle-dot"></i> Capture
-                    </button>
-                    <button type="button" id="btn-cancel-cam"
-                            class="px-4 bg-gray-100 hover:bg-gray-200 text-gray-600 text-xs font-semibold py-2 rounded-lg transition-colors">
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-
                 <!-- Captured preview -->
                 <div id="cam-captured" class="hidden flex-col items-center gap-3">
                   <img id="id-preview" class="w-full rounded-xl max-h-52 object-cover border border-gray-200 shadow-sm" alt="ID Preview">
@@ -309,12 +298,9 @@
                   </p>
                   <button type="button" id="btn-retake"
                           class="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold py-2 rounded-lg flex items-center justify-center gap-1.5 transition-colors">
-                    <i class="fa-solid fa-rotate-left"></i> Retake
+                    <i class="fa-solid fa-rotate-left"></i> Retake Photo
                   </button>
                 </div>
-
-                <!-- Hidden canvas used to grab the frame -->
-                <canvas id="cam-canvas" class="hidden"></canvas>
               </fieldset>
 
               <!-- ── Proof of Residency ── -->
@@ -341,33 +327,15 @@
                   </div>
                 </div>
 
-                <!-- Live camera viewfinder -->
-                <div id="cam-live-por" class="hidden flex-col items-center gap-3">
-                  <video id="cam-video-por" autoplay playsinline
-                         class="w-full rounded-xl border border-gray-200 bg-black max-h-52 object-cover"></video>
-                  <div class="flex gap-2 w-full">
-                    <button type="button" id="btn-capture-por"
-                            class="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold py-2 rounded-lg flex items-center justify-center gap-1.5 transition-colors">
-                      <i class="fa-solid fa-circle-dot"></i> Capture
-                    </button>
-                    <button type="button" id="btn-cancel-cam-por"
-                            class="px-4 bg-gray-100 hover:bg-gray-200 text-gray-600 text-xs font-semibold py-2 rounded-lg transition-colors">
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-
                 <!-- Captured preview -->
                 <div id="cam-captured-por" class="hidden flex-col items-center gap-3">
                   <img id="id-preview-por" class="w-full rounded-xl max-h-52 object-cover border border-gray-200 shadow-sm" alt="Proof of Residency Preview">
                   <button type="button" id="btn-retake-por"
                           class="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold py-2 rounded-lg flex items-center justify-center gap-1.5 transition-colors">
-                    <i class="fa-solid fa-rotate-left"></i> Retake
+                    <i class="fa-solid fa-rotate-left"></i> Retake Photo
                   </button>
                 </div>
-
-                <!-- Hidden canvas used to grab the frame -->
-                <canvas id="cam-canvas-por" class="hidden"></canvas>
+              </fieldset>
               </fieldset>
 
               <!-- ── Submission & Sign In ── -->
@@ -679,25 +647,169 @@
     // ── Camera capture ──────────────────────────────────────────────────────
     // Shared by the Valid ID and Proof of Residency fieldsets — each gets its
     // own independent stream/blob via a distinct set of element ids.
-    function setupCameraCapture(ids, onCapture) {
-      let stream = null;
-      let blob   = null;
-
-      function stopCamera() {
-        if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+    function unlockIdType() {
+      const idTypeSel = document.getElementById('id_type');
+      if (idTypeSel) {
+        idTypeSel.disabled = false;
+        idTypeSel.classList.remove('bg-gray-100', 'cursor-not-allowed', 'text-gray-700');
+        idTypeSel.removeAttribute('title');
       }
-      function showIdle()     { document.getElementById(ids.idle).classList.remove('hidden');  document.getElementById(ids.live).classList.add('hidden');     document.getElementById(ids.captured).classList.add('hidden'); }
-      function showLive()     { document.getElementById(ids.idle).classList.add('hidden');     document.getElementById(ids.live).classList.remove('hidden');   document.getElementById(ids.captured).classList.add('hidden'); }
-      function showCaptured() { document.getElementById(ids.idle).classList.add('hidden');     document.getElementById(ids.live).classList.add('hidden');     document.getElementById(ids.captured).classList.remove('hidden'); }
+      const badge = document.getElementById('id-type-locked-badge');
+      if (badge) {
+        badge.classList.add('hidden');
+        badge.classList.remove('inline-flex');
+      }
+    }
 
-      async function openCamera() {
-        try {
-          stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
-          document.getElementById(ids.video).srcObject = stream;
-          showLive();
-        } catch {
-          alert('Could not access camera. Please allow camera permission and try again.');
+    // ── Fullscreen Camera Modal Controller ──────────────────────────────────
+    const cameraModal = {
+      activeStream: null,
+      activeFacingMode: 'environment',
+      currentConfig: null,
+
+      init: function() {
+        document.getElementById('btn-camera-modal-close')?.addEventListener('click', () => this.close());
+        document.getElementById('btn-camera-modal-cancel')?.addEventListener('click', () => this.close());
+        document.getElementById('btn-camera-modal-capture')?.addEventListener('click', () => this.capture());
+        document.getElementById('btn-camera-modal-flip')?.addEventListener('click', () => this.flip());
+        window.addEventListener('keydown', (e) => {
+          const modal = document.getElementById('camera-modal');
+          if (modal && !modal.classList.contains('hidden')) {
+            if (e.key === 'Escape') this.close();
+            else if (e.key === ' ' || e.key === 'Enter') {
+              e.preventDefault();
+              this.capture();
+            }
+          }
+        });
+      },
+
+      open: async function(config) {
+        this.currentConfig = config;
+        const modal = document.getElementById('camera-modal');
+        const titleEl = document.getElementById('camera-modal-title');
+        const subtitleEl = document.getElementById('camera-modal-subtitle');
+        const iconEl = document.getElementById('camera-modal-icon');
+        const guideEl = document.getElementById('camera-card-guide');
+        const spinner = document.getElementById('camera-loading-spinner');
+
+        if (titleEl) titleEl.textContent = config.title || 'Capture Photo';
+        if (subtitleEl) subtitleEl.textContent = config.subtitle || 'Position document within the frame.';
+        if (iconEl && config.icon) iconEl.className = config.icon;
+        if (guideEl) {
+          if (config.isIdCard !== false) guideEl.classList.remove('hidden');
+          else guideEl.classList.add('hidden');
         }
+
+        if (spinner) spinner.classList.remove('hidden');
+        modal.classList.remove('hidden');
+        document.body.classList.add('overflow-hidden');
+
+        await this.startStream();
+      },
+
+      startStream: async function() {
+        this.stopStream();
+        const video = document.getElementById('camera-modal-video');
+        const spinner = document.getElementById('camera-loading-spinner');
+        try {
+          const constraints = {
+            video: {
+              facingMode: this.activeFacingMode,
+              width: { ideal: 1920 },
+              height: { ideal: 1080 }
+            },
+            audio: false
+          };
+          this.activeStream = await navigator.mediaDevices.getUserMedia(constraints);
+          video.srcObject = this.activeStream;
+          await video.play();
+          if (spinner) spinner.classList.add('hidden');
+        } catch (err) {
+          if (spinner) spinner.classList.add('hidden');
+          alert('Could not access camera. Please allow camera permission and try again.');
+          this.close();
+        }
+      },
+
+      flip: async function() {
+        this.activeFacingMode = (this.activeFacingMode === 'environment') ? 'user' : 'environment';
+        await this.startStream();
+      },
+
+      capture: function() {
+        if (!this.activeStream || !this.currentConfig) return;
+        const video = document.getElementById('camera-modal-video');
+        if (!video || !video.videoWidth) return;
+
+        // Visual shutter flash effect
+        const flash = document.getElementById('camera-flash-overlay');
+        if (flash) {
+          flash.classList.remove('hidden');
+          setTimeout(() => flash.classList.add('hidden'), 120);
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+        canvas.toBlob(blob => {
+          if (this.currentConfig && this.currentConfig.onBlobCaptured) {
+            this.currentConfig.onBlobCaptured(blob, canvas.toDataURL('image/jpeg'));
+          }
+          this.close();
+        }, 'image/jpeg', 0.94);
+      },
+
+      stopStream: function() {
+        if (this.activeStream) {
+          this.activeStream.getTracks().forEach(t => t.stop());
+          this.activeStream = null;
+        }
+        const video = document.getElementById('camera-modal-video');
+        if (video) video.srcObject = null;
+      },
+
+      close: function() {
+        this.stopStream();
+        const modal = document.getElementById('camera-modal');
+        if (modal) modal.classList.add('hidden');
+        document.body.classList.remove('overflow-hidden');
+        this.currentConfig = null;
+      }
+    };
+    cameraModal.init();
+
+    function setupCameraCapture(ids, onCapture) {
+      let blob = null;
+
+      function showIdle() {
+        document.getElementById(ids.idle).classList.remove('hidden');
+        document.getElementById(ids.captured).classList.add('hidden');
+      }
+      function showCaptured() {
+        document.getElementById(ids.idle).classList.add('hidden');
+        document.getElementById(ids.captured).classList.remove('hidden');
+      }
+
+      function openCamera() {
+        const isId = (ids.preview === 'id-preview');
+        cameraModal.open({
+          title: isId ? 'Capture Valid ID' : 'Capture Proof of Residency',
+          subtitle: isId
+            ? 'Position your ID inside the frame. Ensure good lighting and all details are readable.'
+            : 'Position your document (barangay cert, utility bill, or lease contract) inside the frame.',
+          icon: isId ? 'fa-solid fa-id-card text-sm' : 'fa-solid fa-file-shield text-sm',
+          isIdCard: isId,
+          onBlobCaptured: (capturedBlob, dataUrl) => {
+            blob = capturedBlob;
+            document.getElementById(ids.preview).src = dataUrl;
+            showCaptured();
+            if (onCapture) onCapture(capturedBlob);
+          }
+        });
       }
 
       function useFile(file) {
@@ -713,21 +825,6 @@
       }
 
       document.getElementById(ids.btnOpen).addEventListener('click', openCamera);
-      document.getElementById(ids.btnCancel).addEventListener('click', () => { stopCamera(); showIdle(); });
-      document.getElementById(ids.btnCapture).addEventListener('click', () => {
-        const video  = document.getElementById(ids.video);
-        const canvas = document.getElementById(ids.canvas);
-        canvas.width  = video.videoWidth;
-        canvas.height = video.videoHeight;
-        canvas.getContext('2d').drawImage(video, 0, 0);
-        canvas.toBlob(b => {
-          blob = b;
-          document.getElementById(ids.preview).src = canvas.toDataURL('image/jpeg');
-          showCaptured();
-          stopCamera();
-          if (onCapture) onCapture(b);
-        }, 'image/jpeg', 0.92);
-      });
       if (ids.btnUpload && ids.fileInput) {
         document.getElementById(ids.btnUpload).addEventListener('click', () => document.getElementById(ids.fileInput).click());
         document.getElementById(ids.fileInput).addEventListener('change', e => useFile(e.target.files[0]));
@@ -736,12 +833,18 @@
         blob = null;
         if (ids.fileInput) document.getElementById(ids.fileInput).value = '';
         showIdle();
+        if (ids.preview === 'id-preview') unlockIdType();
       });
 
       return {
         getBlob: () => blob,
-        reset:   () => { blob = null; stopCamera(); showIdle(); if (ids.fileInput) document.getElementById(ids.fileInput).value = ''; document.getElementById('ocr-banner')?.classList.add('hidden'); },
-        stop:    stopCamera,
+        reset:   () => {
+          blob = null;
+          showIdle();
+          if (ids.fileInput) document.getElementById(ids.fileInput).value = '';
+          document.getElementById('ocr-banner')?.classList.add('hidden');
+          if (ids.preview === 'id-preview') unlockIdType();
+        },
       };
     }
 
@@ -801,6 +904,7 @@
           stepFields.className = 'flex items-center gap-2 text-slate-400';
           stepFields.innerHTML = '<i class="fa-solid fa-ban text-slate-300 w-4 text-center"></i><span>Extraction stopped (ID not processed)</span>';
           actions.classList.remove('hidden');
+          unlockIdType();
 
           banner.classList.remove('hidden');
           bannerIcon.className = 'fa-solid fa-circle-exclamation text-red-500';
@@ -828,8 +932,40 @@
         fillIfEmpty('id_number',    ex.id_number);
         fillIfEmpty('address_line', ex.address_line);
         const locChanged = applyOcrLocation(ex);
+
+        // Auto-correct ID type from scan result and lock the dropdown
         const idTypeSel = document.getElementById('id_type');
-        if (ex.id_type && idTypeSel && !idTypeSel.value) idTypeSel.value = ex.id_type;
+        const detectedType = ex.id_type || (data.is_philsys ? 'PhilSys National ID' : null);
+        if (idTypeSel) {
+          if (detectedType) {
+            let matched = false;
+            for (let i = 0; i < idTypeSel.options.length; i++) {
+              if (
+                idTypeSel.options[i].value.toLowerCase() === detectedType.toLowerCase() ||
+                idTypeSel.options[i].text.toLowerCase() === detectedType.toLowerCase()
+              ) {
+                idTypeSel.selectedIndex = i;
+                matched = true;
+                break;
+              }
+            }
+            if (!matched) {
+              const opt = document.createElement('option');
+              opt.value = detectedType;
+              opt.textContent = detectedType;
+              opt.selected = true;
+              idTypeSel.appendChild(opt);
+            }
+          }
+          idTypeSel.disabled = true;
+          idTypeSel.classList.add('bg-gray-100', 'cursor-not-allowed', 'text-gray-700');
+          idTypeSel.title = 'ID type locked after verification scan';
+          const badge = document.getElementById('id-type-locked-badge');
+          if (badge) {
+            badge.classList.remove('hidden');
+            badge.classList.add('inline-flex');
+          }
+        }
 
         banner.classList.remove('hidden');
         bannerIcon.className = 'fa-solid fa-wand-magic-sparkles text-emerald-600';
@@ -838,6 +974,7 @@
 
         setTimeout(closeModal, 1100);
       } catch (err) {
+        unlockIdType();
         modalIconWrap.className = 'w-16 h-16 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center mx-auto mb-4 border border-amber-100 shadow-inner';
         modalIcon.className = 'fa-solid fa-triangle-exclamation text-2xl';
         modalTitle.textContent = 'Could Not Read ID';
@@ -854,13 +991,13 @@
     }
 
     const idCapture = setupCameraCapture({
-      idle: 'cam-idle', live: 'cam-live', captured: 'cam-captured', video: 'cam-video', canvas: 'cam-canvas',
-      preview: 'id-preview', btnOpen: 'btn-open-cam', btnCancel: 'btn-cancel-cam', btnCapture: 'btn-capture', btnRetake: 'btn-retake',
+      idle: 'cam-idle', captured: 'cam-captured',
+      preview: 'id-preview', btnOpen: 'btn-open-cam', btnRetake: 'btn-retake',
       btnUpload: 'btn-upload', fileInput: 'file-input',
     }, scanIdAndAutofill);
     const porCapture = setupCameraCapture({
-      idle: 'cam-idle-por', live: 'cam-live-por', captured: 'cam-captured-por', video: 'cam-video-por', canvas: 'cam-canvas-por',
-      preview: 'id-preview-por', btnOpen: 'btn-open-cam-por', btnCancel: 'btn-cancel-cam-por', btnCapture: 'btn-capture-por', btnRetake: 'btn-retake-por',
+      idle: 'cam-idle-por', captured: 'cam-captured-por',
+      preview: 'id-preview-por', btnOpen: 'btn-open-cam-por', btnRetake: 'btn-retake-por',
       btnUpload: 'btn-upload-por', fileInput: 'file-input-por',
     });
 
@@ -986,6 +1123,79 @@
       }
     });
   </script>
+  <!-- ── Fullscreen Camera Capture Modal ── -->
+  <div id="camera-modal" class="hidden fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-5 transition-opacity duration-200">
+    <div class="relative w-full max-w-2xl bg-slate-900 border border-slate-800 rounded-2xl sm:rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+      
+      <!-- Modal Header -->
+      <div class="px-4 py-3 sm:px-6 sm:py-4 bg-slate-900/95 border-b border-slate-800 flex items-center justify-between z-10">
+        <div class="flex items-center gap-2.5">
+          <div class="w-8 h-8 rounded-lg bg-blue-500/20 text-blue-400 flex items-center justify-center border border-blue-400/30">
+            <i class="fa-solid fa-id-card text-sm" id="camera-modal-icon"></i>
+          </div>
+          <div>
+            <h3 id="camera-modal-title" class="text-sm sm:text-base font-bold text-white leading-tight">Capture Valid ID</h3>
+            <p id="camera-modal-subtitle" class="text-[11px] sm:text-xs text-slate-400">Position your card within the frame and ensure details are readable.</p>
+          </div>
+        </div>
+        <button type="button" id="btn-camera-modal-close" class="text-slate-400 hover:text-white p-2 rounded-lg hover:bg-white/10 transition-colors" title="Close Camera">
+          <i class="fa-solid fa-xmark text-base sm:text-lg"></i>
+        </button>
+      </div>
+
+      <!-- Video Viewfinder Area -->
+      <div class="relative flex-1 bg-black overflow-hidden flex items-center justify-center min-h-[300px] sm:min-h-[420px] max-h-[62vh]">
+        <video id="camera-modal-video" autoplay playsinline class="w-full h-full object-cover"></video>
+
+        <!-- Card Alignment Guide Frame -->
+        <div id="camera-card-guide" class="pointer-events-none absolute inset-0 flex items-center justify-center p-4 sm:p-6">
+          <div class="relative w-full max-w-md aspect-[85.6/53.98] rounded-2xl border-2 border-blue-400/90 shadow-[0_0_0_9999px_rgba(0,0,0,0.5)]">
+            <!-- 4 corner brackets -->
+            <span class="absolute -top-1 -left-1 w-6 h-6 border-t-4 border-l-4 border-blue-400 rounded-tl-xl"></span>
+            <span class="absolute -top-1 -right-1 w-6 h-6 border-t-4 border-r-4 border-blue-400 rounded-tr-xl"></span>
+            <span class="absolute -bottom-1 -left-1 w-6 h-6 border-b-4 border-l-4 border-blue-400 rounded-bl-xl"></span>
+            <span class="absolute -bottom-1 -right-1 w-6 h-6 border-b-4 border-r-4 border-blue-400 rounded-br-xl"></span>
+
+            <div class="absolute bottom-3 inset-x-0 text-center">
+              <span class="text-[10px] sm:text-xs font-semibold bg-slate-950/80 backdrop-blur-xs text-blue-200 px-3 py-1 rounded-full border border-blue-400/40 inline-flex items-center gap-1.5 shadow-md">
+                <i class="fa-solid fa-arrows-to-eye text-blue-400"></i> Fit card within corners
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Shutter Flash Overlay -->
+        <div id="camera-flash-overlay" class="hidden absolute inset-0 bg-white pointer-events-none transition-opacity duration-150"></div>
+
+        <!-- Camera starting spinner -->
+        <div id="camera-loading-spinner" class="absolute inset-0 bg-slate-950/90 flex flex-col items-center justify-center gap-2 text-slate-300">
+          <i class="fa-solid fa-circle-notch fa-spin text-3xl text-blue-500"></i>
+          <span class="text-xs font-medium">Starting camera…</span>
+        </div>
+      </div>
+
+      <!-- Modal Footer Controls -->
+      <div class="px-4 py-3 sm:px-6 sm:py-4 bg-slate-900 border-t border-slate-800 flex items-center justify-between z-10">
+        <button type="button" id="btn-camera-modal-cancel" class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-300 hover:text-white hover:bg-slate-800 transition-colors">
+          Cancel
+        </button>
+
+        <!-- Big Shutter Button -->
+        <button type="button" id="btn-camera-modal-capture" class="w-16 h-16 rounded-full bg-white hover:bg-slate-100 p-1 flex items-center justify-center shadow-lg hover:scale-105 active:scale-95 transition-all focus:outline-none focus:ring-4 focus:ring-blue-500/40" title="Capture Photo">
+          <div class="w-13 h-13 rounded-full border-2 border-slate-900 bg-blue-600 hover:bg-blue-700 flex items-center justify-center text-white transition-colors">
+            <i class="fa-solid fa-camera text-xl"></i>
+          </div>
+        </button>
+
+        <button type="button" id="btn-camera-modal-flip" class="px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-300 hover:text-white hover:bg-slate-800 transition-colors inline-flex items-center gap-1.5" title="Flip Camera">
+          <i class="fa-solid fa-camera-rotate text-sm"></i>
+          <span class="hidden sm:inline">Flip</span>
+        </button>
+      </div>
+
+    </div>
+  </div>
+
   <!-- ── PhilSys OCR Processing Modal (Grey out background) ── -->
   <div id="ocr-modal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 transition-opacity duration-200">
     <div class="bg-white rounded-2xl shadow-2xl border border-slate-100 max-w-sm sm:max-w-md w-full p-6 text-center transform transition-all duration-200 scale-100">
