@@ -666,25 +666,45 @@
       activeStream: null,
       activeFacingMode: 'environment',
       currentConfig: null,
+      isInitialized: false,
 
       init: function() {
-        document.getElementById('btn-camera-modal-close')?.addEventListener('click', () => this.close());
-        document.getElementById('btn-camera-modal-cancel')?.addEventListener('click', () => this.close());
-        document.getElementById('btn-camera-modal-capture')?.addEventListener('click', () => this.capture());
-        document.getElementById('btn-camera-modal-flip')?.addEventListener('click', () => this.flip());
+        if (this.isInitialized) return;
+        const btnClose = document.getElementById('btn-camera-modal-close');
+        const btnCancel = document.getElementById('btn-camera-modal-cancel');
+        const btnCapture = document.getElementById('btn-camera-modal-capture');
+        const btnFlip = document.getElementById('btn-camera-modal-flip');
+
+        if (!btnCapture && !btnClose) return; // Modal HTML not yet in DOM
+
+        btnClose?.addEventListener('click', (e) => { e.preventDefault(); this.close(); });
+        btnCancel?.addEventListener('click', (e) => { e.preventDefault(); this.close(); });
+        btnCapture?.addEventListener('click', (e) => {
+          e.preventDefault();
+          this.capture();
+        });
+        btnFlip?.addEventListener('click', (e) => {
+          e.preventDefault();
+          this.flip();
+        });
+
         window.addEventListener('keydown', (e) => {
           const modal = document.getElementById('camera-modal');
           if (modal && !modal.classList.contains('hidden')) {
-            if (e.key === 'Escape') this.close();
-            else if (e.key === ' ' || e.key === 'Enter') {
+            if (e.key === 'Escape') {
+              this.close();
+            } else if (e.key === ' ' || e.key === 'Enter') {
               e.preventDefault();
               this.capture();
             }
           }
         });
+
+        this.isInitialized = true;
       },
 
       open: async function(config) {
+        this.init(); // Ensure listeners are bound
         this.currentConfig = config;
         const modal = document.getElementById('camera-modal');
         const titleEl = document.getElementById('camera-modal-title');
@@ -722,8 +742,10 @@
             audio: false
           };
           this.activeStream = await navigator.mediaDevices.getUserMedia(constraints);
-          video.srcObject = this.activeStream;
-          await video.play();
+          if (video) {
+            video.srcObject = this.activeStream;
+            await video.play().catch(() => {});
+          }
           if (spinner) spinner.classList.add('hidden');
         } catch (err) {
           if (spinner) spinner.classList.add('hidden');
@@ -738,29 +760,65 @@
       },
 
       capture: function() {
-        if (!this.activeStream || !this.currentConfig) return;
+        const config = this.currentConfig;
         const video = document.getElementById('camera-modal-video');
-        if (!video || !video.videoWidth) return;
+        if (!video) {
+          this.close();
+          return;
+        }
 
-        // Visual shutter flash effect
+        // Shutter flash animation
         const flash = document.getElementById('camera-flash-overlay');
         if (flash) {
           flash.classList.remove('hidden');
-          setTimeout(() => flash.classList.add('hidden'), 120);
+          setTimeout(() => flash.classList.add('hidden'), 150);
         }
 
-        const canvas = document.createElement('canvas');
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const vw = video.videoWidth || video.clientWidth || 1280;
+        const vh = video.videoHeight || video.clientHeight || 720;
 
-        canvas.toBlob(blob => {
-          if (this.currentConfig && this.currentConfig.onBlobCaptured) {
-            this.currentConfig.onBlobCaptured(blob, canvas.toDataURL('image/jpeg'));
+        const canvas = document.createElement('canvas');
+        canvas.width = vw;
+        canvas.height = vh;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(video, 0, 0, vw, vh);
+
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.94);
+
+        function dataURItoBlob(dataURI) {
+          const byteString = atob(dataURI.split(',')[1]);
+          const mimeString = dataURI.split(',')[0].split(':')[1].split(';')[0];
+          const ab = new ArrayBuffer(byteString.length);
+          const ia = new Uint8Array(ab);
+          for (let i = 0; i < byteString.length; i++) {
+            ia[i] = byteString.charCodeAt(i);
           }
-          this.close();
-        }, 'image/jpeg', 0.94);
+          return new Blob([ab], { type: mimeString });
+        }
+
+        const fallbackBlob = () => {
+          try { return dataURItoBlob(dataUrl); } catch { return null; }
+        };
+
+        const finish = (blob) => {
+          try {
+            if (config && typeof config.onBlobCaptured === 'function') {
+              config.onBlobCaptured(blob, dataUrl);
+            }
+          } catch (err) {
+            console.error('[CameraModal] onBlobCaptured error:', err);
+          } finally {
+            cameraModal.close();
+          }
+        };
+
+        if (typeof canvas.toBlob === 'function') {
+          canvas.toBlob((blob) => {
+            finish(blob || fallbackBlob());
+          }, 'image/jpeg', 0.94);
+        } else {
+          finish(fallbackBlob());
+        }
       },
 
       stopStream: function() {
@@ -780,7 +838,8 @@
         this.currentConfig = null;
       }
     };
-    cameraModal.init();
+
+    document.addEventListener('DOMContentLoaded', () => cameraModal.init());
 
     function setupCameraCapture(ids, onCapture) {
       let blob = null;
@@ -1123,42 +1182,42 @@
       }
     });
   </script>
-  <!-- ── Fullscreen Camera Capture Modal ── -->
-  <div id="camera-modal" class="hidden fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-5 transition-opacity duration-200">
-    <div class="relative w-full max-w-2xl bg-slate-900 border border-slate-800 rounded-2xl sm:rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+  <!-- ── Fullscreen Camera Capture Modal (White Theme) ── -->
+  <div id="camera-modal" class="hidden fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5 transition-opacity duration-200">
+    <div class="relative w-full max-w-2xl bg-white border border-slate-200 rounded-2xl sm:rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
       
       <!-- Modal Header -->
-      <div class="px-4 py-3 sm:px-6 sm:py-4 bg-slate-900/95 border-b border-slate-800 flex items-center justify-between z-10">
-        <div class="flex items-center gap-2.5">
-          <div class="w-8 h-8 rounded-lg bg-blue-500/20 text-blue-400 flex items-center justify-center border border-blue-400/30">
-            <i class="fa-solid fa-id-card text-sm" id="camera-modal-icon"></i>
+      <div class="px-4 py-3.5 sm:px-6 sm:py-4 bg-white border-b border-slate-100 flex items-center justify-between z-10">
+        <div class="flex items-center gap-3">
+          <div class="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center border border-blue-100 shadow-xs">
+            <i class="fa-solid fa-id-card text-base" id="camera-modal-icon"></i>
           </div>
           <div>
-            <h3 id="camera-modal-title" class="text-sm sm:text-base font-bold text-white leading-tight">Capture Valid ID</h3>
-            <p id="camera-modal-subtitle" class="text-[11px] sm:text-xs text-slate-400">Position your card within the frame and ensure details are readable.</p>
+            <h3 id="camera-modal-title" class="text-sm sm:text-base font-bold text-slate-900 leading-tight">Capture Valid ID</h3>
+            <p id="camera-modal-subtitle" class="text-[11px] sm:text-xs text-slate-500">Position your card within the frame and ensure text is clear.</p>
           </div>
         </div>
-        <button type="button" id="btn-camera-modal-close" class="text-slate-400 hover:text-white p-2 rounded-lg hover:bg-white/10 transition-colors" title="Close Camera">
-          <i class="fa-solid fa-xmark text-base sm:text-lg"></i>
+        <button type="button" id="btn-camera-modal-close" class="text-slate-400 hover:text-slate-700 hover:bg-slate-100 p-2 rounded-xl transition-colors" title="Close Camera">
+          <i class="fa-solid fa-xmark text-lg"></i>
         </button>
       </div>
 
       <!-- Video Viewfinder Area -->
-      <div class="relative flex-1 bg-black overflow-hidden flex items-center justify-center min-h-[300px] sm:min-h-[420px] max-h-[62vh]">
+      <div class="relative flex-1 bg-slate-950 overflow-hidden flex items-center justify-center min-h-[320px] sm:min-h-[440px] max-h-[62vh]">
         <video id="camera-modal-video" autoplay playsinline class="w-full h-full object-cover"></video>
 
         <!-- Card Alignment Guide Frame -->
         <div id="camera-card-guide" class="pointer-events-none absolute inset-0 flex items-center justify-center p-4 sm:p-6">
-          <div class="relative w-full max-w-md aspect-[85.6/53.98] rounded-2xl border-2 border-blue-400/90 shadow-[0_0_0_9999px_rgba(0,0,0,0.5)]">
+          <div class="relative w-full max-w-md aspect-[85.6/53.98] rounded-2xl border-2 border-blue-400 shadow-[0_0_0_9999px_rgba(15,23,42,0.45)]">
             <!-- 4 corner brackets -->
-            <span class="absolute -top-1 -left-1 w-6 h-6 border-t-4 border-l-4 border-blue-400 rounded-tl-xl"></span>
-            <span class="absolute -top-1 -right-1 w-6 h-6 border-t-4 border-r-4 border-blue-400 rounded-tr-xl"></span>
-            <span class="absolute -bottom-1 -left-1 w-6 h-6 border-b-4 border-l-4 border-blue-400 rounded-bl-xl"></span>
-            <span class="absolute -bottom-1 -right-1 w-6 h-6 border-b-4 border-r-4 border-blue-400 rounded-br-xl"></span>
+            <span class="absolute -top-1 -left-1 w-6 h-6 border-t-4 border-l-4 border-blue-500 rounded-tl-xl"></span>
+            <span class="absolute -top-1 -right-1 w-6 h-6 border-t-4 border-r-4 border-blue-500 rounded-tr-xl"></span>
+            <span class="absolute -bottom-1 -left-1 w-6 h-6 border-b-4 border-l-4 border-blue-500 rounded-bl-xl"></span>
+            <span class="absolute -bottom-1 -right-1 w-6 h-6 border-b-4 border-r-4 border-blue-500 rounded-br-xl"></span>
 
             <div class="absolute bottom-3 inset-x-0 text-center">
-              <span class="text-[10px] sm:text-xs font-semibold bg-slate-950/80 backdrop-blur-xs text-blue-200 px-3 py-1 rounded-full border border-blue-400/40 inline-flex items-center gap-1.5 shadow-md">
-                <i class="fa-solid fa-arrows-to-eye text-blue-400"></i> Fit card within corners
+              <span class="text-[11px] sm:text-xs font-semibold bg-white/95 backdrop-blur-md text-blue-900 px-3.5 py-1.5 rounded-full border border-blue-200 inline-flex items-center gap-1.5 shadow-lg">
+                <i class="fa-solid fa-arrows-to-eye text-blue-600"></i> Fit card within corners
               </span>
             </div>
           </div>
@@ -1168,26 +1227,26 @@
         <div id="camera-flash-overlay" class="hidden absolute inset-0 bg-white pointer-events-none transition-opacity duration-150"></div>
 
         <!-- Camera starting spinner -->
-        <div id="camera-loading-spinner" class="absolute inset-0 bg-slate-950/90 flex flex-col items-center justify-center gap-2 text-slate-300">
-          <i class="fa-solid fa-circle-notch fa-spin text-3xl text-blue-500"></i>
+        <div id="camera-loading-spinner" class="absolute inset-0 bg-slate-900/90 flex flex-col items-center justify-center gap-2 text-white">
+          <i class="fa-solid fa-circle-notch fa-spin text-3xl text-blue-400"></i>
           <span class="text-xs font-medium">Starting camera…</span>
         </div>
       </div>
 
       <!-- Modal Footer Controls -->
-      <div class="px-4 py-3 sm:px-6 sm:py-4 bg-slate-900 border-t border-slate-800 flex items-center justify-between z-10">
-        <button type="button" id="btn-camera-modal-cancel" class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-300 hover:text-white hover:bg-slate-800 transition-colors">
+      <div class="px-4 py-3 sm:px-6 sm:py-4 bg-white border-t border-slate-100 flex items-center justify-between z-10">
+        <button type="button" id="btn-camera-modal-cancel" class="px-4 py-2.5 rounded-xl text-xs font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors">
           Cancel
         </button>
 
         <!-- Big Shutter Button -->
-        <button type="button" id="btn-camera-modal-capture" class="w-16 h-16 rounded-full bg-white hover:bg-slate-100 p-1 flex items-center justify-center shadow-lg hover:scale-105 active:scale-95 transition-all focus:outline-none focus:ring-4 focus:ring-blue-500/40" title="Capture Photo">
-          <div class="w-13 h-13 rounded-full border-2 border-slate-900 bg-blue-600 hover:bg-blue-700 flex items-center justify-center text-white transition-colors">
-            <i class="fa-solid fa-camera text-xl"></i>
+        <button type="button" id="btn-camera-modal-capture" class="w-16 h-16 rounded-full bg-blue-50 border-4 border-blue-500 hover:border-blue-600 flex items-center justify-center shadow-lg hover:scale-105 active:scale-95 transition-all focus:outline-none focus:ring-4 focus:ring-blue-100" title="Capture Photo">
+          <div class="w-10 h-10 rounded-full bg-blue-600 hover:bg-blue-700 flex items-center justify-center text-white transition-colors shadow-xs">
+            <i class="fa-solid fa-camera text-base"></i>
           </div>
         </button>
 
-        <button type="button" id="btn-camera-modal-flip" class="px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-300 hover:text-white hover:bg-slate-800 transition-colors inline-flex items-center gap-1.5" title="Flip Camera">
+        <button type="button" id="btn-camera-modal-flip" class="px-3.5 py-2.5 rounded-xl text-xs font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-100 border border-slate-200 transition-colors inline-flex items-center gap-1.5" title="Flip Camera">
           <i class="fa-solid fa-camera-rotate text-sm"></i>
           <span class="hidden sm:inline">Flip</span>
         </button>
