@@ -175,7 +175,13 @@ exports.inbound = async (req, res) => {
     );
 
     const [inc] = await db.query(`
-      SELECT i.*, u.full_name AS reporter_name, p.name AS purok_name
+      SELECT i.*,
+             CASE
+               WHEN i.description LIKE '[via SMS from unregistered %'
+                 THEN CONCAT('SMS: ', SUBSTRING_INDEX(SUBSTRING_INDEX(i.description, ']', 1), '[via SMS from unregistered ', -1))
+               ELSE u.full_name
+             END AS reporter_name,
+             p.name AS purok_name
       FROM incidents i
       LEFT JOIN users u ON i.reporter_id = u.id
       LEFT JOIN puroks p ON i.purok_id = p.id

@@ -35,7 +35,17 @@ exports.getIncidents = async (req, res) => {
     const version = req.user?.version || req.tenantVersion || 'manay';
     const { status, incident_type, purok_id, search } = req.query;
     let q = `
-      SELECT i.*, u.full_name AS reporter_name,
+      SELECT i.*,
+             CASE
+               WHEN i.description LIKE '[via SMS from unregistered %'
+                 THEN CONCAT('SMS: ', SUBSTRING_INDEX(SUBSTRING_INDEX(i.description, ']', 1), '[via SMS from unregistered ', -1))
+               ELSE u.full_name
+             END AS reporter_name,
+             CASE
+               WHEN i.description LIKE '[via SMS from unregistered %'
+                 THEN SUBSTRING_INDEX(SUBSTRING_INDEX(i.description, ']', 1), '[via SMS from unregistered ', -1)
+               ELSE u.phone
+             END AS reporter_phone,
              r.full_name AS responder_name, p.name AS purok_name
       FROM incidents i
       LEFT JOIN users u  ON i.reporter_id = u.id
@@ -67,7 +77,17 @@ exports.getIncidentById = async (req, res) => {
   try {
     const version = req.user?.version || req.tenantVersion || 'manay';
     const [[incident]] = await db.query(`
-      SELECT i.*, u.full_name AS reporter_name, u.phone AS reporter_phone,
+      SELECT i.*,
+             CASE
+               WHEN i.description LIKE '[via SMS from unregistered %'
+                 THEN CONCAT('SMS: ', SUBSTRING_INDEX(SUBSTRING_INDEX(i.description, ']', 1), '[via SMS from unregistered ', -1))
+               ELSE u.full_name
+             END AS reporter_name,
+             CASE
+               WHEN i.description LIKE '[via SMS from unregistered %'
+                 THEN SUBSTRING_INDEX(SUBSTRING_INDEX(i.description, ']', 1), '[via SMS from unregistered ', -1)
+               ELSE u.phone
+             END AS reporter_phone,
              r.full_name AS responder_name, p.name AS purok_name
       FROM incidents i
       LEFT JOIN users u  ON i.reporter_id = u.id

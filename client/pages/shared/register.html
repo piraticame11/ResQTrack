@@ -54,13 +54,6 @@
       </div>
 
       <div class="p-6 lg:p-8">
-        <div id="switch-banner" class="mb-5 p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between text-xs text-slate-600">
-          <span id="switch-banner-text">Registering under Barangay Manay.</span>
-          <a id="switch-portal-link" href="#" class="font-semibold text-blue-600 hover:underline inline-flex items-center gap-1">
-            <i class="fa-solid fa-arrow-right-arrow-left text-[10px]"></i>
-            <span id="switch-portal-text">Switch Barangay</span>
-          </a>
-        </div>
         <div id="success-msg" class="hidden mb-6 bg-green-50 border border-green-200 text-green-700 rounded-xl px-4 py-3 text-sm flex items-start gap-2">
           <i class="fa-solid fa-circle-check mt-0.5 shrink-0"></i><span id="success-text"></span>
         </div>
@@ -363,16 +356,11 @@
   <script>
     const slug = getTenantSlug();
     const currentName = getTenantName(slug);
-    const otherSlug = slug === 'new-visayas' ? 'manay' : 'new-visayas';
-    const otherName = getTenantName(otherSlug);
 
     document.title = `Register — ${currentName} · ResQTrack`;
     document.getElementById('tenant-badge-text').textContent = currentName;
     document.getElementById('signin-header-link').href = `/${slug}/login`;
     document.getElementById('signin-footer-link').href = `/${slug}/login`;
-    document.getElementById('switch-banner-text').textContent = `Registering resident account under ${currentName}.`;
-    document.getElementById('switch-portal-link').href = `/${otherSlug}/register`;
-    document.getElementById('switch-portal-text').textContent = `Switch to ${otherName}`;
 
     // Dynamic Purok options based on selected Barangay and tenant
     let allPuroksList = [];
