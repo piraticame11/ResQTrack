@@ -380,8 +380,217 @@ function loadImageAsBase64(url) {
   });
 }
 
-async function downloadPDF() {
-  const logoData = await loadImageAsBase64('/public/images/images.jfif');
+function escapeHtml(str) {
+  if (str == null) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+let cachedTemplateBaseData = null;
+let cachedLogoData = null;
+let cachedTenantLoaded = null;
+let activeReportBlobUrl = null;
+let activeReportDoc = null;
+let activeReportFileName = '';
+let isUpdatingPreview = false;
+
+function getExportSections() {
+  return {
+    includeSummary: document.getElementById('export-sec-summary')?.checked ?? true,
+    includeIncidents: document.getElementById('export-sec-incidents')?.checked ?? true,
+    includeResponders: document.getElementById('export-sec-responders')?.checked ?? true,
+    includeSignatures: document.getElementById('export-sec-signatures')?.checked ?? true,
+  };
+}
+
+function setAllExportSections(checked) {
+  ['export-sec-summary', 'export-sec-incidents', 'export-sec-responders', 'export-sec-signatures'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.checked = Boolean(checked);
+  });
+  updateReportPreview();
+}
+
+function openReportExportModal() {
+  const modal = document.getElementById('report-export-modal');
+  if (!modal) return;
+  modal.classList.remove('hidden');
+  updateReportPreview();
+}
+
+function closeReportExportModal() {
+  const modal = document.getElementById('report-export-modal');
+  if (modal) modal.classList.add('hidden');
+}
+
+async function updateReportPreview() {
+  if (isUpdatingPreview) return;
+  isUpdatingPreview = true;
+
+  const canvas = document.getElementById('report-preview-canvas');
+  const statsEl = document.getElementById('report-preview-stats');
+  const btnTab = document.getElementById('btn-report-tab');
+  const btnPrint = document.getElementById('btn-report-print');
+  const btnDownload = document.getElementById('btn-report-download');
+
+  const sections = getExportSections();
+  const anyChecked = sections.includeSummary || sections.includeIncidents || sections.includeResponders || sections.includeSignatures;
+
+  if (!anyChecked) {
+    if (activeReportBlobUrl) {
+      URL.revokeObjectURL(activeReportBlobUrl);
+      activeReportBlobUrl = null;
+    }
+    if (canvas) {
+      canvas.innerHTML = `
+        <div class="p-8 text-center text-gray-500">
+          <i class="fa-solid fa-square-check text-4xl text-gray-400 mb-3 block"></i>
+          <p class="font-semibold text-gray-800 text-base">No sections selected</p>
+          <p class="text-xs text-gray-500 mt-1 max-w-sm mx-auto">Please select at least one section above to generate and export your report.</p>
+        </div>
+      `;
+    }
+    if (statsEl) statsEl.innerHTML = `<span class="text-amber-600 flex items-center gap-1.5 font-medium"><i class="fa-solid fa-triangle-exclamation"></i>Select at least one section</span>`;
+    if (btnTab) btnTab.disabled = true;
+    if (btnPrint) btnPrint.disabled = true;
+    if (btnDownload) btnDownload.disabled = true;
+    isUpdatingPreview = false;
+    return;
+  }
+
+  if (btnTab) btnTab.disabled = false;
+  if (btnPrint) btnPrint.disabled = false;
+  if (btnDownload) btnDownload.disabled = false;
+
+  if (canvas && !activeReportBlobUrl) {
+    canvas.innerHTML = `
+      <div class="flex flex-col items-center justify-center py-20 text-gray-600">
+        <i class="fa-solid fa-circle-notch fa-spin text-3xl text-blue-600 mb-3"></i>
+        <p class="font-medium text-sm text-gray-800">Rendering PDF preview…</p>
+        <p class="text-xs text-gray-400 mt-1">Applying layout, headers, and section tables</p>
+      </div>
+    `;
+  }
+
+  try {
+    const result = await buildReportPdf(sections);
+    if (activeReportBlobUrl) {
+      URL.revokeObjectURL(activeReportBlobUrl);
+    }
+    activeReportBlobUrl = result.blobUrl;
+    activeReportDoc = result.doc;
+    activeReportFileName = result.fileName;
+
+    if (canvas) {
+      canvas.innerHTML = `
+        <div class="w-full h-full flex flex-col flex-1 min-h-[66vh]">
+          <iframe id="report-preview-frame" src="${activeReportBlobUrl}#toolbar=0&navpanes=0" class="w-full flex-1 min-h-[68vh] rounded-lg border border-gray-300 shadow-md bg-white" title="Report PDF Preview"></iframe>
+          <div class="mt-2 text-center text-xs text-gray-500">
+            Previewing: <span class="text-gray-700 font-mono font-medium">${escapeHtml(result.fileName)}</span> · ${result.pageCount} page(s)
+          </div>
+        </div>
+      `;
+    }
+
+    if (statsEl) {
+      statsEl.innerHTML = `
+        <i class="fa-solid fa-circle-check text-emerald-600"></i>
+        <span class="text-gray-700 font-medium">${result.totalIncidents} incident(s) · ${result.totalResponders} responder(s) · ${result.pageCount} page(s) ready</span>
+      `;
+    }
+  } catch (err) {
+    console.error('Error generating PDF report preview:', err);
+    if (canvas) {
+      canvas.innerHTML = `
+        <div class="p-8 text-center text-red-500">
+          <i class="fa-solid fa-circle-exclamation text-3xl mb-2 block"></i>
+          <p class="font-semibold text-gray-800">Failed to render report preview</p>
+          <p class="text-xs text-gray-500 mt-1">${escapeHtml(err.message)}</p>
+        </div>
+      `;
+    }
+    if (statsEl) statsEl.innerHTML = `<span class="text-red-500 font-medium">Error generating preview</span>`;
+  } finally {
+    isUpdatingPreview = false;
+  }
+}
+
+function openReportPdfTab() {
+  if (activeReportBlobUrl) {
+    window.open(activeReportBlobUrl, '_blank');
+  }
+}
+
+function printReportPdf() {
+  const frame = document.getElementById('report-preview-frame');
+  if (frame && frame.contentWindow) {
+    try {
+      frame.contentWindow.focus();
+      frame.contentWindow.print();
+      return;
+    } catch (e) {
+      console.warn('Iframe print failed, falling back:', e);
+    }
+  }
+  if (activeReportBlobUrl) {
+    const printWin = window.open(activeReportBlobUrl, '_blank');
+    if (printWin) {
+      printWin.focus();
+      setTimeout(() => { try { printWin.print(); } catch (_) {} }, 500);
+    }
+  }
+}
+
+function downloadActiveReportPdf() {
+  if (!activeReportBlobUrl) {
+    if (typeof showToast === 'function') showToast('Please select at least one section to export', 'error');
+    return;
+  }
+  const a = document.createElement('a');
+  a.href = activeReportBlobUrl;
+  a.download = activeReportFileName || 'ResQTrack_Report.pdf';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  if (typeof showToast === 'function') showToast('Report PDF downloaded successfully');
+}
+
+async function buildReportPdf(options = {}) {
+  const {
+    includeSummary = true,
+    includeIncidents = true,
+    includeResponders = true,
+    includeSignatures = true,
+  } = options;
+
+  const user = typeof getUser === 'function' ? getUser() : null;
+  const tenantSlug = typeof getTenantSlug === 'function' ? getTenantSlug() : (user?.version || 'manay');
+  const isNewVisayas = tenantSlug === 'new-visayas';
+  const tenantTitle = isNewVisayas ? 'BARANGAY NEW VISAYAS' : 'BARANGAY MANAY';
+
+  if (cachedTenantLoaded !== tenantSlug || !cachedLogoData) {
+    const baseTemplateUrl = isNewVisayas
+      ? '/public/templates/new-visayas-report-base.jpg'
+      : null;
+    const logoUrl = isNewVisayas
+      ? '/public/images/seal-new-visayas.png'
+      : '/public/images/seal-manay.png';
+
+    const [baseData, logoData] = await Promise.all([
+      baseTemplateUrl ? loadImageAsBase64(baseTemplateUrl) : Promise.resolve(null),
+      loadImageAsBase64(logoUrl),
+    ]);
+    cachedTemplateBaseData = baseData;
+    cachedLogoData = logoData;
+    cachedTenantLoaded = tenantSlug;
+  }
+
+  const baseData = cachedTemplateBaseData;
+  const logoData = cachedLogoData;
 
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
@@ -396,139 +605,296 @@ async function downloadPDF() {
   const pending  = filtered.filter(i => i.status === 'Pending').length;
   const ongoing  = filtered.filter(i => ['Assigned', 'Initiate', 'Delayed'].includes(i.status)).length;
 
-  // ── Header ──────────────────────────────────────────────
-  const logoSize = 22; // mm, square
-  const logoX    = 14;
-  const logoY    = 8;
-  const textX    = logoX + logoSize + 5;
-
-  if (logoData) {
-    doc.addImage(logoData, 'JPEG', logoX, logoY, logoSize, logoSize);
+  let perfList = _cachedPerformance;
+  if (f.responder) {
+    perfList = perfList.filter(r => r.id == f.responder);
   }
 
-  doc.setFontSize(16);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(20, 20, 20);
-  doc.text('ResQTrack', textX, 14);
-
-  doc.setFontSize(10);
-  doc.setFont('helvetica', 'normal');
-  doc.setTextColor(70, 70, 70);
-  doc.text('Barangay Incident Report', textX, 20);
-
-  doc.setFontSize(8);
-  doc.setTextColor(110, 110, 110);
-  doc.text(`Period: ${periodLabel}`, textX, 27);
-  doc.text(`Incident Type: ${typeLabel}`, textX, 32);
-  doc.text(`Generated: ${generated}`, textX, 37);
-
-  // Divider below header
-  const divY = logoY + logoSize + 3;
-  doc.setDrawColor(200, 200, 200);
-  doc.setLineWidth(0.4);
-  doc.line(14, divY, 196, divY);
-
-  // ── Summary ──────────────────────────────────────────────
-  const summaryStartY = divY + 8;
-  doc.setFontSize(10);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(30, 30, 30);
-  doc.text('Summary', 14, summaryStartY);
-
-  doc.autoTable({
-    startY: summaryStartY + 4,
-    head: [['Total Incidents', 'Resolved', 'Pending', 'Assigned / Initiate / Delayed']],
-    body: [[total, resolved, pending, ongoing]],
-    theme: 'grid',
-    headStyles: { fillColor: [30, 64, 175], textColor: 255, fontSize: 8, fontStyle: 'bold' },
-    bodyStyles: { fontSize: 11, fontStyle: 'bold', halign: 'center' },
-    columnStyles: {
-      0: { textColor: [30, 30, 30] },
-      1: { textColor: [22, 163, 74] },
-      2: { textColor: [202, 138, 4] },
-      3: { textColor: [37, 99, 235] },
-    },
-    margin: { left: 14, right: 14 },
-  });
-
-  // ── Incident Records ─────────────────────────────────────
-  const incY = doc.lastAutoTable.finalY + 10;
-  doc.setFontSize(10);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(30, 30, 30);
-  doc.text('Incident Records', 14, incY);
-
-  if (filtered.length === 0) {
-    doc.setFontSize(9);
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(150, 150, 150);
-    doc.text('No incidents found for this period.', 14, incY + 8);
-  } else {
-    doc.autoTable({
-      startY: incY + 4,
-      head: [['Ref No.', 'Type', 'Status', 'Purok', 'Reporter', 'Date & Time']],
-      body: filtered.map(i => [
-        i.reference_no,
-        i.incident_type,
-        i.status,
-        i.purok_name   || '—',
-        i.reporter_name || '—',
-        new Date(i.reported_at).toLocaleString('en-PH', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
-      ]),
-      theme: 'striped',
-      headStyles: { fillColor: [30, 64, 175], textColor: 255, fontSize: 8, fontStyle: 'bold' },
-      bodyStyles: { fontSize: 8 },
-      columnStyles: { 0: { cellWidth: 32 }, 5: { cellWidth: 36 } },
-      margin: { left: 14, right: 14 },
-    });
+  const drawnPages = new Set();
+  function ensurePageBackground(pageNum) {
+    if (drawnPages.has(pageNum)) return;
+    drawnPages.add(pageNum);
+    if (isNewVisayas && baseData) {
+      doc.setPage(pageNum);
+      doc.addImage(baseData, 'JPEG', 0, 0, 210, 297);
+    }
   }
 
-  // ── Responder Performance ────────────────────────────────
-  const perfY = (doc.lastAutoTable ? doc.lastAutoTable.finalY : 130) + 10;
-  doc.setFontSize(10);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(30, 30, 30);
-  doc.text('Responder Performance', 14, perfY);
+  // ── Layout configuration based on Tenant ─────────────────
+  let currentY = 70;
+  const primaryThemeColor = isNewVisayas ? [24, 76, 120] : [30, 64, 175];
+  const safeMargins = isNewVisayas && baseData
+    ? { top: 48, bottom: 26, left: 14, right: 14 }
+    : { top: 20, bottom: 20, left: 14, right: 14 };
 
-  if (_cachedPerformance.length === 0) {
-    doc.setFontSize(9);
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(150, 150, 150);
-    doc.text('No responder data available.', 14, perfY + 8);
+  if (isNewVisayas && baseData) {
+    // Page 1 gets the official full-page New Visayas stationery background
+    ensurePageBackground(1);
+
+    // Document Title below the official header
+    doc.setFontSize(13);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(26, 54, 93);
+    doc.text('INCIDENT & PERFORMANCE REPORT', 105, 50, { align: 'center' });
+
+    // Metadata ribbon
+    doc.setFillColor(241, 245, 249);
+    doc.setDrawColor(203, 213, 225);
+    doc.setLineWidth(0.3);
+    doc.roundedRect(14, 53, 182, 10, 1.5, 1.5, 'FD');
+
+    doc.setFontSize(7.5);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(71, 85, 105);
+    doc.text(`PERIOD: ${periodLabel.toUpperCase()}`, 18, 59.5);
+    doc.text(`INCIDENT TYPE: ${typeLabel.toUpperCase()}`, 82, 59.5);
+    doc.text(`GENERATED: ${generated.toUpperCase()}`, 192, 59.5, { align: 'right' });
+
+    currentY = 67;
   } else {
+    // Barangay Manay / Official Header
+    const logoSize = 24; // mm, circular seal
+    const logoX    = 14;
+    const logoY    = 10;
+    const textX    = logoX + logoSize + 5; // 43mm
+
+    if (logoData) {
+      doc.addImage(logoData, 'PNG', logoX, logoY, logoSize, logoSize);
+    }
+
+    doc.setFontSize(7.5);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(100, 116, 139);
+    doc.text('REPUBLIC OF THE PHILIPPINES · CITY OF PANABO', textX, 14);
+
+    doc.setFontSize(13);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(26, 54, 93);
+    doc.text('BARANGAY MANAY', textX, 20);
+
+    doc.setFontSize(9.5);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(51, 65, 85);
+    doc.text('Official Incident & Performance Report', textX, 25.5);
+
+    doc.setFontSize(7.5);
+    doc.setTextColor(100, 116, 139);
+    doc.text('ResQTrack Incident Management & Response System', textX, 30.5);
+
+    // Divider line
+    const divY = 36;
+    doc.setDrawColor(203, 213, 225);
+    doc.setLineWidth(0.4);
+    doc.line(14, divY, 196, divY);
+
+    // Metadata ribbon
+    doc.setFillColor(241, 245, 249);
+    doc.setDrawColor(203, 213, 225);
+    doc.setLineWidth(0.3);
+    doc.roundedRect(14, 39, 182, 8.5, 1.5, 1.5, 'FD');
+
+    doc.setFontSize(7.5);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(71, 85, 105);
+    doc.text(`PERIOD: ${periodLabel.toUpperCase()}`, 18, 44.5);
+    doc.text(`INCIDENT TYPE: ${typeLabel.toUpperCase()}`, 82, 44.5);
+    doc.text(`GENERATED: ${generated.toUpperCase()}`, 192, 44.5, { align: 'right' });
+
+    currentY = 52;
+  }
+
+  const anySectionSelected = includeSummary || includeIncidents || includeResponders || includeSignatures;
+  if (!anySectionSelected) {
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'italic');
+    doc.setTextColor(150, 150, 150);
+    doc.text('No sections selected for this report.', 105, currentY + 20, { align: 'center' });
+  }
+
+  // ── 1. Summary Cards Table ──────────────────────────────────
+  if (includeSummary) {
     doc.autoTable({
-      startY: perfY + 4,
-      head: [['Responder', 'Assigned', 'Resolved', 'Avg Response Time', 'Avg Resolution Time']],
-      body: _cachedPerformance.map(r => [
-        r.full_name,
-        r.total_assigned || 0,
-        r.resolved       || 0,
-        fmtMinutes(r.avg_response_time_minutes),
-        fmtMinutes(r.avg_resolution_minutes),
-      ]),
-      theme: 'striped',
-      headStyles: { fillColor: [30, 64, 175], textColor: 255, fontSize: 8, fontStyle: 'bold' },
-      bodyStyles: { fontSize: 8 },
-      margin: { left: 14, right: 14 },
+      startY: currentY,
+      head: [['Total Incidents', 'Resolved', 'Pending', 'Assigned / Initiate / Delayed']],
+      body: [[total, resolved, pending, ongoing]],
+      theme: 'grid',
+      headStyles: { fillColor: primaryThemeColor, textColor: 255, fontSize: 8, fontStyle: 'bold', halign: 'center' },
+      bodyStyles: { fontSize: 11, fontStyle: 'bold', halign: 'center' },
+      columnStyles: {
+        0: { textColor: [30, 30, 30] },
+        1: { textColor: [22, 163, 74] },
+        2: { textColor: [202, 138, 4] },
+        3: { textColor: [37, 99, 235] },
+      },
+      margin: safeMargins,
+      willDrawPage: (data) => ensurePageBackground(data.pageNumber),
     });
+
+    currentY = doc.lastAutoTable.finalY + 8;
+  }
+
+  // ── 2. Incident Records Table ───────────────────────────────
+  if (includeIncidents) {
+    const pageBreakY = isNewVisayas && baseData ? 240 : 250;
+    if (currentY > pageBreakY) {
+      doc.addPage();
+      ensurePageBackground(doc.internal.getNumberOfPages());
+      currentY = isNewVisayas && baseData ? 52 : 24;
+    }
+
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(30, 41, 59);
+    doc.text('Incident Records', 14, currentY);
+
+    if (filtered.length === 0) {
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(150, 150, 150);
+      doc.text('No incidents found for this period.', 14, currentY + 6);
+      currentY += 12;
+    } else {
+      doc.autoTable({
+        startY: currentY + 3,
+        head: [['Ref No.', 'Type', 'Status', 'Purok', 'Reporter', 'Date & Time']],
+        body: filtered.map(i => [
+          i.reference_no,
+          i.incident_type,
+          i.status,
+          i.purok_name   || '—',
+          i.reporter_name || '—',
+          new Date(i.reported_at).toLocaleString('en-PH', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+        ]),
+        theme: 'striped',
+        headStyles: { fillColor: primaryThemeColor, textColor: 255, fontSize: 8, fontStyle: 'bold' },
+        bodyStyles: { fontSize: 8 },
+        columnStyles: { 0: { cellWidth: 32 }, 5: { cellWidth: 36 } },
+        margin: safeMargins,
+        willDrawPage: (data) => ensurePageBackground(data.pageNumber),
+      });
+      currentY = doc.lastAutoTable.finalY + 8;
+    }
+  }
+
+  // ── 3. Responder Performance Table ──────────────────────────
+  if (includeResponders) {
+    const pageBreakY = isNewVisayas && baseData ? 240 : 250;
+    if (currentY > pageBreakY) {
+      doc.addPage();
+      ensurePageBackground(doc.internal.getNumberOfPages());
+      currentY = isNewVisayas && baseData ? 52 : 24;
+    }
+
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(30, 41, 59);
+    doc.text('Responder Performance', 14, currentY);
+
+    if (perfList.length === 0) {
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(150, 150, 150);
+      doc.text('No responder data available.', 14, currentY + 6);
+      currentY += 12;
+    } else {
+      doc.autoTable({
+        startY: currentY + 3,
+        head: [['Responder', 'Assigned', 'Resolved', 'Avg Response Time', 'Avg Resolution Time']],
+        body: perfList.map(r => [
+          r.full_name,
+          r.total_assigned || 0,
+          r.resolved       || 0,
+          fmtMinutes(r.avg_response_time_minutes),
+          fmtMinutes(r.avg_resolution_minutes),
+        ]),
+        theme: 'striped',
+        headStyles: { fillColor: primaryThemeColor, textColor: 255, fontSize: 8, fontStyle: 'bold' },
+        bodyStyles: { fontSize: 8 },
+        margin: safeMargins,
+        willDrawPage: (data) => ensurePageBackground(data.pageNumber),
+      });
+      currentY = doc.lastAutoTable.finalY + 8;
+    }
+  }
+
+  // ── 4. Official Signatures / Certification ──────────────────
+  if (includeSignatures) {
+    let sigY = currentY + 6;
+    const pageLimit = isNewVisayas && baseData ? 245 : 255;
+    if (sigY > pageLimit) {
+      doc.addPage();
+      ensurePageBackground(doc.internal.getNumberOfPages());
+      sigY = isNewVisayas && baseData ? 56 : 24;
+    }
+
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(71, 85, 105);
+
+    doc.text('Prepared by:', 20, sigY);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(30, 41, 59);
+    doc.text(user?.full_name ? user.full_name.toUpperCase() : 'BARANGAY SYSTEM ADMINISTRATOR', 20, sigY + 12);
+    doc.setDrawColor(148, 163, 184);
+    doc.setLineWidth(0.3);
+    doc.line(20, sigY + 13, 85, sigY + 13);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7);
+    doc.text('ResQTrack Records & Analytics Section', 20, sigY + 17);
+
+    doc.setFontSize(8);
+    doc.text('Approved & Noted by:', 125, sigY);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(30, 41, 59);
+    doc.text('HON. PUNONG BARANGAY', 125, sigY + 12);
+    doc.line(125, sigY + 13, 190, sigY + 13);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7);
+    doc.text(`${tenantTitle}, Panabo City`, 125, sigY + 17);
   }
 
   // ── Footer on every page ─────────────────────────────────
   const pageCount = doc.internal.getNumberOfPages();
+  const footerY = isNewVisayas && baseData ? 273 : 289;
   for (let p = 1; p <= pageCount; p++) {
     doc.setPage(p);
-    doc.setFontSize(8);
+    doc.setFontSize(7.5);
     doc.setFont('helvetica', 'normal');
-    doc.setTextColor(160, 160, 160);
-    doc.text(`Page ${p} of ${pageCount}`, 196, 289, { align: 'right' });
-    doc.text('ResQTrack — Confidential', 14, 289);
+    doc.setTextColor(100, 116, 139);
+    doc.text(`ResQTrack Incident Management System · Official Report of ${tenantTitle}`, 14, footerY);
+    doc.text(`Page ${p} of ${pageCount}`, 196, footerY, { align: 'right' });
   }
 
   const safePeriod = periodLabel.replace(/[^a-zA-Z0-9]/g, '-');
-  doc.save(`ResQTrack-Report-${safePeriod}.pdf`);
+  const fileName = isNewVisayas
+    ? `Barangay_New_Visayas_Report_${safePeriod}.pdf`
+    : `ResQTrack_Report_${safePeriod}.pdf`;
+
+  const blob = doc.output('blob');
+  const blobUrl = URL.createObjectURL(blob);
+
+  return {
+    doc,
+    fileName,
+    blob,
+    blobUrl,
+    pageCount,
+    totalIncidents: total,
+    totalResponders: perfList.length,
+    periodLabel,
+  };
 }
 
-function downloadExcel() {
+function downloadPDF() {
+  openReportExportModal();
+}
+
+function downloadExcelFromModal() {
+  const sections = getExportSections();
+  downloadExcel(sections);
+}
+
+function downloadExcel(sections = null) {
   const f = getFilters();
   const filtered = filterIncidents(_cachedIncidents, f);
 
@@ -543,7 +909,12 @@ function downloadExcel() {
     'Resolved':  i.resolved_at ? new Date(i.resolved_at).toLocaleString('en-PH') : '',
   }));
 
-  const performanceRows = _cachedPerformance.map(r => ({
+  let perfList = _cachedPerformance;
+  if (f.responder) {
+    perfList = perfList.filter(r => r.id == f.responder);
+  }
+
+  const performanceRows = perfList.map(r => ({
     'Responder':            r.full_name,
     'Assigned':             r.total_assigned || 0,
     'Resolved':             r.resolved || 0,
@@ -552,9 +923,40 @@ function downloadExcel() {
   }));
 
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(incidentRows), 'Incidents');
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(performanceRows), 'Responder Performance');
+
+  if (sections) {
+    let sheetAdded = false;
+    if (sections.includeSummary) {
+      const summaryRows = [
+        { 'Metric': 'Period', 'Value': getPeriodLabel(f) },
+        { 'Metric': 'Incident Type', 'Value': f.type || 'All Types' },
+        { 'Metric': 'Generated At', 'Value': new Date().toLocaleString('en-PH') },
+        { 'Metric': 'Total Incidents', 'Value': filtered.length },
+        { 'Metric': 'Resolved Incidents', 'Value': filtered.filter(i => i.status === 'Resolved' || i.status === 'Archived').length },
+        { 'Metric': 'Pending Incidents', 'Value': filtered.filter(i => i.status === 'Pending').length },
+        { 'Metric': 'Active / Ongoing Incidents', 'Value': filtered.filter(i => ['Assigned', 'Initiate', 'Delayed'].includes(i.status)).length },
+      ];
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(summaryRows), 'Summary');
+      sheetAdded = true;
+    }
+    if (sections.includeIncidents) {
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(incidentRows.length ? incidentRows : [{ 'Notice': 'No incidents found for this period' }]), 'Incidents');
+      sheetAdded = true;
+    }
+    if (sections.includeResponders) {
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(performanceRows.length ? performanceRows : [{ 'Notice': 'No responder data available' }]), 'Responder Performance');
+      sheetAdded = true;
+    }
+    if (!sheetAdded) {
+      if (typeof showToast === 'function') showToast('Please select at least one section to export', 'error');
+      return;
+    }
+  } else {
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(incidentRows), 'Incidents');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(performanceRows), 'Responder Performance');
+  }
 
   const safePeriod = getPeriodLabel(f).replace(/[^a-zA-Z0-9]/g, '-');
   XLSX.writeFile(wb, `ResQTrack-Report-${safePeriod}.xlsx`);
+  if (typeof showToast === 'function') showToast('Excel report downloaded');
 }
