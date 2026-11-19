@@ -1,6 +1,7 @@
 const db = require('../config/db');
 const { sendBlotterStatusEmail } = require('../utils/mailer');
 const { sendSMS } = require('../utils/sms');
+const { generateBlotterPdf } = require('../utils/blotterPdfGenerator');
 
 const STATUSES = ['Open', 'Under Mediation', 'Resolved', 'Endorsed to Court', 'Voided'];
 const LOCKING_STATUSES = ['Resolved', 'Endorsed to Court', 'Voided'];
@@ -74,13 +75,17 @@ exports.createEntry = async (req, res) => {
     const version = req.user?.version || req.tenantVersion || 'manay';
     const {
       complainant_user_id, complainant_name, complainant_email, complainant_address, complainant_contact,
+      complainant_age, complainant_sex, complainant_occupation, complainant_civil_status,
       respondent_user_id, respondent_name, respondent_address, respondent_contact,
-      nature, narrative, purok_id,
+      respondent_age, respondent_sex, respondent_occupation, respondent_civil_status,
+      incident_date, incident_time, incident_place, incident_type,
+      nature, narrative, action_taken, attachments, purok_id, noted_by,
     } = req.body;
 
+    const finalNature = (nature?.trim() || incident_type?.trim() || '');
     if (!complainant_name?.trim() || !complainant_address?.trim() || !complainant_contact?.trim() ||
-        !respondent_name?.trim() || !nature?.trim() || !narrative?.trim()) {
-      return res.status(400).json({ message: 'Complainant name, address, contact number, respondent name, nature, and narrative are required.' });
+        !respondent_name?.trim() || !finalNature || !narrative?.trim()) {
+      return res.status(400).json({ message: 'Complainant name, address, contact number, respondent name, incident type/nature, and narrative are required.' });
     }
 
     let finalComplainantEmail = complainant_email?.trim() || null;
@@ -93,9 +98,12 @@ exports.createEntry = async (req, res) => {
     const [result] = await db.query(
       `INSERT INTO blotter_entries
          (entry_no, complainant_user_id, complainant_name, complainant_email, complainant_address, complainant_contact,
+          complainant_age, complainant_sex, complainant_occupation, complainant_civil_status,
           respondent_user_id, respondent_name, respondent_address, respondent_contact,
-          nature, narrative, purok_id, filed_by, status, version)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Open', ?)`,
+          respondent_age, respondent_sex, respondent_occupation, respondent_civil_status,
+          incident_date, incident_time, incident_place, incident_type,
+          nature, narrative, action_taken, attachments, purok_id, filed_by, noted_by, status, version)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Open', ?)`,
       [
         entry_no,
         complainant_user_id || null,
@@ -103,14 +111,29 @@ exports.createEntry = async (req, res) => {
         finalComplainantEmail,
         complainant_address.trim(),
         complainant_contact.trim(),
+        complainant_age ? parseInt(complainant_age, 10) : null,
+        complainant_sex?.trim() || null,
+        complainant_occupation?.trim() || null,
+        complainant_civil_status?.trim() || null,
         respondent_user_id || null,
         respondent_name.trim(),
         respondent_address?.trim() || null,
         respondent_contact?.trim() || null,
-        nature.trim(),
+        respondent_age ? parseInt(respondent_age, 10) : null,
+        respondent_sex?.trim() || null,
+        respondent_occupation?.trim() || null,
+        respondent_civil_status?.trim() || null,
+        incident_date?.trim() || null,
+        incident_time?.trim() || null,
+        incident_place?.trim() || null,
+        incident_type?.trim() || finalNature,
+        finalNature,
         narrative.trim(),
+        action_taken?.trim() || null,
+        attachments ? (typeof attachments === 'string' ? attachments.trim() : JSON.stringify(attachments)) : null,
         purok_id || null,
         req.user.id,
+        noted_by?.trim() || null,
         version,
       ]
     );
@@ -144,14 +167,21 @@ exports.updateEntry = async (req, res) => {
 
     const editable = [
       'complainant_user_id', 'complainant_name', 'complainant_email', 'complainant_address', 'complainant_contact',
+      'complainant_age', 'complainant_sex', 'complainant_occupation', 'complainant_civil_status',
       'respondent_user_id', 'respondent_name', 'respondent_address', 'respondent_contact',
-      'nature', 'narrative', 'action_taken', 'purok_id',
+      'respondent_age', 'respondent_sex', 'respondent_occupation', 'respondent_civil_status',
+      'incident_date', 'incident_time', 'incident_place', 'incident_type',
+      'nature', 'narrative', 'action_taken', 'attachments', 'purok_id', 'noted_by',
     ];
     const updates = [], params = [];
     for (const key of editable) {
       if (req.body[key] !== undefined) {
         updates.push(`${key} = ?`);
-        params.push(typeof req.body[key] === 'string' ? req.body[key].trim() || null : req.body[key]);
+        let val = req.body[key];
+        if (typeof val === 'string') val = val.trim() || null;
+        if (key.endsWith('_age') && val) val = parseInt(val, 10);
+        if (key === 'attachments' && typeof val === 'object' && val !== null) val = JSON.stringify(val);
+        params.push(val);
       }
     }
     if (!updates.length) return res.status(400).json({ message: 'No fields to update' });
@@ -273,5 +303,35 @@ exports.notifyComplainant = async (req, res) => {
     res.json({ message: `Notification sent via ${dispatched.join(' and ')}`, dispatched });
   } catch (err) {
     res.status(500).json({ message: 'Server error', error: err.message });
+  }
+};
+
+exports.exportBlotterPdf = async (req, res) => {
+  try {
+    const version = req.user?.version || req.tenantVersion || 'manay';
+    const [[entry]] = await db.query(`
+      SELECT b.*, p.name AS purok_name, u.full_name AS filed_by_name,
+             cu.full_name AS complainant_user_name, ru.full_name AS respondent_user_name
+      FROM blotter_entries b
+      LEFT JOIN puroks p ON b.purok_id = p.id
+      LEFT JOIN users u  ON b.filed_by = u.id
+      LEFT JOIN users cu ON b.complainant_user_id = cu.id
+      LEFT JOIN users ru ON b.respondent_user_id = ru.id
+      WHERE b.id = ? AND b.version = ?`, [req.params.id, version]);
+
+    if (!entry) {
+      return res.status(404).json({ message: 'Blotter entry not found' });
+    }
+
+    const pdfBuffer = await generateBlotterPdf(entry, version);
+    const filename = `Barangay_Blotter_${entry.entry_no || req.params.id}.pdf`;
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
+    res.setHeader('Content-Length', pdfBuffer.length);
+    res.end(pdfBuffer);
+  } catch (err) {
+    console.error('Failed to export blotter PDF:', err);
+    res.status(500).json({ message: 'Failed to generate blotter PDF', error: err.message });
   }
 };

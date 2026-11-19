@@ -12,17 +12,89 @@ let modalMap     = null;
 
   document.getElementById('filter-search').addEventListener('keydown', e => { if (e.key === 'Enter') applyFilter(); });
 
+  await loadMyIncidents();
+
+  if (typeof io !== 'undefined') {
+    const socket = io();
+    const slug = typeof getTenantSlug === 'function' ? getTenantSlug() : 'manay';
+    socket.emit('join:barangay', slug);
+    if (currentUser?.id) {
+      socket.emit('join:user', currentUser.id);
+      socket.emit('join:responder', { userId: currentUser.id });
+    }
+
+    socket.on('incident:assigned', (data) => {
+      if (data && data.version && data.version !== slug) return;
+      const isMe = data.assigned_responder_id === currentUser.id ||
+                   (Array.isArray(data.responder_ids) && data.responder_ids.includes(currentUser.id));
+      if (isMe) {
+        playDispatchChime();
+        if (typeof showToast === 'function') {
+          showToast(`🚨 DISPATCH ALERT: You have been assigned to ${data.reference_no || 'Incident'} (${data.incident_type || ''})!`, 'info');
+        }
+        loadMyIncidents();
+      }
+    });
+
+    socket.on('incident:status_update', (data) => {
+      if (data && data.version && data.version !== slug) return;
+      if (data?.status === 'Assigned') {
+        const isMe = data.assigned_responder_id === currentUser.id ||
+                     (Array.isArray(data.responder_ids) && data.responder_ids.includes(currentUser.id));
+        if (isMe) {
+          playDispatchChime();
+          if (typeof showToast === 'function') {
+            showToast(`🚨 DISPATCH ALERT: You have been assigned to ${data.reference_no || 'Incident'}!`, 'info');
+          }
+        }
+      }
+      loadMyIncidents();
+    });
+  }
+})();
+
+function playDispatchChime() {
+  try {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    if (ctx.state === 'suspended') ctx.resume();
+    const tones = [
+      { f: 587.33, t: 0.00, d: 0.14 },
+      { f: 880.00, t: 0.12, d: 0.16 },
+      { f: 1174.66, t: 0.26, d: 0.35 },
+      { f: 587.33, t: 0.65, d: 0.14 },
+      { f: 880.00, t: 0.77, d: 0.16 },
+      { f: 1174.66, t: 0.91, d: 0.45 },
+    ];
+    tones.forEach(tone => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(tone.f, ctx.currentTime + tone.t);
+      gain.gain.setValueAtTime(0.4, ctx.currentTime + tone.t);
+      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + tone.t + tone.d);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(ctx.currentTime + tone.t);
+      osc.stop(ctx.currentTime + tone.t + tone.d);
+    });
+  } catch (err) {
+    console.warn('Could not play dispatch chime:', err);
+  }
+}
+
+async function loadMyIncidents() {
   const res = await api.get('/incidents');
   if (!res || !res.ok) {
     document.getElementById('incidents-body').innerHTML =
       `<tr><td colspan="8" class="px-4 py-10 text-center text-red-400">Failed to load incidents.</td></tr>`;
     return;
   }
-
   const all = await res.json();
   allIncidents = all.filter(i => i.assigned_responder_id === currentUser.id);
-  renderTable(allIncidents);
-})();
+  applyFilter();
+}
 
 function applyFilter() {
   const search = document.getElementById('filter-search').value.trim().toLowerCase();

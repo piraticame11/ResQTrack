@@ -481,10 +481,21 @@ exports.assignResponder = async (req, res) => {
         reporter_id: incData.reporter_id,
         reference_no: incData.reference_no,
         responder_name: nameList,
+        assigned_responder_id: responder_ids[0],
+        responder_ids,
+        incident_type: incData.incident_type,
+        triage_color: incData.triage_color,
+        purok_name: incData.purok_name,
         version,
       };
       io.to(`barangay:${version}`).emit('incident:status_update', payload);
       io.emit('incident:status_update', payload);
+
+      for (const rid of responder_ids) {
+        io.to(`user:${rid}`).emit('incident:assigned', payload);
+      }
+      io.to(`barangay:${version}`).emit('incident:assigned', payload);
+      io.emit('incident:assigned', payload);
     }
 
     // Notify assigned responders via SMS

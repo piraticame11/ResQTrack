@@ -16,6 +16,16 @@ module.exports = function setupSockets(io) {
       socket.join('admin_room');
     });
 
+    socket.on('join:user', (userId) => {
+      if (userId) socket.join(`user:${userId}`);
+    });
+
+    socket.on('join:responder', (data) => {
+      const uid = typeof data === 'object' ? data?.userId : data;
+      if (uid) socket.join(`user:${uid}`);
+      socket.join('responders');
+    });
+
     // Responder pushes their GPS from client side via socket
     socket.on('responder:update_location', (data) => {
       const v = data?.version === 'new-visayas' ? 'new-visayas' : 'manay';

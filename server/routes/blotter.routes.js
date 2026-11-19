@@ -2,7 +2,7 @@ const express = require('express');
 const router  = express.Router();
 const { auth, requireRole } = require('../middleware/auth');
 const {
-  getEntries, getEntryById, createEntry, updateEntry, updateStatus, notifyComplainant,
+  getEntries, getEntryById, createEntry, updateEntry, updateStatus, notifyComplainant, exportBlotterPdf,
 } = require('../controllers/blotter.controller');
 
 // Blotter entries are formal barangay complaint records filed by staff —
@@ -11,6 +11,7 @@ const {
 router.use(auth, requireRole('admin'));
 
 router.get('/',             getEntries);
+router.get('/:id/pdf',      exportBlotterPdf);
 router.get('/:id',          getEntryById);
 router.post('/',            createEntry);
 router.patch('/:id',        updateEntry);

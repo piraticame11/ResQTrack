@@ -20,6 +20,7 @@
     "mysql2": "^3.9.7",
     "node-cron": "^3.0.3",
     "nodemailer": "^8.0.10",
+    "pdf-lib": "^1.17.1",
     "socket.io": "^4.7.5",
     "tesseract.js": "^7.0.0"
   },

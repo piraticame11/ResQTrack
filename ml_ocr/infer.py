@@ -35,7 +35,10 @@ import cv2
 import numpy as np
 from PIL import Image, ImageEnhance, ImageOps
 import torch
-from rapidocr_onnxruntime import RapidOCR
+try:
+    from rapidocr import RapidOCR
+except ImportError:
+    from rapidocr_onnxruntime import RapidOCR
 from ultralytics import YOLO
 
 ROOT_DIR = Path(__file__).resolve().parent

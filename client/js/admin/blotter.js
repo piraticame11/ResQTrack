@@ -10,6 +10,7 @@ let currentEntryId = null;
 let currentEntryStatus = null;
 let currentEntryData = null;
 let pendingStatus = null;
+let activePreviewEntry = null;
 
 (async function () {
   const user = requireRole('admin');
@@ -40,6 +41,23 @@ async function initBlotterPage() {
 
   setupAutocomplete('comp', 'e-complainant_name', 'comp-autocomplete');
   setupAutocomplete('resp', 'e-respondent_name', 'resp-autocomplete');
+
+  // Radio listener for incident type "Others"
+  const typeRadios = document.querySelectorAll('input[name="incident_type"]');
+  const typeOtherInput = document.getElementById('e-incident_type_other');
+  if (typeRadios && typeOtherInput) {
+    typeRadios.forEach(r => {
+      r.addEventListener('change', () => {
+        if (document.getElementById('type-others-radio')?.checked) {
+          typeOtherInput.disabled = false;
+          typeOtherInput.focus();
+        } else {
+          typeOtherInput.disabled = true;
+          typeOtherInput.value = '';
+        }
+      });
+    });
+  }
 
   await loadEntries();
 }
@@ -103,12 +121,20 @@ function selectResidentMatch(type, userId) {
   const user = allResidents.find(u => u.id === userId);
   if (!user) return;
 
+  let calculatedAge = '';
+  if (user.birthdate) {
+    const diff = new Date() - new Date(user.birthdate);
+    const age = Math.floor(diff / (365.25 * 24 * 60 * 60 * 1000));
+    if (!isNaN(age) && age > 0) calculatedAge = age;
+  }
+
   if (type === 'comp') {
     document.getElementById('e-complainant_name').value    = user.full_name;
     document.getElementById('e-complainant_address').value = user.address_line || '';
     document.getElementById('e-complainant_contact').value = user.phone || '';
     document.getElementById('e-complainant_user_id').value = user.id;
     document.getElementById('e-complainant_email').value   = user.email || '';
+    if (calculatedAge) document.getElementById('e-complainant_age').value = calculatedAge;
     document.getElementById('comp-linked-name').textContent = `Linked: ${user.full_name}`;
     document.getElementById('comp-linked-badge').classList.remove('hidden');
     document.getElementById('comp-autocomplete').classList.add('hidden');
@@ -120,6 +146,7 @@ function selectResidentMatch(type, userId) {
     document.getElementById('e-respondent_address').value = user.address_line || '';
     document.getElementById('e-respondent_contact').value = user.phone || '';
     document.getElementById('e-respondent_user_id').value = user.id;
+    if (calculatedAge) document.getElementById('e-respondent_age').value = calculatedAge;
     document.getElementById('resp-linked-name').textContent = `Linked: ${user.full_name}`;
     document.getElementById('resp-linked-badge').classList.remove('hidden');
     document.getElementById('resp-autocomplete').classList.add('hidden');
@@ -166,7 +193,7 @@ async function loadEntries() {
   tbody.innerHTML = entries.map(b => `
     <tr class="table-row">
       <td class="px-4 py-3 font-mono text-xs text-blue-600 font-medium">${escapeHtml(b.entry_no)}</td>
-      <td class="px-4 py-3 text-sm text-gray-700">${escapeHtml(b.nature)}</td>
+      <td class="px-4 py-3 text-sm text-gray-700">${escapeHtml(b.incident_type || b.nature)}</td>
       <td class="px-4 py-3 text-sm text-gray-700">
         ${escapeHtml(b.complainant_name)}
         ${b.complainant_user_id ? '<span class="ml-1 text-[10px] text-blue-500" title="Linked Resident User"><i class="fa-solid fa-user-check"></i></span>' : ''}
@@ -186,7 +213,7 @@ async function loadEntries() {
           <button onclick="openNotifyModal(${b.id})" class="text-amber-500 hover:text-amber-700 text-sm p-1 transition-colors" title="Send Notification to Complainant">
             <i class="fa-solid fa-bell"></i>
           </button>
-          <button onclick="generateBlotterPDF(${b.id})" class="text-red-500 hover:text-red-700 text-sm p-1 transition-colors" title="Export Official PDF Report">
+          <button onclick="openBlotterPdfPreview(${b.id})" class="text-red-500 hover:text-red-700 text-sm p-1 transition-colors" title="Preview & Export Official PDF Report">
             <i class="fa-solid fa-file-pdf"></i>
           </button>
         </div>
@@ -200,6 +227,21 @@ function openNewEntryModal() {
   unlinkResident('resp');
   document.getElementById('comp-autocomplete').classList.add('hidden');
   document.getElementById('resp-autocomplete').classList.add('hidden');
+
+  const today = new Date().toISOString().slice(0, 10);
+  const now = new Date().toTimeString().slice(0, 5);
+  document.getElementById('e-incident_date').value = today;
+  document.getElementById('e-incident_time').value = now;
+
+  const user = (typeof getCurrentUser === 'function' ? getCurrentUser() : null);
+  const prepEl = document.getElementById('e-prepared_by');
+  if (prepEl) prepEl.value = user?.name || user?.full_name || 'Barangay Desk Officer';
+  const notedEl = document.getElementById('e-noted_by');
+  if (notedEl && !notedEl.value) notedEl.value = 'HON. PUNONG BARANGAY';
+
+  const typeOtherInput = document.getElementById('e-incident_type_other');
+  if (typeOtherInput) typeOtherInput.disabled = true;
+
   document.getElementById('new-entry-modal').classList.remove('hidden');
 }
 
@@ -207,41 +249,92 @@ function closeNewEntryModal() { document.getElementById('new-entry-modal').class
 
 async function handleEntrySubmit(e) {
   e.preventDefault();
-  const complainant_name    = document.getElementById('e-complainant_name').value.trim();
-  const complainant_address = document.getElementById('e-complainant_address').value.trim();
-  const complainant_contact = document.getElementById('e-complainant_contact').value.trim();
-  const respondent_name     = document.getElementById('e-respondent_name').value.trim();
-  const nature              = document.getElementById('e-nature').value.trim();
-  const narrative           = document.getElementById('e-narrative').value.trim();
+  const complainant_name        = document.getElementById('e-complainant_name').value.trim();
+  const complainant_age         = document.getElementById('e-complainant_age').value.trim();
+  const complainant_sex         = document.getElementById('e-complainant_sex').value.trim();
+  const complainant_address     = document.getElementById('e-complainant_address').value.trim();
+  const complainant_contact     = document.getElementById('e-complainant_contact').value.trim();
+  const complainant_occupation  = document.getElementById('e-complainant_occupation').value.trim();
+  const complainant_civil_status = document.getElementById('e-complainant_civil_status').value.trim();
 
-  if (!complainant_name || !complainant_address || !complainant_contact || !respondent_name || !nature || !narrative) {
-    showToast('Please fill in all required fields (Complainant Name, Address, Contact No., Respondent Name, Nature, and Narrative).', 'error');
+  const respondent_name         = document.getElementById('e-respondent_name').value.trim();
+  const respondent_age          = document.getElementById('e-respondent_age').value.trim();
+  const respondent_sex          = document.getElementById('e-respondent_sex').value.trim();
+  const respondent_address      = document.getElementById('e-respondent_address').value.trim();
+  const respondent_contact      = document.getElementById('e-respondent_contact').value.trim();
+  const respondent_occupation   = document.getElementById('e-respondent_occupation').value.trim();
+  const respondent_civil_status = document.getElementById('e-respondent_civil_status').value.trim();
+
+  const incident_date           = document.getElementById('e-incident_date').value.trim();
+  const incident_time           = document.getElementById('e-incident_time').value.trim();
+  const incident_place          = document.getElementById('e-incident_place').value.trim();
+
+  const selectedTypeRadio       = document.querySelector('input[name="incident_type"]:checked');
+  let incident_type             = selectedTypeRadio ? selectedTypeRadio.value : '';
+  if (incident_type === 'Others') {
+    const otherVal = document.getElementById('e-incident_type_other').value.trim();
+    incident_type = otherVal ? `Others (${otherVal})` : 'Others';
+  }
+
+  const narrative               = document.getElementById('e-narrative').value.trim();
+  const action_taken            = document.getElementById('e-action_taken').value.trim();
+
+  // Attachments
+  const attachList = [];
+  if (document.getElementById('attach-photos')?.checked)    attachList.push('Photo/s');
+  if (document.getElementById('attach-videos')?.checked)    attachList.push('Video/s');
+  if (document.getElementById('attach-documents')?.checked) attachList.push('Document/s');
+  if (document.getElementById('attach-others')?.checked)    attachList.push('Others');
+  const attachNote = document.getElementById('e-attachments_note')?.value.trim();
+  const attachments = attachList.length ? (attachNote ? `${attachList.join(', ')} - ${attachNote}` : attachList.join(', ')) : (attachNote || null);
+
+  const noted_by = document.getElementById('e-noted_by')?.value.trim() || 'HON. PUNONG BARANGAY';
+
+  if (!complainant_name || !complainant_address || !complainant_contact || !respondent_name || !incident_type || !narrative) {
+    showToast('Please fill in all required fields (Complainant Name, Address, Contact No., Respondent Name, Incident Type, and Narrative).', 'error');
     return;
   }
 
   const payload = {
     complainant_user_id: document.getElementById('e-complainant_user_id').value || null,
     complainant_name,
+    complainant_age:     complainant_age ? parseInt(complainant_age, 10) : null,
+    complainant_sex:     complainant_sex || null,
     complainant_email:   document.getElementById('e-complainant_email').value.trim() || null,
     complainant_address,
     complainant_contact,
+    complainant_occupation: complainant_occupation || null,
+    complainant_civil_status: complainant_civil_status || null,
+
     respondent_user_id:  document.getElementById('e-respondent_user_id').value || null,
     respondent_name,
-    respondent_address:  document.getElementById('e-respondent_address').value.trim() || null,
-    respondent_contact:  document.getElementById('e-respondent_contact').value.trim() || null,
-    nature,
+    respondent_age:      respondent_age ? parseInt(respondent_age, 10) : null,
+    respondent_sex:      respondent_sex || null,
+    respondent_address:  respondent_address || null,
+    respondent_contact:  respondent_contact || null,
+    respondent_occupation: respondent_occupation || null,
+    respondent_civil_status: respondent_civil_status || null,
+
+    incident_date:       incident_date || null,
+    incident_time:       incident_time || null,
+    incident_place:      incident_place || null,
+    incident_type,
+    nature:              incident_type,
     narrative,
+    action_taken:        action_taken || null,
+    attachments,
+    noted_by,
     purok_id: document.getElementById('e-purok').value || null,
   };
 
   const btn = document.getElementById('entry-submit-btn');
   btn.disabled = true;
-  btn.textContent = 'Filing…';
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1.5"></i> Filing…';
 
   const res = await api.post('/blotter', payload);
 
   btn.disabled = false;
-  btn.textContent = 'File Entry';
+  btn.innerHTML = '<i class="fa-solid fa-floppy-disk mr-1.5"></i> File Blotter Entry';
 
   if (res && res.ok) {
     showToast('Blotter entry filed successfully');
@@ -266,40 +359,60 @@ async function openDetailModal(id) {
 
   document.getElementById('detail-content').innerHTML = `
     <div class="grid grid-cols-2 gap-3 text-sm">
-      <div><span class="text-gray-500">Nature of Complaint</span><p class="font-semibold">${escapeHtml(entry.nature)}</p></div>
-      <div><span class="text-gray-500">Status</span><p>${blotterStatusBadge(entry.status)}</p></div>
-      <div><span class="text-gray-500">Purok Location</span><p class="font-semibold">${escapeHtml(entry.purok_name) || '—'}</p></div>
-      <div><span class="text-gray-500">Desk Officer</span><p class="font-semibold">${escapeHtml(entry.filed_by_name) || '—'}</p></div>
+      <div><span class="text-gray-500 text-xs">Type / Nature</span><p class="font-semibold text-gray-800">${escapeHtml(entry.incident_type || entry.nature)}</p></div>
+      <div><span class="text-gray-500 text-xs">Status</span><p>${blotterStatusBadge(entry.status)}</p></div>
+      <div><span class="text-gray-500 text-xs">Incident Date &amp; Time</span><p class="font-semibold text-gray-800">${entry.incident_date ? formatDate(entry.incident_date) : '—'} ${entry.incident_time ? 'at ' + escapeHtml(entry.incident_time) : ''}</p></div>
+      <div><span class="text-gray-500 text-xs">Place of Incident</span><p class="font-semibold text-gray-800">${escapeHtml(entry.incident_place || entry.purok_name) || '—'}</p></div>
+      <div><span class="text-gray-500 text-xs">Desk Officer (Prepared by)</span><p class="font-semibold text-gray-800">${escapeHtml(entry.filed_by_name) || '—'}</p></div>
+      <div><span class="text-gray-500 text-xs">Noted by</span><p class="font-semibold text-gray-800">${escapeHtml(entry.noted_by) || 'HON. PUNONG BARANGAY'}</p></div>
 
+      <!-- Section I: Complainant -->
       <div class="col-span-2 border-t border-gray-100 pt-3">
-        <span class="text-gray-500 text-xs uppercase font-semibold flex items-center justify-between">
-          <span>Complainant Information</span>
-          ${entry.complainant_user_id ? '<span class="text-[10px] text-blue-600 font-normal"><i class="fa-solid fa-user-check mr-1"></i>Verified Resident Account Linked</span>' : ''}
+        <span class="text-gray-500 text-xs uppercase font-bold flex items-center justify-between text-blue-700">
+          <span>I. Complainant / Reporting Party</span>
+          ${entry.complainant_user_id ? '<span class="text-[10px] text-blue-600 font-normal"><i class="fa-solid fa-user-check mr-1"></i>Verified Resident Account</span>' : ''}
         </span>
         <p class="font-semibold text-gray-800 text-base mt-0.5">${escapeHtml(entry.complainant_name)}</p>
-        <p class="text-xs text-gray-600 mt-0.5"><i class="fa-solid fa-location-dot mr-1 text-gray-400"></i>${escapeHtml(entry.complainant_address)}</p>
-        <p class="text-xs text-gray-600 mt-0.5"><i class="fa-solid fa-phone mr-1 text-gray-400"></i>${escapeHtml(entry.complainant_contact)} ${entry.complainant_email || entry.complainant_linked_email ? ' · <i class="fa-solid fa-envelope mr-1 text-gray-400"></i>' + escapeHtml(entry.complainant_email || entry.complainant_linked_email) : ''}</p>
+        <div class="grid grid-cols-2 gap-2 text-xs text-gray-600 mt-1">
+          <p><strong>Age:</strong> ${entry.complainant_age || 'N/A'} · <strong>Sex:</strong> ${escapeHtml(entry.complainant_sex || 'N/A')}</p>
+          <p><strong>Civil Status:</strong> ${escapeHtml(entry.complainant_civil_status || 'N/A')} · <strong>Occupation:</strong> ${escapeHtml(entry.complainant_occupation || 'N/A')}</p>
+          <p class="col-span-2"><i class="fa-solid fa-location-dot mr-1 text-gray-400"></i>${escapeHtml(entry.complainant_address)}</p>
+          <p class="col-span-2"><i class="fa-solid fa-phone mr-1 text-gray-400"></i>${escapeHtml(entry.complainant_contact)} ${entry.complainant_email || entry.complainant_linked_email ? ' · <i class="fa-solid fa-envelope mr-1 text-gray-400"></i>' + escapeHtml(entry.complainant_email || entry.complainant_linked_email) : ''}</p>
+        </div>
       </div>
 
+      <!-- Section II: Respondent -->
       <div class="col-span-2 border-t border-gray-100 pt-3">
-        <span class="text-gray-500 text-xs uppercase font-semibold flex items-center justify-between">
-          <span>Respondent Information</span>
-          ${entry.respondent_user_id ? '<span class="text-[10px] text-purple-600 font-normal"><i class="fa-solid fa-user-check mr-1"></i>Verified Resident Account Linked</span>' : ''}
+        <span class="text-gray-500 text-xs uppercase font-bold flex items-center justify-between text-purple-700">
+          <span>II. Respondent / Person Involved</span>
+          ${entry.respondent_user_id ? '<span class="text-[10px] text-purple-600 font-normal"><i class="fa-solid fa-user-check mr-1"></i>Verified Resident Account</span>' : ''}
         </span>
         <p class="font-semibold text-gray-800 text-base mt-0.5">${escapeHtml(entry.respondent_name)}</p>
-        <p class="text-xs text-gray-600 mt-0.5"><i class="fa-solid fa-location-dot mr-1 text-gray-400"></i>${escapeHtml(entry.respondent_address) || 'No address provided'}</p>
-        ${entry.respondent_contact ? `<p class="text-xs text-gray-600 mt-0.5"><i class="fa-solid fa-phone mr-1 text-gray-400"></i>${escapeHtml(entry.respondent_contact)}</p>` : ''}
+        <div class="grid grid-cols-2 gap-2 text-xs text-gray-600 mt-1">
+          <p><strong>Age:</strong> ${entry.respondent_age || 'N/A'} · <strong>Sex:</strong> ${escapeHtml(entry.respondent_sex || 'N/A')}</p>
+          <p><strong>Civil Status:</strong> ${escapeHtml(entry.respondent_civil_status || 'N/A')} · <strong>Occupation:</strong> ${escapeHtml(entry.respondent_occupation || 'N/A')}</p>
+          <p class="col-span-2"><i class="fa-solid fa-location-dot mr-1 text-gray-400"></i>${escapeHtml(entry.respondent_address) || 'No address provided'}</p>
+          ${entry.respondent_contact ? `<p class="col-span-2"><i class="fa-solid fa-phone mr-1 text-gray-400"></i>${escapeHtml(entry.respondent_contact)}</p>` : ''}
+        </div>
       </div>
 
+      <!-- Section IV: Narrative -->
       <div class="col-span-2 border-t border-gray-100 pt-3">
-        <span class="text-gray-500 font-medium">Facts of Complaint / Narrative</span>
-        <p class="bg-gray-50 border border-gray-200/80 rounded-lg p-3 mt-1 text-gray-700 leading-relaxed whitespace-pre-line">${escapeHtml(entry.narrative)}</p>
+        <span class="text-gray-700 font-semibold text-xs uppercase">IV. Incident Narrative</span>
+        <p class="bg-gray-50 border border-gray-200/80 rounded-lg p-3 mt-1 text-gray-700 leading-relaxed whitespace-pre-line text-xs font-mono">${escapeHtml(entry.narrative)}</p>
       </div>
 
+      <!-- Section V: Action Taken -->
       ${entry.action_taken ? `
         <div class="col-span-2">
-          <span class="text-gray-500 font-medium">Action Taken / Resolution Notes</span>
-          <p class="bg-blue-50/60 border border-blue-100 rounded-lg p-3 mt-1 text-blue-900 leading-relaxed whitespace-pre-line">${escapeHtml(entry.action_taken)}</p>
+          <span class="text-gray-700 font-semibold text-xs uppercase">V. Action Taken / Remarks</span>
+          <p class="bg-blue-50/60 border border-blue-100 rounded-lg p-3 mt-1 text-blue-900 leading-relaxed whitespace-pre-line text-xs">${escapeHtml(entry.action_taken)}</p>
+        </div>` : ''}
+
+      <!-- Section VI: Attachments -->
+      ${entry.attachments ? `
+        <div class="col-span-2 text-xs text-gray-600">
+          <span class="font-semibold text-gray-700 uppercase">VI. Attachments:</span> ${escapeHtml(entry.attachments)}
         </div>` : ''}
 
       <div class="col-span-2 flex items-center justify-between text-xs text-gray-500 border-t border-gray-100 pt-3">
@@ -427,148 +540,115 @@ async function handleNotifySubmit(e) {
   }
 }
 
-// ── Official Barangay Blotter Report PDF Export ──
+// ── Official Barangay Blotter Report PDF Preview & Export ──
+let activePdfBlobUrl = null;
+
 function exportDetailToPDF() {
-  if (currentEntryData) generateBlotterPDF(currentEntryData.id, currentEntryData);
+  if (currentEntryData) openBlotterPdfPreview(currentEntryData.id, currentEntryData);
 }
 
-async function generateBlotterPDF(id, cachedData = null) {
+async function openBlotterPdfPreview(id, cachedData = null) {
   let entry = cachedData;
-  if (!entry) {
-    const res = await api.get(`/blotter/${id}`);
-    if (!res || !res.ok) { showToast('Could not load blotter entry for PDF export', 'error'); return; }
-    entry = await res.json();
-  }
+  activePreviewEntry = entry;
 
-  showToast('Generating official Blotter Report PDF…');
+  const modal = document.getElementById('pdf-preview-modal');
+  const canvas = document.getElementById('pdf-preview-canvas');
+  modal.classList.remove('hidden');
 
-  const container = document.createElement('div');
-  container.style.position = 'fixed';
-  container.style.left = '-9999px';
-  container.style.top = '0';
-  container.style.width = '794px'; // standard A4 px width
-  container.style.background = '#ffffff';
-  container.style.color = '#1a202c';
-  container.style.fontFamily = "'Times New Roman', Times, serif";
-  container.style.padding = '40px 50px';
-  container.style.lineHeight = '1.4';
-
-  const tenantName = (typeof getTenantName === 'function' ? getTenantName() : 'Barangay Manay');
-  const tenantUpper = tenantName.toUpperCase();
-
-  const filedDate = entry.filed_at ? new Date(entry.filed_at).toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' }) : '—';
-  const filedTime = entry.filed_at ? new Date(entry.filed_at).toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit' }) : '—';
-
-  container.innerHTML = `
-    <div style="text-align: center; border-bottom: 2px solid #2d3748; padding-bottom: 15px; margin-bottom: 20px;">
-      <p style="margin: 0; font-size: 13px; text-transform: uppercase; letter-spacing: 1px;">Republic of the Philippines</p>
-      <p style="margin: 2px 0; font-size: 13px;">Province of Davao del Norte · City of Panabo</p>
-      <h2 style="margin: 4px 0 2px 0; font-size: 20px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; color: #1a365d;">${tenantUpper}</h2>
-      <p style="margin: 0; font-size: 12px; font-style: italic; color: #4a5568;">Office of the Lupong Tagapamayapa / Barangay Peace and Order Council</p>
-      <h1 style="margin: 15px 0 0 0; font-size: 18px; font-weight: bold; text-transform: uppercase; text-decoration: underline; letter-spacing: 1.5px;">BARANGAY BLOTTER INCIDENT REPORT</h1>
-    </div>
-
-    <table style="width: 100%; border-collapse: collapse; margin-bottom: 15px; font-size: 12px;">
-      <tr>
-        <td style="padding: 4px 0; width: 50%;"><strong>BLOTTER ENTRY NO:</strong> <span style="font-family: monospace; font-size: 14px; font-weight: bold; color: #2b6cb0;">${escapeHtml(entry.entry_no)}</span></td>
-        <td style="padding: 4px 0; width: 50%; text-align: right;"><strong>DATE &amp; TIME FILED:</strong> ${filedDate} ${filedTime}</td>
-      </tr>
-      <tr>
-        <td style="padding: 4px 0;"><strong>NATURE OF COMPLAINT:</strong> ${escapeHtml(entry.nature)}</td>
-        <td style="padding: 4px 0; text-align: right;"><strong>STATUS:</strong> <span style="text-transform: uppercase; font-weight: bold;">${escapeHtml(entry.status)}</span></td>
-      </tr>
-      <tr>
-        <td style="padding: 4px 0;" colspan="2"><strong>PUROK / LOCATION:</strong> ${escapeHtml(entry.purok_name || tenantName)}</td>
-      </tr>
-    </table>
-
-    <div style="border: 1px solid #cbd5e0; border-radius: 4px; padding: 10px 14px; margin-bottom: 14px; background: #f8fafc; font-size: 12px;">
-      <p style="margin: 0 0 6px 0; font-weight: bold; text-transform: uppercase; border-bottom: 1px solid #e2e8f0; padding-bottom: 3px; color: #2c5282;">I. COMPLAINANT INFORMATION</p>
-      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px;">
-        <p style="margin: 2px 0;"><strong>Full Name:</strong> ${escapeHtml(entry.complainant_name)}</p>
-        <p style="margin: 2px 0;"><strong>Contact Number:</strong> ${escapeHtml(entry.complainant_contact || 'N/A')}</p>
-        <p style="margin: 2px 0; grid-column: span 2;"><strong>Address:</strong> ${escapeHtml(entry.complainant_address || `${tenantName}, Panabo City`)}</p>
-        ${entry.complainant_email ? `<p style="margin: 2px 0; grid-column: span 2;"><strong>Email Address:</strong> ${escapeHtml(entry.complainant_email)}</p>` : ''}
-      </div>
-    </div>
-
-    <div style="border: 1px solid #cbd5e0; border-radius: 4px; padding: 10px 14px; margin-bottom: 14px; background: #f8fafc; font-size: 12px;">
-      <p style="margin: 0 0 6px 0; font-weight: bold; text-transform: uppercase; border-bottom: 1px solid #e2e8f0; padding-bottom: 3px; color: #2c5282;">II. RESPONDENT INFORMATION</p>
-      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px;">
-        <p style="margin: 2px 0;"><strong>Full Name:</strong> ${escapeHtml(entry.respondent_name)}</p>
-        <p style="margin: 2px 0;"><strong>Contact Number:</strong> ${escapeHtml(entry.respondent_contact || 'N/A')}</p>
-        <p style="margin: 2px 0; grid-column: span 2;"><strong>Address:</strong> ${escapeHtml(entry.respondent_address || `${tenantName}, Panabo City`)}</p>
-      </div>
-    </div>
-
-    <div style="border: 1px solid #cbd5e0; border-radius: 4px; padding: 12px 14px; margin-bottom: 14px; font-size: 12px;">
-      <p style="margin: 0 0 6px 0; font-weight: bold; text-transform: uppercase; border-bottom: 1px solid #e2e8f0; padding-bottom: 3px; color: #2c5282;">III. FACTS OF THE COMPLAINT / INCIDENT NARRATIVE</p>
-      <p style="margin: 6px 0 0 0; text-align: justify; white-space: pre-line; line-height: 1.6;">${escapeHtml(entry.narrative)}</p>
-    </div>
-
-    ${entry.action_taken ? `
-      <div style="border: 1px solid #cbd5e0; border-radius: 4px; padding: 10px 14px; margin-bottom: 14px; background: #f0fdf4; font-size: 12px;">
-        <p style="margin: 0 0 6px 0; font-weight: bold; text-transform: uppercase; border-bottom: 1px solid #bbf7d0; padding-bottom: 3px; color: #166534;">IV. ACTION TAKEN / MEDIATION RESOLUTION / REMARKS</p>
-        <p style="margin: 6px 0 0 0; white-space: pre-line; line-height: 1.5; color: #14532d;">${escapeHtml(entry.action_taken)}</p>
-      </div>` : ''}
-
-    <div style="margin-top: 35px; font-size: 12px;">
-      <table style="width: 100%; border-collapse: collapse;">
-        <tr>
-          <td style="width: 50%; vertical-align: top; padding-right: 20px;">
-            <p style="margin-bottom: 40px;">Certified correct by Complainant:</p>
-            <p style="border-top: 1px solid #000; width: 85%; text-align: center; margin: 0; padding-top: 4px; font-weight: bold;">
-              ${escapeHtml(entry.complainant_name)}
-            </p>
-            <p style="text-align: center; width: 85%; margin: 2px 0 0 0; font-size: 11px; color: #718096;">Complainant Signature Over Printed Name</p>
-          </td>
-          <td style="width: 50%; vertical-align: top; padding-left: 20px;">
-            <p style="margin-bottom: 40px;">Recorded / Filed by:</p>
-            <p style="border-top: 1px solid #000; width: 85%; text-align: center; margin: 0; padding-top: 4px; font-weight: bold;">
-              ${escapeHtml(entry.filed_by_name || 'Barangay Desk Officer')}
-            </p>
-            <p style="text-align: center; width: 85%; margin: 2px 0 0 0; font-size: 11px; color: #718096;">Duty Officer / Administrator</p>
-          </td>
-        </tr>
-        <tr>
-          <td colspan="2" style="text-align: center; padding-top: 40px;">
-            <p style="margin-bottom: 40px;">Attested &amp; Approved by:</p>
-            <p style="border-top: 1px solid #000; width: 45%; margin: auto; padding-top: 4px; font-weight: bold; text-transform: uppercase;">
-              HON. PUNONG BARANGAY
-            </p>
-            <p style="margin: 2px 0 0 0; font-size: 11px; color: #718096;">Punong Barangay / Lupon Chairman</p>
-          </td>
-        </tr>
-      </table>
-    </div>
-
-    <div style="margin-top: 30px; border-top: 1px dashed #cbd5e0; padding-top: 8px; text-align: center; font-size: 10px; color: #a0aec0;">
-      ResQTrack Digital Blotter Record Management System · Official Copy · ${tenantName}, Panabo City, Davao del Norte
+  // Loading state
+  canvas.innerHTML = `
+    <div class="flex flex-col items-center justify-center py-24 text-slate-300">
+      <i class="fa-solid fa-circle-notch fa-spin text-4xl text-blue-500 mb-3"></i>
+      <p class="font-medium text-sm">Generating Official Blotter PDF from template…</p>
+      <p class="text-xs text-slate-500 mt-1">Populating official barangay form inputs with complaint record data</p>
     </div>
   `;
 
-  document.body.appendChild(container);
-
-  if (typeof html2pdf !== 'undefined') {
-    const opt = {
-      margin:       10,
-      filename:     `Blotter_Report_${entry.entry_no}.pdf`,
-      image:        { type: 'jpeg', quality: 0.98 },
-      html2canvas:  { scale: 2, useCORS: true },
-      jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
-    };
-    try {
-      await html2pdf().set(opt).from(container).save();
-      showToast('PDF downloaded successfully');
-    } catch (err) {
-      console.error('html2pdf export error:', err);
-      window.print();
-    } finally {
-      container.remove();
+  try {
+    const res = await api.get(`/blotter/${id}/pdf`);
+    if (!res || !res.ok) {
+      canvas.innerHTML = `
+        <div class="p-8 text-center text-red-400">
+          <i class="fa-solid fa-circle-exclamation text-3xl mb-2"></i>
+          <p class="font-semibold">Failed to generate official blotter PDF.</p>
+          <p class="text-xs text-slate-400 mt-1">Please try again or contact system support.</p>
+        </div>
+      `;
+      showToast('Could not load official blotter PDF', 'error');
+      return;
     }
-  } else {
-    window.print();
-    container.remove();
+
+    const blob = await res.blob();
+    if (activePdfBlobUrl) {
+      URL.revokeObjectURL(activePdfBlobUrl);
+    }
+    activePdfBlobUrl = URL.createObjectURL(blob);
+
+    if (!activePreviewEntry) {
+      activePreviewEntry = allEntries.find(b => b.id === id) || { id, entry_no: `BLT-${id}` };
+    }
+
+    canvas.innerHTML = `
+      <div class="w-full h-full flex flex-col flex-1 min-h-[70vh]">
+        <iframe id="pdf-preview-frame" src="${activePdfBlobUrl}#toolbar=0&navpanes=0" class="w-full flex-1 min-h-[72vh] rounded-lg border border-slate-700 shadow-xl bg-white" title="Official Blotter Document"></iframe>
+        <div class="mt-2 text-center text-xs text-slate-400">
+          Official Barangay Blotter Document · Exact base template filled with complaint record details
+        </div>
+      </div>
+    `;
+  } catch (err) {
+    console.error('Error generating blotter PDF preview:', err);
+    canvas.innerHTML = `<div class="p-8 text-center text-red-400">Error: ${escapeHtml(err.message)}</div>`;
   }
 }
 
+function closePdfPreviewModal() {
+  document.getElementById('pdf-preview-modal').classList.add('hidden');
+}
+
+function openPdfNewTab() {
+  if (activePdfBlobUrl) {
+    window.open(activePdfBlobUrl, '_blank');
+  } else if (activePreviewEntry) {
+    const token = typeof getToken === 'function' ? getToken() : '';
+    window.open(`/api/blotter/${activePreviewEntry.id}/pdf?token=${encodeURIComponent(token)}`, '_blank');
+  }
+}
+
+function downloadActivePdf() {
+  if (!activePreviewEntry) return;
+  const fileName = `Barangay_Blotter_${activePreviewEntry.entry_no || 'Document'}.pdf`;
+
+  if (activePdfBlobUrl) {
+    const a = document.createElement('a');
+    a.href = activePdfBlobUrl;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    showToast('Official Blotter PDF downloaded');
+  } else {
+    const token = typeof getToken === 'function' ? getToken() : '';
+    window.location.href = `/api/blotter/${activePreviewEntry.id}/pdf?token=${encodeURIComponent(token)}`;
+  }
+}
+
+function printActivePdf() {
+  const frame = document.getElementById('pdf-preview-frame');
+  if (frame && frame.contentWindow) {
+    try {
+      frame.contentWindow.focus();
+      frame.contentWindow.print();
+      return;
+    } catch (e) {
+      console.warn('Iframe print failed, falling back:', e);
+    }
+  }
+  if (activePdfBlobUrl) {
+    const printWin = window.open(activePdfBlobUrl, '_blank');
+    if (printWin) {
+      printWin.focus();
+      setTimeout(() => { try { printWin.print(); } catch (_) {} }, 500);
+    }
+  }
+}

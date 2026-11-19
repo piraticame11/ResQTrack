@@ -26,8 +26,32 @@ let responderGpsMarker = null;
   const socket = io();
   const slug = typeof getTenantSlug === 'function' ? getTenantSlug() : 'manay';
   socket.emit('join:barangay', slug);
+  if (currentUser?.id) {
+    socket.emit('join:user', currentUser.id);
+    socket.emit('join:responder', { userId: currentUser.id });
+  }
+
+  socket.on('incident:assigned', (data) => {
+    if (data && data.version && data.version !== slug) return;
+    const isMe = data.assigned_responder_id === currentUser.id ||
+                 (Array.isArray(data.responder_ids) && data.responder_ids.includes(currentUser.id));
+    if (isMe) {
+      handleDispatchAlert(data);
+    } else {
+      loadActive();
+    }
+  });
+
   socket.on('incident:status_update', (data) => {
     if (data && data.version && data.version !== slug) return;
+    if (data?.status === 'Assigned') {
+      const isMe = data.assigned_responder_id === currentUser.id ||
+                   (Array.isArray(data.responder_ids) && data.responder_ids.includes(currentUser.id));
+      if (isMe) {
+        handleDispatchAlert(data);
+        return;
+      }
+    }
     loadActive();
   });
   socket.on('incident:new', (data) => {
@@ -35,6 +59,47 @@ let responderGpsMarker = null;
     loadActive();
   });
 })();
+
+function playDispatchChime() {
+  try {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    if (ctx.state === 'suspended') {
+      ctx.resume();
+    }
+    const tones = [
+      { f: 587.33, t: 0.00, d: 0.14 }, // D5
+      { f: 880.00, t: 0.12, d: 0.16 }, // A5
+      { f: 1174.66, t: 0.26, d: 0.35 }, // D6
+      { f: 587.33, t: 0.65, d: 0.14 }, // D5
+      { f: 880.00, t: 0.77, d: 0.16 }, // A5
+      { f: 1174.66, t: 0.91, d: 0.45 }, // D6
+    ];
+    tones.forEach(tone => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(tone.f, ctx.currentTime + tone.t);
+      gain.gain.setValueAtTime(0.4, ctx.currentTime + tone.t);
+      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + tone.t + tone.d);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(ctx.currentTime + tone.t);
+      osc.stop(ctx.currentTime + tone.t + tone.d);
+    });
+  } catch (err) {
+    console.warn('Could not play dispatch chime:', err);
+  }
+}
+
+function handleDispatchAlert(data) {
+  playDispatchChime();
+  if (typeof showToast === 'function') {
+    showToast(`🚨 DISPATCH ALERT: You have been assigned to ${data.reference_no || 'Incident'} (${data.incident_type || ''})!`, 'info');
+  }
+  loadActive();
+}
 
 async function loadActive() {
   const res = await api.get('/incidents');
