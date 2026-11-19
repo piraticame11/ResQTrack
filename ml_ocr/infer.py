@@ -30,11 +30,16 @@ from typing import Any
 
 # Suppress noisy ultralytics/onnxruntime logs on stdout
 os.environ.setdefault("YOLO_VERBOSE", "False")
+os.environ.setdefault("OMP_NUM_THREADS", "2")
+os.environ.setdefault("OPENBLAS_NUM_THREADS", "2")
+os.environ.setdefault("MKL_NUM_THREADS", "2")
 
 import cv2
 import numpy as np
 from PIL import Image, ImageEnhance, ImageOps
 import torch
+if torch.get_num_threads() > 2:
+    torch.set_num_threads(2)
 try:
     from rapidocr import RapidOCR
 except ImportError:
@@ -657,6 +662,9 @@ class PhilSysOcrEngine:
 
     def recognize_image(self, image_path: str | Path) -> dict[str, Any]:
         raw_img = ImageOps.exif_transpose(Image.open(image_path)).convert("RGB")
+        max_dim = 1600
+        if max(raw_img.size) > max_dim:
+            raw_img.thumbnail((max_dim, max_dim), Image.Resampling.LANCZOS)
         upright_img, dets, applied_rot = self._orient_and_detect(raw_img)
         uw, uh = upright_img.size
 

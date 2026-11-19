@@ -108,20 +108,22 @@ function startPythonWorker() {
     if (waiter) waiter.resolve(parsed);
   });
 
-  const handleExit = (code) => {
+  const handleExit = (code, signal) => {
     clearTimeout(startupTimer);
+    const reason = signal ? `signal ${signal}` : `code ${code}`;
+    const extra = stderrBuf.trim() ? `: ${stderrBuf.trim()}` : '';
     if (!isReady) {
-      readyReject(new Error(`Python OCR worker exited (${code}): ${stderrBuf}`));
+      readyReject(new Error(`Python OCR worker exited before ready (${reason})${extra}`));
     }
     while (pendingWaiters.length) {
       const waiter = pendingWaiters.shift();
-      waiter.reject(new Error(`Python OCR worker exited unexpectedly (${code})`));
+      waiter.reject(new Error(`Python OCR worker exited unexpectedly (${reason})${extra}`));
     }
     workerState = null;
   };
 
-  proc.on('error', (err) => handleExit(err.message));
-  proc.on('exit', handleExit);
+  proc.on('error', (err) => handleExit(null, err.message));
+  proc.on('exit', (code, signal) => handleExit(code, signal));
 
   workerState = { proc, rl, pendingWaiters, readyPromise };
   return readyPromise;
@@ -135,8 +137,8 @@ function runPythonOcr(imagePath) {
         const idx = state.pendingWaiters.findIndex((w) => w.reject === reject);
         if (idx !== -1) state.pendingWaiters.splice(idx, 1);
         resetPythonWorker();
-        reject(new Error('Python OCR inference timed out'));
-      }, 20000);
+        reject(new Error('Python OCR inference timed out (60s)'));
+      }, 60000);
       timer.unref?.();
 
       state.pendingWaiters.push({
