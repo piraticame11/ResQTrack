@@ -10,19 +10,54 @@
   <style>
     .card-header-stripe {
       background: white;
-      padding: 1.25rem 2rem;
+      padding: 1rem 1.25rem;
       border-bottom: 1.5px solid #bfdbfe;
-      display: flex;
-      justify-content: space-between;
+    }
+    @media (min-width: 640px) {
+      .card-header-stripe {
+        padding: 1.25rem 2rem;
+      }
+    }
+    .card-header-stripe img.brand-logo {
+      border: 2px solid #bfdbfe;
+      border-radius: 0.875rem;
+      padding: 5px;
+      background: #eff6ff;
+      box-shadow: 0 4px 14px rgba(59,130,246,0.12), 0 1px 3px rgba(59,130,246,0.08);
+      flex-shrink: 0;
+    }
+    @media (min-width: 640px) {
+      .card-header-stripe img.brand-logo {
+        border-radius: 1rem;
+        padding: 6px;
+        box-shadow: 0 4px 16px rgba(59,130,246,0.15), 0 1px 4px rgba(59,130,246,0.10);
+      }
+    }
+    .header-layout {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      grid-template-areas:
+        "logo    .       action"
+        "heading heading heading"
+        "subtext subtext subtext";
+      row-gap: 0.625rem;
+      column-gap: 0.75rem;
       align-items: center;
     }
-    .card-header-stripe img {
-      border: 2px solid #bfdbfe;
-      border-radius: 1rem;
-      padding: 6px;
-      background: #eff6ff;
-      box-shadow: 0 4px 16px rgba(59,130,246,0.15), 0 1px 4px rgba(59,130,246,0.10);
+    @media (min-width: 640px) {
+      .header-layout {
+        grid-template-columns: auto 1fr auto;
+        grid-template-areas:
+          "logo heading action"
+          "logo subtext action";
+        row-gap: 0.25rem;
+        column-gap: 1rem;
+      }
     }
+    .header-logo    { grid-area: logo; display: flex; align-items: center; }
+    .header-heading { grid-area: heading; }
+    .header-subtext { grid-area: subtext; }
+    .header-action  { grid-area: action; display: flex; justify-content: flex-end; align-items: center; }
     .residency-tab { background: #f9fafb; border-color: #e5e7eb; color: #6b7280; }
     .residency-tab.active { background: #eff6ff; border-color: #3b82f6; color: #1d4ed8; }
   </style>
@@ -35,22 +70,39 @@
 
       <!-- Header stripe -->
       <div class="card-header-stripe">
-        <div class="flex items-center gap-3.5">
-          <img src="/public/images/favicon.png" alt="ResQTrack" class="h-12 w-12 sm:h-14 sm:w-14 object-contain">
-          <div>
+        <div class="header-layout">
+          <!-- Logo -->
+          <div class="header-logo">
             <div class="flex items-center gap-2">
-              <h1 class="text-base sm:text-lg font-bold text-gray-800">Create Resident Account</h1>
-              <span id="tenant-badge" class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-100 border border-blue-300 text-blue-800 text-xs font-bold shadow-2xs">
-                <i class="fa-solid fa-location-dot text-[11px] text-blue-600"></i>
+              <img src="/public/images/favicon.png" alt="ResQTrack" class="brand-logo h-10 w-10 sm:h-14 sm:w-14 object-contain">
+              <span class="text-sm font-bold text-gray-800 tracking-tight sm:hidden">ResQ<span class="text-blue-600">Track</span></span>
+            </div>
+          </div>
+
+          <!-- Heading & Tenant Badge -->
+          <div class="header-heading min-w-0">
+            <div class="flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
+              <h1 class="text-base sm:text-lg font-bold text-gray-800 leading-snug">Create Resident Account</h1>
+              <span id="tenant-badge" class="inline-flex items-center gap-1.5 px-2.5 py-0.5 sm:px-3 sm:py-1 rounded-full bg-blue-100 border border-blue-300 text-blue-800 text-[11px] sm:text-xs font-bold whitespace-nowrap shrink-0 shadow-xs">
+                <i class="fa-solid fa-location-dot text-[10px] sm:text-[11px] text-blue-600"></i>
                 <span id="tenant-badge-text">Barangay Manay</span>
               </span>
             </div>
-            <p class="text-xs text-gray-500 mt-0.5">Your account will be reviewed and verified by the Barangay Administrator prior to activation.</p>
+          </div>
+
+          <!-- Subtext -->
+          <div class="header-subtext min-w-0">
+            <p class="text-[11px] sm:text-xs text-gray-500 leading-relaxed">Your account will be reviewed and verified by the Barangay Administrator prior to activation.</p>
+          </div>
+
+          <!-- Sign In Link -->
+          <div class="header-action">
+            <a id="signin-header-link" href="/pages/shared/login.html" class="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl transition-colors shrink-0 whitespace-nowrap">
+              <i class="fa-solid fa-arrow-left"></i>
+              <span>Sign In</span>
+            </a>
           </div>
         </div>
-        <a id="signin-header-link" href="/pages/shared/login.html" class="hidden sm:inline-flex items-center gap-1.5 text-xs font-semibold text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 px-3.5 py-2 rounded-xl transition-colors">
-          <i class="fa-solid fa-arrow-left"></i> Sign In
-        </a>
       </div>
 
       <div class="p-6 lg:p-8">
@@ -258,6 +310,7 @@
                       <option value="">Select ID Type</option>
                       <option>PhilSys National ID</option>
                       <option>Driver's License</option>
+                      <option>Others</option>
                     </select>
                   </div>
                   <div>
@@ -328,7 +381,6 @@
                     <i class="fa-solid fa-rotate-left"></i> Retake Photo
                   </button>
                 </div>
-              </fieldset>
               </fieldset>
 
               <!-- ── Submission & Sign In ── -->
@@ -918,10 +970,10 @@
       modal.classList.remove('hidden');
       modalIconWrap.className = 'w-16 h-16 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center mx-auto mb-4 border border-blue-100 shadow-inner';
       modalIcon.className = 'fa-solid fa-circle-notch fa-spin text-2xl';
-      modalTitle.textContent = 'Scanning National ID';
-      modalDesc.textContent = 'Verifying PhilSys security identifier (PHL seal) and reading details…';
+      modalTitle.textContent = 'Scanning ID';
+      modalDesc.textContent = 'Checking for PhilSys security identifier (PHL seal)…';
       stepSeal.className = 'flex items-center gap-2 text-blue-600 font-medium';
-      stepSeal.innerHTML = '<i class="fa-solid fa-spinner fa-spin text-blue-500 w-4 text-center"></i><span>Verifying PhilSys Security Identifier (PHL Seal)…</span>';
+      stepSeal.innerHTML = '<i class="fa-solid fa-spinner fa-spin text-blue-500 w-4 text-center"></i><span>Checking PhilSys Security Identifier (PHL Seal)…</span>';
       stepFields.className = 'flex items-center gap-2 text-slate-400';
       stepFields.innerHTML = '<i class="fa-regular fa-circle text-slate-300 w-4 text-center"></i><span>Reading ID Number, Name, Birthdate & Address</span>';
       actions.classList.add('hidden');
@@ -940,27 +992,61 @@
         const res  = await fetch('/api/auth/ocr-id', { method: 'POST', body: fd });
         const data = await res.json();
 
-        if (!res.ok || !data.success || !data.extracted) {
-          const errMsg = data.message || "Couldn't automatically read your ID. Please ensure the PhilSys security identifier (PHL seal) is visible and clear.";
-          modalIconWrap.className = 'w-16 h-16 rounded-full bg-red-50 text-red-600 flex items-center justify-center mx-auto mb-4 border border-red-100 shadow-inner';
-          modalIcon.className = 'fa-solid fa-circle-xmark text-2xl';
-          modalTitle.textContent = 'National ID Not Verified';
-          modalDesc.textContent = errMsg;
-          stepSeal.className = 'flex items-center gap-2 text-red-600 font-medium';
-          stepSeal.innerHTML = '<i class="fa-solid fa-circle-xmark text-red-500 w-4 text-center"></i><span>PhilSys Security Identifier Not Detected</span>';
-          stepFields.className = 'flex items-center gap-2 text-slate-400';
-          stepFields.innerHTML = '<i class="fa-solid fa-ban text-slate-300 w-4 text-center"></i><span>Extraction stopped (ID not processed)</span>';
-          actions.classList.remove('hidden');
+        // 1. Non-National ID: Do NOT block, keep photo uploaded, skip autofill, set ID type to Others
+        if (data && data.success && data.is_philsys === false) {
+          stepSeal.className = 'flex items-center gap-2 text-blue-600 font-medium';
+          stepSeal.innerHTML = '<i class="fa-solid fa-circle-info text-blue-500 w-4 text-center"></i><span>Non-PhilSys ID (Photo Accepted)</span>';
+          stepFields.className = 'flex items-center gap-2 text-slate-500';
+          stepFields.innerHTML = '<i class="fa-solid fa-pen-to-square text-blue-500 w-4 text-center"></i><span>Auto-fill skipped · Please enter details manually</span>';
+
+          modalIconWrap.className = 'w-16 h-16 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center mx-auto mb-4 border border-blue-100 shadow-inner';
+          modalIcon.className = 'fa-solid fa-id-card text-2xl';
+          modalTitle.textContent = 'ID Photo Accepted';
+          modalDesc.textContent = 'Your ID has been uploaded. Since it is not a PhilSys National ID, auto-fill is disabled and ID Type is set to Others.';
+
+          const idTypeSel = document.getElementById('id_type');
+          if (idTypeSel) {
+            idTypeSel.value = 'Others';
+          }
           unlockIdType();
 
           banner.classList.remove('hidden');
-          bannerIcon.className = 'fa-solid fa-circle-exclamation text-red-500';
-          bannerText.textContent = errMsg;
-          setTimeout(() => banner.classList.add('hidden'), 8000);
+          bannerIcon.className = 'fa-solid fa-circle-check text-blue-600';
+          bannerText.textContent = 'ID photo uploaded. ID Type set to Others — please enter your details manually.';
+          setTimeout(() => banner.classList.add('hidden'), 7000);
+
+          setTimeout(closeModal, 1300);
           return;
         }
 
-        // Successfully verified and extracted
+        // 2. Server or network error response
+        if (!res.ok || !data.success || !data.extracted) {
+          const errMsg = data.message || "ID photo attached. Auto-fill unavailable — please fill in your details manually.";
+          modalIconWrap.className = 'w-16 h-16 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center mx-auto mb-4 border border-blue-100 shadow-inner';
+          modalIcon.className = 'fa-solid fa-id-card text-2xl';
+          modalTitle.textContent = 'ID Photo Attached';
+          modalDesc.textContent = errMsg;
+          stepSeal.className = 'flex items-center gap-2 text-slate-600 font-medium';
+          stepSeal.innerHTML = '<i class="fa-solid fa-circle-info text-blue-500 w-4 text-center"></i><span>Non-PhilSys ID (Photo Accepted)</span>';
+          stepFields.className = 'flex items-center gap-2 text-slate-500';
+          stepFields.innerHTML = '<i class="fa-solid fa-pen-to-square text-blue-500 w-4 text-center"></i><span>Auto-fill unavailable · Please enter details manually</span>';
+
+          const idTypeSel = document.getElementById('id_type');
+          if (idTypeSel && !idTypeSel.value) {
+            idTypeSel.value = 'Others';
+          }
+          unlockIdType();
+
+          banner.classList.remove('hidden');
+          bannerIcon.className = 'fa-solid fa-circle-check text-blue-600';
+          bannerText.textContent = 'ID photo attached. Please enter your details manually.';
+          setTimeout(() => banner.classList.add('hidden'), 7000);
+
+          setTimeout(closeModal, 1300);
+          return;
+        }
+
+        // 3. PhilSys National ID Verified and Extracted
         stepSeal.className = 'flex items-center gap-2 text-emerald-600 font-medium';
         stepSeal.innerHTML = '<i class="fa-solid fa-circle-check text-emerald-500 w-4 text-center"></i><span>PhilSys Security Identifier Verified</span>';
         stepFields.className = 'flex items-center gap-2 text-emerald-600 font-medium';
@@ -1022,18 +1108,21 @@
         setTimeout(closeModal, 1100);
       } catch (err) {
         unlockIdType();
-        modalIconWrap.className = 'w-16 h-16 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center mx-auto mb-4 border border-amber-100 shadow-inner';
-        modalIcon.className = 'fa-solid fa-triangle-exclamation text-2xl';
-        modalTitle.textContent = 'Could Not Read ID';
-        modalDesc.textContent = err.message || "Couldn't connect to ID reader. Please fill in the fields manually.";
-        stepSeal.className = 'flex items-center gap-2 text-amber-600';
-        stepSeal.innerHTML = '<i class="fa-solid fa-triangle-exclamation text-amber-500 w-4 text-center"></i><span>OCR processing encountered an issue</span>';
-        actions.classList.remove('hidden');
+        const idTypeSel = document.getElementById('id_type');
+        if (idTypeSel && !idTypeSel.value) idTypeSel.value = 'Others';
+
+        modalIconWrap.className = 'w-16 h-16 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center mx-auto mb-4 border border-blue-100 shadow-inner';
+        modalIcon.className = 'fa-solid fa-id-card text-2xl';
+        modalTitle.textContent = 'ID Photo Attached';
+        modalDesc.textContent = "Your ID photo has been uploaded. Please fill in the fields manually.";
+        stepSeal.className = 'flex items-center gap-2 text-slate-500';
+        stepSeal.innerHTML = '<i class="fa-solid fa-circle-info text-blue-500 w-4 text-center"></i><span>Manual Entry Mode</span>';
 
         banner.classList.remove('hidden');
         bannerIcon.className = 'fa-solid fa-circle-info';
-        bannerText.textContent = "Couldn't automatically read your ID — please fill in the fields manually.";
+        bannerText.textContent = "ID photo attached. Please fill in your details manually.";
         setTimeout(() => banner.classList.add('hidden'), 7000);
+        setTimeout(closeModal, 1300);
       }
     }
 
@@ -1249,9 +1338,9 @@
       <div id="ocr-modal-icon-wrap" class="w-16 h-16 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center mx-auto mb-4 border border-blue-100 shadow-inner">
         <i class="fa-solid fa-circle-notch fa-spin text-2xl" id="ocr-modal-icon"></i>
       </div>
-      <h3 id="ocr-modal-title" class="text-base font-bold text-slate-800 mb-1">Scanning National ID</h3>
+      <h3 id="ocr-modal-title" class="text-base font-bold text-slate-800 mb-1">Scanning ID</h3>
       <p id="ocr-modal-desc" class="text-xs text-slate-500 leading-relaxed mb-4">
-        Verifying PhilSys security identifier (PHL seal) and reading details…
+        Checking for PhilSys security identifier (PHL seal) and reading details…
       </p>
 
       <!-- Checklist / Step pills -->

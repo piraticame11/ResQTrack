@@ -14,30 +14,71 @@ function fmtMinutes(mins) {
 let _cachedIncidents = [];
 let _cachedPerformance = [];
 
-(async function () {
-  const user = requireRole('admin');
-  if (!user) return;
-  setUserUI(user);
-
-  const yearSel = document.getElementById('report-year');
-  const now     = new Date();
-
-  for (let y = now.getFullYear(); y >= now.getFullYear() - 4; y--) {
-    const o = document.createElement('option');
-    o.value = y; o.textContent = y;
-    yearSel.appendChild(o);
+async function populatePurokSelector(elOrId, placeholder = '— Select Purok —') {
+  const el = typeof elOrId === 'string' ? document.getElementById(elOrId) : elOrId;
+  if (!el) return;
+  if (typeof populatePurokSelect === 'function') {
+    return populatePurokSelect(el, { placeholder });
   }
+}
 
-  document.getElementById('report-month').value = now.getMonth() + 1;
-  document.getElementById('report-period').value = 'annual';
+async function initReportsPage() {
+  try {
+    const user = typeof requireRole === 'function' ? requireRole('admin') : null;
+    if (!user) return;
+    if (typeof setUserUI === 'function') setUserUI(user);
 
-  populateWeekSelector();
-  await populatePurokSelector('filter-purok', 'All Puroks');
-  await populateResponderSelector();
-  onPeriodChange(false);
+    const yearSel = document.getElementById('report-year');
+    const now     = new Date();
 
-  await loadReports();
-})();
+    if (yearSel && yearSel.options.length === 0) {
+      for (let y = now.getFullYear(); y >= now.getFullYear() - 4; y--) {
+        const o = document.createElement('option');
+        o.value = y; o.textContent = y;
+        yearSel.appendChild(o);
+      }
+    }
+
+    const monthSel = document.getElementById('report-month');
+    if (monthSel) monthSel.value = now.getMonth() + 1;
+
+    const periodSel = document.getElementById('report-period');
+    if (periodSel) periodSel.value = 'annual';
+
+    populateWeekSelector();
+
+    const purokEl = document.getElementById('filter-purok');
+    if (purokEl && typeof populatePurokSelect === 'function') {
+      try {
+        await populatePurokSelect(purokEl, { placeholder: 'All Puroks' });
+      } catch (purokErr) {
+        console.warn('Failed to populate purok selector:', purokErr);
+      }
+    }
+
+    try {
+      await populateResponderSelector();
+    } catch (respErr) {
+      console.warn('Failed to populate responder selector:', respErr);
+    }
+
+    onPeriodChange(false);
+    await loadReports();
+  } catch (err) {
+    console.error('Reports initialization error:', err);
+    try {
+      await loadReports();
+    } catch (loadErr) {
+      console.error('Fallback loadReports error:', loadErr);
+    }
+  }
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initReportsPage);
+} else {
+  initReportsPage();
+}
 
 async function populateResponderSelector() {
   const sel = document.getElementById('filter-responder');
@@ -397,6 +438,7 @@ let activeReportBlobUrl = null;
 let activeReportDoc = null;
 let activeReportFileName = '';
 let isUpdatingPreview = false;
+let currentExportFormat = 'pdf'; // 'pdf' | 'excel'
 
 function getExportSections() {
   return {
@@ -412,19 +454,92 @@ function setAllExportSections(checked) {
     const el = document.getElementById(id);
     if (el) el.checked = Boolean(checked);
   });
-  updateReportPreview();
+  updateActiveReportPreview();
 }
 
-function openReportExportModal() {
+function openExcelExportModal() {
+  openReportExportModal('excel');
+}
+
+function openReportExportModal(format = 'pdf') {
+  currentExportFormat = format;
   const modal = document.getElementById('report-export-modal');
   if (!modal) return;
   modal.classList.remove('hidden');
-  updateReportPreview();
+  applyModalFormatStyles();
+  updateActiveReportPreview();
 }
 
 function closeReportExportModal() {
   const modal = document.getElementById('report-export-modal');
   if (modal) modal.classList.add('hidden');
+}
+
+function switchReportExportFormat(format) {
+  if (currentExportFormat === format) return;
+  currentExportFormat = format;
+  applyModalFormatStyles();
+  updateActiveReportPreview();
+}
+
+function applyModalFormatStyles() {
+  const isExcel = currentExportFormat === 'excel';
+  const iconBadge = document.getElementById('export-modal-icon-badge');
+  const icon = document.getElementById('export-modal-icon');
+  const title = document.getElementById('export-modal-title');
+  const subtitle = document.getElementById('export-modal-subtitle');
+  const tabPdf = document.getElementById('tab-format-pdf');
+  const tabExcel = document.getElementById('tab-format-excel');
+  const actionsPdf = document.getElementById('export-actions-pdf');
+  const actionsExcel = document.getElementById('export-actions-excel');
+  const footerPdf = document.getElementById('export-footer-pdf-actions');
+  const footerExcel = document.getElementById('export-footer-excel-actions');
+
+  if (isExcel) {
+    if (iconBadge) {
+      iconBadge.className = 'w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold text-base shrink-0 border border-emerald-200';
+    }
+    if (icon) icon.className = 'fa-solid fa-file-excel';
+    if (title) title.textContent = 'Report Excel Export & Preview';
+    if (subtitle) subtitle.textContent = 'Select sections to include and live-preview spreadsheet (1 single tab) before exporting';
+
+    if (tabExcel) {
+      tabExcel.className = 'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all text-emerald-700 bg-white shadow-2xs border border-emerald-300';
+    }
+    if (tabPdf) {
+      tabPdf.className = 'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all text-gray-600 hover:text-red-700 hover:bg-white/80';
+    }
+    if (actionsPdf) actionsPdf.classList.add('hidden');
+    if (actionsExcel) actionsExcel.classList.remove('hidden');
+    if (footerPdf) footerPdf.classList.add('hidden');
+    if (footerExcel) footerExcel.classList.remove('hidden');
+  } else {
+    if (iconBadge) {
+      iconBadge.className = 'w-9 h-9 rounded-xl bg-red-50 text-red-600 flex items-center justify-center font-bold text-base shrink-0 border border-red-100';
+    }
+    if (icon) icon.className = 'fa-solid fa-file-pdf';
+    if (title) title.textContent = 'Report PDF Export & Preview';
+    if (subtitle) subtitle.textContent = 'Select sections to include and live-preview before exporting';
+
+    if (tabPdf) {
+      tabPdf.className = 'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all text-red-700 bg-white shadow-2xs border border-red-200';
+    }
+    if (tabExcel) {
+      tabExcel.className = 'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all text-gray-600 hover:text-emerald-700 hover:bg-white/80';
+    }
+    if (actionsPdf) actionsPdf.classList.remove('hidden');
+    if (actionsExcel) actionsExcel.classList.add('hidden');
+    if (footerPdf) footerPdf.classList.remove('hidden');
+    if (footerExcel) footerExcel.classList.add('hidden');
+  }
+}
+
+async function updateActiveReportPreview() {
+  if (currentExportFormat === 'excel') {
+    updateExcelReportPreview();
+  } else {
+    await updateReportPreview();
+  }
 }
 
 async function updateReportPreview() {
@@ -886,7 +1001,7 @@ async function buildReportPdf(options = {}) {
 }
 
 function downloadPDF() {
-  openReportExportModal();
+  openReportExportModal('pdf');
 }
 
 function downloadExcelFromModal() {
@@ -898,65 +1013,584 @@ function downloadExcel(sections = null) {
   const f = getFilters();
   const filtered = filterIncidents(_cachedIncidents, f);
 
-  const incidentRows = filtered.map(i => ({
-    'Ref No.':   i.reference_no,
-    'Type':      i.incident_type,
-    'Status':    i.status,
-    'Triage':    i.triage_color,
-    'Purok':     i.purok_name || '',
-    'Reporter':  i.reporter_name || '',
-    'Reported':  new Date(i.reported_at).toLocaleString('en-PH'),
-    'Resolved':  i.resolved_at ? new Date(i.resolved_at).toLocaleString('en-PH') : '',
-  }));
+  const user = typeof getUser === 'function' ? getUser() : null;
+  const tenantSlug = typeof getTenantSlug === 'function' ? getTenantSlug() : (user?.version || 'manay');
+  const isNewVisayas = tenantSlug === 'new-visayas';
+  const tenantTitle = isNewVisayas ? 'BARANGAY NEW VISAYAS' : 'BARANGAY MANAY';
+  const periodLabel = getPeriodLabel(f);
+  const typeLabel   = f.type || 'All Types';
+  const generated   = new Date().toLocaleString('en-PH', { dateStyle: 'long', timeStyle: 'short' });
+  const generatedBy = user?.full_name ? user.full_name.toUpperCase() : 'BARANGAY SYSTEM ADMINISTRATOR';
+
+  const total    = filtered.length;
+  const resolved = filtered.filter(i => i.status === 'Resolved' || i.status === 'Archived').length;
+  const pending  = filtered.filter(i => i.status === 'Pending').length;
+  const ongoing  = filtered.filter(i => ['Assigned', 'Initiate', 'Delayed'].includes(i.status)).length;
+  const resolutionRate = total > 0 ? ((resolved / total) * 100).toFixed(1) + '%' : '0.0%';
 
   let perfList = _cachedPerformance;
   if (f.responder) {
     perfList = perfList.filter(r => r.id == f.responder);
   }
 
-  const performanceRows = perfList.map(r => ({
-    'Responder':            r.full_name,
-    'Assigned':             r.total_assigned || 0,
-    'Resolved':             r.resolved || 0,
-    'Avg Response (min)':   r.avg_response_time_minutes ?? '',
-    'Avg Resolution (min)': r.avg_resolution_minutes ?? '',
-  }));
+  // Default to exporting all sections if sections is not passed
+  const sec = sections || {
+    includeSummary: true,
+    includeIncidents: true,
+    includeResponders: true,
+    includeSignatures: true,
+  };
 
-  const wb = XLSX.utils.book_new();
-
-  if (sections) {
-    let sheetAdded = false;
-    if (sections.includeSummary) {
-      const summaryRows = [
-        { 'Metric': 'Period', 'Value': getPeriodLabel(f) },
-        { 'Metric': 'Incident Type', 'Value': f.type || 'All Types' },
-        { 'Metric': 'Generated At', 'Value': new Date().toLocaleString('en-PH') },
-        { 'Metric': 'Total Incidents', 'Value': filtered.length },
-        { 'Metric': 'Resolved Incidents', 'Value': filtered.filter(i => i.status === 'Resolved' || i.status === 'Archived').length },
-        { 'Metric': 'Pending Incidents', 'Value': filtered.filter(i => i.status === 'Pending').length },
-        { 'Metric': 'Active / Ongoing Incidents', 'Value': filtered.filter(i => ['Assigned', 'Initiate', 'Delayed'].includes(i.status)).length },
-      ];
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(summaryRows), 'Summary');
-      sheetAdded = true;
-    }
-    if (sections.includeIncidents) {
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(incidentRows.length ? incidentRows : [{ 'Notice': 'No incidents found for this period' }]), 'Incidents');
-      sheetAdded = true;
-    }
-    if (sections.includeResponders) {
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(performanceRows.length ? performanceRows : [{ 'Notice': 'No responder data available' }]), 'Responder Performance');
-      sheetAdded = true;
-    }
-    if (!sheetAdded) {
-      if (typeof showToast === 'function') showToast('Please select at least one section to export', 'error');
-      return;
-    }
-  } else {
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(incidentRows), 'Incidents');
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(performanceRows), 'Responder Performance');
+  const anyChecked = sec.includeSummary || sec.includeIncidents || sec.includeResponders || sec.includeSignatures;
+  if (!anyChecked) {
+    if (typeof showToast === 'function') showToast('Please select at least one section to export', 'error');
+    return;
   }
 
-  const safePeriod = getPeriodLabel(f).replace(/[^a-zA-Z0-9]/g, '-');
-  XLSX.writeFile(wb, `ResQTrack-Report-${safePeriod}.xlsx`);
-  if (typeof showToast === 'function') showToast('Excel report downloaded');
+  const wb = XLSX.utils.book_new();
+  const reportAoa = [];
+
+  // ── 1. Official Letterhead ─────────────────────────────────
+  reportAoa.push(['REPUBLIC OF THE PHILIPPINES · CITY OF PANABO']);
+  reportAoa.push([tenantTitle]);
+  reportAoa.push(['OFFICIAL INCIDENT & PERFORMANCE REPORT']);
+  reportAoa.push(['ResQTrack Incident Management & Response System']);
+  reportAoa.push([]);
+
+  // ── 2. Report Metadata ─────────────────────────────────────
+  reportAoa.push(['REPORT METADATA', '']);
+  reportAoa.push(['Reporting Period:', periodLabel.toUpperCase()]);
+  reportAoa.push(['Incident Type Filter:', typeLabel.toUpperCase()]);
+  reportAoa.push(['Date & Time Generated:', generated]);
+  reportAoa.push(['Generated By:', `${generatedBy} (System Administrator)`]);
+  reportAoa.push(['Barangay Jurisdiction:', `${tenantTitle}, City of Panabo, Davao del Norte`]);
+  reportAoa.push([]);
+
+  // ── 3. Executive Summary & Status Breakdown ───────────────
+  if (sec.includeSummary) {
+    reportAoa.push(['EXECUTIVE SUMMARY', '', '', '']);
+    reportAoa.push(['Metric', 'Count', 'Percentage of Total', 'Status Description']);
+    reportAoa.push(['Total Incidents', total, '100.0%', 'All reported incidents within selected period']);
+    reportAoa.push(['Resolved / Archived', resolved, resolutionRate, 'Successfully addressed and closed']);
+    reportAoa.push(['Pending Verification', pending, total > 0 ? ((pending / total) * 100).toFixed(1) + '%' : '0.0%', 'Awaiting initial review or dispatch']);
+    reportAoa.push(['Active / In Progress', ongoing, total > 0 ? ((ongoing / total) * 100).toFixed(1) + '%' : '0.0%', 'Currently assigned, initiated, or delayed']);
+    reportAoa.push(['Critical / High Priority', filtered.filter(i => (i.triage_color || '').toLowerCase() === 'red').length, total > 0 ? ((filtered.filter(i => (i.triage_color || '').toLowerCase() === 'red').length / total) * 100).toFixed(1) + '%' : '0.0%', 'Red triage emergency level incidents']);
+    reportAoa.push([]);
+
+    reportAoa.push(['STATUS BREAKDOWN', '', '']);
+    reportAoa.push(['Status', 'Count', 'Share']);
+    const statusBreakdown = [
+      ['Pending',  filtered.filter(i => i.status === 'Pending').length],
+      ['Assigned', filtered.filter(i => i.status === 'Assigned').length],
+      ['Initiate', filtered.filter(i => i.status === 'Initiate').length],
+      ['Delayed',  filtered.filter(i => i.status === 'Delayed').length],
+      ['Resolved', filtered.filter(i => i.status === 'Resolved').length],
+      ['Archived', filtered.filter(i => i.status === 'Archived').length],
+    ];
+    statusBreakdown.forEach(([st, cnt]) => {
+      reportAoa.push([st, cnt, total > 0 ? ((cnt / total) * 100).toFixed(1) + '%' : '0.0%']);
+    });
+    reportAoa.push([]);
+  }
+
+  // ── 4. Incident Records ────────────────────────────────────
+  if (sec.includeIncidents) {
+    reportAoa.push(['INCIDENT RECORDS', '']);
+    reportAoa.push([`Period: ${periodLabel} | Filter: ${typeLabel} | Total Records: ${total}`]);
+    reportAoa.push([
+      'Ref No.',
+      'Incident Type',
+      'Status',
+      'Triage Level',
+      'Purok',
+      'Location Details',
+      'Reporter Name',
+      'Reporter Contact',
+      'Assigned Responder',
+      'Date & Time Reported',
+      'Date & Time Resolved',
+      'Description',
+    ]);
+
+    if (filtered.length === 0) {
+      reportAoa.push(['No incidents found for this period.']);
+    } else {
+      filtered.forEach(i => {
+        reportAoa.push([
+          i.reference_no || '—',
+          i.incident_type || '—',
+          i.status || '—',
+          i.triage_color || '—',
+          i.purok_name || '—',
+          i.address_details || '—',
+          i.reporter_name || '—',
+          i.reporter_phone || '—',
+          i.responder_name || '—',
+          i.reported_at ? new Date(i.reported_at).toLocaleString('en-PH', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—',
+          i.resolved_at ? new Date(i.resolved_at).toLocaleString('en-PH', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—',
+          i.description || '—',
+        ]);
+      });
+    }
+    reportAoa.push([]);
+  }
+
+  // ── 5. Responder Performance ───────────────────────────────
+  if (sec.includeResponders) {
+    reportAoa.push(['RESPONDER PERFORMANCE REPORT', '']);
+    reportAoa.push([`Period: ${periodLabel} | Total Responders: ${perfList.length}`]);
+    reportAoa.push([
+      'Responder Name',
+      'Total Assigned',
+      'Incidents Resolved',
+      'Active / Ongoing',
+      'Resolution Rate',
+      'Avg Response Time',
+      'Avg Resolution Time',
+    ]);
+
+    if (perfList.length === 0) {
+      reportAoa.push(['No responder data available for this period.']);
+    } else {
+      perfList.forEach(r => {
+        const assigned = Number(r.total_assigned) || 0;
+        const resCount = Number(r.resolved) || 0;
+        const ongoingCount = Math.max(0, assigned - resCount);
+        const rate = assigned > 0 ? ((resCount / assigned) * 100).toFixed(1) + '%' : '0.0%';
+        reportAoa.push([
+          r.full_name || '—',
+          assigned,
+          resCount,
+          ongoingCount,
+          rate,
+          fmtMinutes(r.avg_response_time_minutes),
+          fmtMinutes(r.avg_resolution_minutes),
+        ]);
+      });
+    }
+    reportAoa.push([]);
+  }
+
+  // ── 6. Signatures & Certification ──────────────────────────
+  if (sec.includeSignatures) {
+    reportAoa.push(['OFFICIAL CERTIFICATION & SIGNATURES', '']);
+    reportAoa.push(['This document certifies that the incident logs and performance statistics above have been officially recorded and verified in accordance with Barangay Incident Response protocols.']);
+    reportAoa.push([]);
+    reportAoa.push(['Prepared by:', '', '', 'Approved & Noted by:']);
+    reportAoa.push([]);
+    reportAoa.push([generatedBy, '', '', 'HON. PUNONG BARANGAY']);
+    reportAoa.push(['Barangay System Administrator', '', '', 'Punong Barangay / Incident Commander']);
+    reportAoa.push(['ResQTrack Records & Analytics Section', '', '', `${tenantTitle}, Panabo City`]);
+    reportAoa.push(['Date Signed: ____________________', '', '', 'Date Signed: ____________________']);
+    reportAoa.push([]);
+    reportAoa.push([`Official Report of ${tenantTitle} · ResQTrack Incident Management System`]);
+  }
+
+  // Generate SINGLE worksheet (1 Tab only)
+  const ws = XLSX.utils.aoa_to_sheet(reportAoa);
+  ws['!cols'] = [
+    { wch: 20 }, // Ref No. / Metric / Label / Responder
+    { wch: 20 }, // Type / Count / Assigned
+    { wch: 14 }, // Status / Share / Resolved
+    { wch: 14 }, // Triage / Active / Approved
+    { wch: 16 }, // Purok / Resolution Rate
+    { wch: 32 }, // Location Details / Avg Response
+    { wch: 24 }, // Reporter Name / Avg Resolution
+    { wch: 18 }, // Reporter Contact
+    { wch: 24 }, // Assigned Responder
+    { wch: 22 }, // Date Reported
+    { wch: 22 }, // Date Resolved
+    { wch: 45 }, // Description
+  ];
+
+  const sheetName = isNewVisayas ? 'New Visayas Report' : 'Barangay Report';
+  XLSX.utils.book_append_sheet(wb, ws, sheetName);
+
+  const safePeriod = periodLabel.replace(/[^a-zA-Z0-9]/g, '-');
+  const fileName = isNewVisayas
+    ? `Barangay_New_Visayas_Report_${safePeriod}.xlsx`
+    : `ResQTrack_Report_${safePeriod}.xlsx`;
+
+  XLSX.writeFile(wb, fileName);
+  if (typeof showToast === 'function') showToast('Excel report downloaded (1 sheet)');
+}
+
+function updateExcelReportPreview() {
+  const canvas = document.getElementById('report-preview-canvas');
+  const statsEl = document.getElementById('report-preview-stats');
+  const btnExcelDownloads = document.querySelectorAll('.btn-excel-download-target');
+
+  const sections = getExportSections();
+  const anyChecked = sections.includeSummary || sections.includeIncidents || sections.includeResponders || sections.includeSignatures;
+
+  if (!anyChecked) {
+    if (canvas) {
+      canvas.innerHTML = `
+        <div class="p-8 text-center text-gray-500 my-auto">
+          <i class="fa-solid fa-square-check text-4xl text-gray-400 mb-3 block"></i>
+          <p class="font-semibold text-gray-800 text-base">No sections selected</p>
+          <p class="text-xs text-gray-500 mt-1 max-w-sm mx-auto">Please select at least one section above to generate and export your Excel report.</p>
+        </div>
+      `;
+    }
+    if (statsEl) {
+      statsEl.innerHTML = `<span class="text-amber-600 flex items-center gap-1.5 font-medium"><i class="fa-solid fa-triangle-exclamation"></i>Select at least one section</span>`;
+    }
+    btnExcelDownloads.forEach(btn => { btn.disabled = true; });
+    return;
+  }
+
+  btnExcelDownloads.forEach(btn => { btn.disabled = false; });
+
+  const f = getFilters();
+  const filtered = filterIncidents(_cachedIncidents, f);
+  let perfList = _cachedPerformance;
+  if (f.responder) {
+    perfList = perfList.filter(r => r.id == f.responder);
+  }
+
+  const user = typeof getUser === 'function' ? getUser() : null;
+  const tenantSlug = typeof getTenantSlug === 'function' ? getTenantSlug() : (user?.version || 'manay');
+  const isNewVisayas = tenantSlug === 'new-visayas';
+  const tenantTitle = isNewVisayas ? 'BARANGAY NEW VISAYAS' : 'BARANGAY MANAY';
+  const sheetName = isNewVisayas ? 'New Visayas Report' : 'Barangay Report';
+
+  const previewHtml = buildExcelReportPreviewHtml({
+    sections,
+    filtered,
+    perfList,
+    filters: f,
+    tenantTitle,
+    sheetName,
+    user,
+  });
+
+  if (canvas) {
+    canvas.innerHTML = previewHtml;
+  }
+
+  if (statsEl) {
+    statsEl.innerHTML = `
+      <i class="fa-solid fa-circle-check text-emerald-600"></i>
+      <span class="text-gray-700 font-medium">${filtered.length} incident(s) · ${perfList.length} responder(s) · 1 Worksheet (Single Tab) ready</span>
+    `;
+  }
+}
+
+function buildExcelReportPreviewHtml(opts) {
+  const { sections, filtered, perfList, filters, tenantTitle, sheetName, user } = opts;
+  const periodLabel = getPeriodLabel(filters);
+  const typeLabel   = filters.type || 'All Types';
+  const generated   = new Date().toLocaleString('en-PH', { dateStyle: 'long', timeStyle: 'short' });
+  const generatedBy = user?.full_name ? user.full_name.toUpperCase() : 'BARANGAY SYSTEM ADMINISTRATOR';
+
+  const total    = filtered.length;
+  const resolved = filtered.filter(i => i.status === 'Resolved' || i.status === 'Archived').length;
+  const pending  = filtered.filter(i => i.status === 'Pending').length;
+  const ongoing  = filtered.filter(i => ['Assigned', 'Initiate', 'Delayed'].includes(i.status)).length;
+  const resolutionRate = total > 0 ? ((resolved / total) * 100).toFixed(1) + '%' : '0.0%';
+
+  let rowCounter = 1;
+  const rows = [];
+
+  function addRow(cells, customRowClass = '') {
+    const rowNum = rowCounter++;
+    const cellsHtml = cells.map(c => {
+      let text = c !== undefined && c !== null ? String(c) : '';
+      let colSpan = 1;
+      let cellClass = 'border border-gray-200 px-3 py-1.5 text-xs text-gray-800 bg-white align-top whitespace-nowrap';
+      let style = '';
+
+      if (typeof c === 'object' && c !== null) {
+        text = c.text ?? '';
+        colSpan = c.colSpan || 1;
+        if (c.class) cellClass += ' ' + c.class;
+        if (c.style) style = c.style;
+      }
+      return `<td class="${cellClass}" colspan="${colSpan}" style="${style}">${escapeHtml(text)}</td>`;
+    }).join('');
+
+    rows.push(`
+      <tr class="${customRowClass}">
+        <td class="w-10 min-w-[2.5rem] bg-gray-50 border border-gray-300 text-center font-mono text-[10px] text-gray-400 select-none py-1">${rowNum}</td>
+        ${cellsHtml}
+      </tr>
+    `);
+  }
+
+  function addBlankRow() {
+    addRow([{ text: '', colSpan: 12, class: 'bg-white h-3.5 border-x border-gray-100 border-y-0' }]);
+  }
+
+  // ── 1. Official Letterhead ─────────────────────────────────
+  addRow([{ text: 'REPUBLIC OF THE PHILIPPINES · CITY OF PANABO', colSpan: 12, class: 'font-bold text-gray-700 tracking-wider text-xs bg-slate-50' }]);
+  addRow([{ text: tenantTitle, colSpan: 12, class: 'font-extrabold text-gray-900 text-sm tracking-wide bg-slate-50' }]);
+  addRow([{ text: 'OFFICIAL INCIDENT & PERFORMANCE REPORT', colSpan: 12, class: 'font-bold text-blue-900 text-xs bg-slate-50' }]);
+  addRow([{ text: 'ResQTrack Incident Management & Response System', colSpan: 12, class: 'italic text-gray-500 text-[11px] bg-slate-50' }]);
+  addBlankRow();
+
+  // ── 2. Report Metadata ─────────────────────────────────────
+  addRow([{ text: 'REPORT METADATA', colSpan: 12, class: 'font-bold text-gray-800 bg-gray-100 border-b border-gray-300' }]);
+  addRow([
+    { text: 'Reporting Period:', class: 'font-semibold text-gray-600 bg-gray-50 w-48' },
+    { text: periodLabel.toUpperCase(), colSpan: 11, class: 'font-bold text-gray-800' }
+  ]);
+  addRow([
+    { text: 'Incident Type Filter:', class: 'font-semibold text-gray-600 bg-gray-50' },
+    { text: typeLabel.toUpperCase(), colSpan: 11, class: 'font-bold text-gray-800' }
+  ]);
+  addRow([
+    { text: 'Date & Time Generated:', class: 'font-semibold text-gray-600 bg-gray-50' },
+    { text: generated, colSpan: 11, class: 'text-gray-800' }
+  ]);
+  addRow([
+    { text: 'Generated By:', class: 'font-semibold text-gray-600 bg-gray-50' },
+    { text: `${generatedBy} (System Administrator)`, colSpan: 11, class: 'text-gray-800' }
+  ]);
+  addRow([
+    { text: 'Barangay Jurisdiction:', class: 'font-semibold text-gray-600 bg-gray-50' },
+    { text: `${tenantTitle}, City of Panabo, Davao del Norte`, colSpan: 11, class: 'text-gray-800' }
+  ]);
+  addBlankRow();
+
+  // ── 3. Executive Summary ───────────────────────────────────
+  if (sections.includeSummary) {
+    addRow([{ text: 'EXECUTIVE SUMMARY', colSpan: 12, class: 'font-bold text-emerald-900 bg-emerald-50/80 border border-emerald-200' }]);
+    addRow([
+      { text: 'Metric', class: 'font-semibold text-gray-700 bg-gray-100' },
+      { text: 'Count', class: 'font-semibold text-gray-700 bg-gray-100 text-center' },
+      { text: 'Percentage of Total', class: 'font-semibold text-gray-700 bg-gray-100 text-center' },
+      { text: 'Status Description', colSpan: 9, class: 'font-semibold text-gray-700 bg-gray-100' }
+    ]);
+    addRow([
+      'Total Incidents',
+      { text: total, class: 'text-center font-bold' },
+      { text: '100.0%', class: 'text-center' },
+      { text: 'All reported incidents within selected period', colSpan: 9 }
+    ]);
+    addRow([
+      'Resolved / Archived',
+      { text: resolved, class: 'text-center font-bold text-emerald-700' },
+      { text: resolutionRate, class: 'text-center font-semibold text-emerald-700' },
+      { text: 'Successfully addressed and closed', colSpan: 9 }
+    ]);
+    addRow([
+      'Pending Verification',
+      { text: pending, class: 'text-center font-bold text-amber-700' },
+      { text: total > 0 ? ((pending / total) * 100).toFixed(1) + '%' : '0.0%', class: 'text-center' },
+      { text: 'Awaiting initial review or dispatch', colSpan: 9 }
+    ]);
+    addRow([
+      'Active / In Progress',
+      { text: ongoing, class: 'text-center font-bold text-blue-700' },
+      { text: total > 0 ? ((ongoing / total) * 100).toFixed(1) + '%' : '0.0%', class: 'text-center' },
+      { text: 'Currently assigned, initiated, or delayed', colSpan: 9 }
+    ]);
+    const redCount = filtered.filter(i => (i.triage_color || '').toLowerCase() === 'red').length;
+    addRow([
+      'Critical / High Priority',
+      { text: redCount, class: 'text-center font-bold text-red-600' },
+      { text: total > 0 ? ((redCount / total) * 100).toFixed(1) + '%' : '0.0%', class: 'text-center' },
+      { text: 'Red triage emergency level incidents', colSpan: 9 }
+    ]);
+    addBlankRow();
+
+    addRow([{ text: 'STATUS BREAKDOWN', colSpan: 12, class: 'font-bold text-gray-800 bg-gray-100' }]);
+    addRow([
+      { text: 'Status', class: 'font-semibold text-gray-700 bg-gray-50' },
+      { text: 'Count', class: 'font-semibold text-gray-700 bg-gray-50 text-center' },
+      { text: 'Share', class: 'font-semibold text-gray-700 bg-gray-50 text-center' },
+      { text: '', colSpan: 9, class: 'bg-white' }
+    ]);
+    const statusBreakdown = [
+      ['Pending',  filtered.filter(i => i.status === 'Pending').length],
+      ['Assigned', filtered.filter(i => i.status === 'Assigned').length],
+      ['Initiate', filtered.filter(i => i.status === 'Initiate').length],
+      ['Delayed',  filtered.filter(i => i.status === 'Delayed').length],
+      ['Resolved', filtered.filter(i => i.status === 'Resolved').length],
+      ['Archived', filtered.filter(i => i.status === 'Archived').length],
+    ];
+    statusBreakdown.forEach(([st, cnt]) => {
+      addRow([
+        st,
+        { text: cnt, class: 'text-center font-semibold' },
+        { text: total > 0 ? ((cnt / total) * 100).toFixed(1) + '%' : '0.0%', class: 'text-center text-gray-600' },
+        { text: '', colSpan: 9 }
+      ]);
+    });
+    addBlankRow();
+  }
+
+  // ── 4. Incident Records ────────────────────────────────────
+  if (sections.includeIncidents) {
+    addRow([{ text: 'INCIDENT RECORDS', colSpan: 12, class: 'font-bold text-blue-900 bg-blue-50/80 border border-blue-200' }]);
+    addRow([{ text: `Period: ${periodLabel} | Filter: ${typeLabel} | Total Records: ${total}`, colSpan: 12, class: 'text-gray-500 italic text-[11px] bg-slate-50' }]);
+    addRow([
+      { text: 'Ref No.', class: 'font-semibold text-gray-700 bg-gray-100' },
+      { text: 'Incident Type', class: 'font-semibold text-gray-700 bg-gray-100' },
+      { text: 'Status', class: 'font-semibold text-gray-700 bg-gray-100 text-center' },
+      { text: 'Triage Level', class: 'font-semibold text-gray-700 bg-gray-100 text-center' },
+      { text: 'Purok', class: 'font-semibold text-gray-700 bg-gray-100' },
+      { text: 'Location Details', class: 'font-semibold text-gray-700 bg-gray-100' },
+      { text: 'Reporter Name', class: 'font-semibold text-gray-700 bg-gray-100' },
+      { text: 'Reporter Contact', class: 'font-semibold text-gray-700 bg-gray-100' },
+      { text: 'Assigned Responder', class: 'font-semibold text-gray-700 bg-gray-100' },
+      { text: 'Date & Time Reported', class: 'font-semibold text-gray-700 bg-gray-100' },
+      { text: 'Date & Time Resolved', class: 'font-semibold text-gray-700 bg-gray-100' },
+      { text: 'Description', class: 'font-semibold text-gray-700 bg-gray-100' },
+    ]);
+
+    if (filtered.length === 0) {
+      addRow([{ text: 'No incidents found for this period.', colSpan: 12, class: 'text-center py-4 text-gray-400 italic' }]);
+    } else {
+      filtered.forEach(i => {
+        addRow([
+          { text: i.reference_no || '—', class: 'font-mono text-gray-700' },
+          { text: i.incident_type || '—', class: 'font-medium text-gray-900' },
+          { text: i.status || '—', class: 'text-center font-medium' },
+          { text: i.triage_color || '—', class: 'text-center font-medium' },
+          i.purok_name || '—',
+          i.address_details || '—',
+          i.reporter_name || '—',
+          i.reporter_phone || '—',
+          i.responder_name || '—',
+          i.reported_at ? new Date(i.reported_at).toLocaleString('en-PH', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—',
+          i.resolved_at ? new Date(i.resolved_at).toLocaleString('en-PH', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—',
+          { text: i.description || '—', class: 'max-w-xs truncate' },
+        ]);
+      });
+    }
+    addBlankRow();
+  }
+
+  // ── 5. Responder Performance ───────────────────────────────
+  if (sections.includeResponders) {
+    addRow([{ text: 'RESPONDER PERFORMANCE REPORT', colSpan: 12, class: 'font-bold text-emerald-900 bg-emerald-50/80 border border-emerald-200' }]);
+    addRow([{ text: `Period: ${periodLabel} | Total Responders: ${perfList.length}`, colSpan: 12, class: 'text-gray-500 italic text-[11px] bg-slate-50' }]);
+    addRow([
+      { text: 'Responder Name', class: 'font-semibold text-gray-700 bg-gray-100' },
+      { text: 'Total Assigned', class: 'font-semibold text-gray-700 bg-gray-100 text-center' },
+      { text: 'Incidents Resolved', class: 'font-semibold text-gray-700 bg-gray-100 text-center' },
+      { text: 'Active / Ongoing', class: 'font-semibold text-gray-700 bg-gray-100 text-center' },
+      { text: 'Resolution Rate', class: 'font-semibold text-gray-700 bg-gray-100 text-center' },
+      { text: 'Avg Response Time', class: 'font-semibold text-gray-700 bg-gray-100 text-center' },
+      { text: 'Avg Resolution Time', class: 'font-semibold text-gray-700 bg-gray-100 text-center' },
+      { text: '', colSpan: 5, class: 'bg-white' }
+    ]);
+
+    if (perfList.length === 0) {
+      addRow([{ text: 'No responder data available for this period.', colSpan: 12, class: 'text-center py-4 text-gray-400 italic' }]);
+    } else {
+      perfList.forEach(r => {
+        const assigned = Number(r.total_assigned) || 0;
+        const resCount = Number(r.resolved) || 0;
+        const ongoingCount = Math.max(0, assigned - resCount);
+        const rate = assigned > 0 ? ((resCount / assigned) * 100).toFixed(1) + '%' : '0.0%';
+        addRow([
+          { text: r.full_name || '—', class: 'font-medium text-gray-900' },
+          { text: assigned, class: 'text-center font-bold' },
+          { text: resCount, class: 'text-center font-semibold text-emerald-700' },
+          { text: ongoingCount, class: 'text-center font-semibold text-blue-700' },
+          { text: rate, class: 'text-center font-bold' },
+          { text: fmtMinutes(r.avg_response_time_minutes), class: 'text-center font-mono text-gray-700' },
+          { text: fmtMinutes(r.avg_resolution_minutes), class: 'text-center font-mono text-gray-700' },
+          { text: '', colSpan: 5 }
+        ]);
+      });
+    }
+    addBlankRow();
+  }
+
+  // ── 6. Signatures & Certification ──────────────────────────
+  if (sections.includeSignatures) {
+    addRow([{ text: 'OFFICIAL CERTIFICATION & SIGNATURES', colSpan: 12, class: 'font-bold text-gray-800 bg-gray-100 border-b border-gray-300' }]);
+    addRow([{ text: 'This document certifies that the incident logs and performance statistics above have been officially recorded and verified in accordance with Barangay Incident Response protocols.', colSpan: 12, class: 'text-gray-600 italic text-[11px]' }]);
+    addBlankRow();
+    addRow([
+      { text: 'Prepared by:', colSpan: 6, class: 'font-semibold text-gray-700' },
+      { text: 'Approved & Noted by:', colSpan: 6, class: 'font-semibold text-gray-700' }
+    ]);
+    addBlankRow();
+    addRow([
+      { text: generatedBy, colSpan: 6, class: 'font-bold text-gray-900 border-b border-gray-400' },
+      { text: 'HON. PUNONG BARANGAY', colSpan: 6, class: 'font-bold text-gray-900 border-b border-gray-400' }
+    ]);
+    addRow([
+      { text: 'Barangay System Administrator', colSpan: 6, class: 'text-gray-600 text-[11px]' },
+      { text: 'Punong Barangay / Incident Commander', colSpan: 6, class: 'text-gray-600 text-[11px]' }
+    ]);
+    addRow([
+      { text: 'ResQTrack Records & Analytics Section', colSpan: 6, class: 'text-gray-500 text-[11px]' },
+      { text: `${tenantTitle}, City of Panabo`, colSpan: 6, class: 'text-gray-500 text-[11px]' }
+    ]);
+    addRow([
+      { text: 'Date Signed: ____________________', colSpan: 6, class: 'text-gray-600 text-[11px]' },
+      { text: 'Date Signed: ____________________', colSpan: 6, class: 'text-gray-600 text-[11px]' }
+    ]);
+    addBlankRow();
+    addRow([{ text: `Official Report of ${tenantTitle} · ResQTrack Incident Management System`, colSpan: 12, class: 'text-center text-[10px] text-gray-400 italic' }]);
+  }
+
+  const totalSheetRows = rowCounter - 1;
+
+  return `
+    <div class="w-full flex flex-col flex-1 min-h-[58vh] max-w-full">
+      <!-- Top info bar inside sheet preview (White Theme) -->
+      <div class="bg-white border border-gray-200 rounded-t-xl px-4 py-2.5 flex items-center justify-between border-b border-gray-200 shrink-0">
+        <div class="flex items-center gap-2">
+          <div class="w-6 h-6 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center justify-center text-xs font-bold shadow-2xs">
+            <i class="fa-solid fa-file-excel"></i>
+          </div>
+          <div>
+            <span class="font-bold text-gray-800 text-xs">${escapeHtml(sheetName)}</span>
+            <span class="text-gray-500 text-[11px] ml-1.5">(1 Single Tab · All Sections Included)</span>
+          </div>
+        </div>
+        <div class="flex items-center gap-2 text-[11px] text-gray-500">
+          <span class="px-2 py-0.5 rounded bg-gray-100 text-gray-700 border border-gray-200 font-mono">A1:L${totalSheetRows}</span>
+          <span class="px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 font-semibold">${totalSheetRows} Rows</span>
+        </div>
+      </div>
+
+      <!-- Scrollable Spreadsheet Grid (White Theme) -->
+      <div class="overflow-x-auto overflow-y-auto max-h-[62vh] bg-white border-x border-gray-200 shadow-inner">
+        <table class="w-full border-collapse font-sans text-xs min-w-[960px]">
+          <thead>
+            <tr class="bg-gray-100 text-gray-600 font-mono text-[11px] sticky top-0 z-10 shadow-2xs">
+              <th class="w-10 min-w-[2.5rem] border border-gray-300 py-1 text-center font-normal text-gray-400 bg-gray-100">#</th>
+              <th class="border border-gray-300 px-2 py-1 text-center font-semibold bg-gray-100 w-[12%]">A</th>
+              <th class="border border-gray-300 px-2 py-1 text-center font-semibold bg-gray-100 w-[12%]">B</th>
+              <th class="border border-gray-300 px-2 py-1 text-center font-semibold bg-gray-100 w-[8%]">C</th>
+              <th class="border border-gray-300 px-2 py-1 text-center font-semibold bg-gray-100 w-[8%]">D</th>
+              <th class="border border-gray-300 px-2 py-1 text-center font-semibold bg-gray-100 w-[10%]">E</th>
+              <th class="border border-gray-300 px-2 py-1 text-center font-semibold bg-gray-100 w-[16%]">F</th>
+              <th class="border border-gray-300 px-2 py-1 text-center font-semibold bg-gray-100 w-[12%]">G</th>
+              <th class="border border-gray-300 px-2 py-1 text-center font-semibold bg-gray-100 w-[10%]">H</th>
+              <th class="border border-gray-300 px-2 py-1 text-center font-semibold bg-gray-100 w-[12%]">I</th>
+              <th class="border border-gray-300 px-2 py-1 text-center font-semibold bg-gray-100 w-[12%]">J</th>
+              <th class="border border-gray-300 px-2 py-1 text-center font-semibold bg-gray-100 w-[12%]">K</th>
+              <th class="border border-gray-300 px-2 py-1 text-center font-semibold bg-gray-100 w-[20%]">L</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows.join('')}
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Bottom Sheet Tab Bar (White Theme) -->
+      <div class="bg-gray-100 border border-gray-300 border-t-0 rounded-b-xl px-4 py-1.5 flex items-center justify-between text-xs select-none shrink-0">
+        <div class="flex items-center gap-1">
+          <div class="bg-white border-x border-t border-gray-300 border-b-2 border-b-emerald-600 px-3 py-1 rounded-t font-semibold text-gray-800 shadow-2xs flex items-center gap-1.5">
+            <i class="fa-solid fa-file-excel text-emerald-600 text-xs"></i>
+            <span>${escapeHtml(sheetName)}</span>
+          </div>
+        </div>
+        <div class="text-[11px] text-gray-500 flex items-center gap-1.5">
+          <i class="fa-solid fa-circle-check text-emerald-600"></i>
+          <span>Single worksheet (1 tab only) — all selected sections stacked in one sheet</span>
+        </div>
+      </div>
+    </div>
+  `;
 }

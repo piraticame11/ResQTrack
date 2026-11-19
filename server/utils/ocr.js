@@ -326,10 +326,15 @@ async function scanIdImage(filePath) {
     }
   }
 
-  const buffer = fs.readFileSync(filePath);
-  const text = await extractIdText(buffer);
-  const parsed = parseIdFields(text);
-  return { ...parsed, engine: 'tesseract' };
+  try {
+    const buffer = fs.readFileSync(filePath);
+    const text = await extractIdText(buffer);
+    const parsed = parseIdFields(text);
+    return { ...parsed, engine: 'tesseract' };
+  } catch (err) {
+    console.warn('[ocr] Text extraction failed:', err.message);
+    return { is_philsys: false, id_type: null, engine: 'fallback' };
+  }
 }
 
 module.exports = {
