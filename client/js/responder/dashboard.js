@@ -68,28 +68,32 @@ function playDispatchChime() {
     if (ctx.state === 'suspended') {
       ctx.resume();
     }
-    const tones = [
-      { f: 587.33, t: 0.00, d: 0.14 }, // D5
-      { f: 880.00, t: 0.12, d: 0.16 }, // A5
-      { f: 1174.66, t: 0.26, d: 0.35 }, // D6
-      { f: 587.33, t: 0.65, d: 0.14 }, // D5
-      { f: 880.00, t: 0.77, d: 0.16 }, // A5
-      { f: 1174.66, t: 0.91, d: 0.45 }, // D6
-    ];
-    tones.forEach(tone => {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = 'triangle';
-      osc.frequency.setValueAtTime(tone.f, ctx.currentTime + tone.t);
-      gain.gain.setValueAtTime(0.4, ctx.currentTime + tone.t);
-      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + tone.t + tone.d);
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start(ctx.currentTime + tone.t);
-      osc.stop(ctx.currentTime + tone.t + tone.d);
-    });
+    const osc  = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.type = 'square';
+
+    const loFreq = 660, hiFreq = 1320, cycleLen = 0.40, totalDur = 5.0;
+    const now = ctx.currentTime;
+    const cycles = Math.ceil(totalDur / cycleLen);
+
+    for (let i = 0; i < cycles; i++) {
+      const t = now + i * cycleLen;
+      osc.frequency.setValueAtTime(loFreq, t);
+      osc.frequency.linearRampToValueAtTime(hiFreq, t + cycleLen * 0.5);
+      osc.frequency.linearRampToValueAtTime(loFreq, t + cycleLen);
+    }
+
+    gain.gain.setValueAtTime(0, now);
+    gain.gain.linearRampToValueAtTime(0.7, now + 0.05);
+    gain.gain.setValueAtTime(0.7, now + totalDur - 0.3);
+    gain.gain.linearRampToValueAtTime(0, now + totalDur);
+
+    osc.start(now);
+    osc.stop(now + totalDur);
   } catch (err) {
-    console.warn('Could not play dispatch chime:', err);
+    console.warn('Could not play dispatch alert sound:', err);
   }
 }
 

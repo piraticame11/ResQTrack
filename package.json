@@ -7,6 +7,7 @@
     "dev": "concurrently \"nodemon server/index.js\" \"npx tailwindcss -i ./client/src/input.css -o ./client/public/css/output.css --watch\"",
     "build:css": "npx tailwindcss -i ./client/src/input.css -o ./client/public/css/output.css --minify",
     "migrate": "node database/migrate.js",
+    "test:email": "node server/scripts/test-email.js",
     "start": "node server/index.js",
     "deploy": "git pull && npm install --no-audit --no-fund && npm run build:css && pm2 restart resqtrack"
   },

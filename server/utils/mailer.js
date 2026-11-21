@@ -1,14 +1,89 @@
+const https = require('https');
 const nodemailer = require('nodemailer');
 
+const mailPort = Number(process.env.MAIL_PORT) || 587;
+const mailSecure = process.env.MAIL_SECURE === 'true' || mailPort === 465;
+
 const transporter = nodemailer.createTransport({
-  host: process.env.MAIL_HOST,
-  port: Number(process.env.MAIL_PORT),
-  secure: process.env.MAIL_SECURE === 'true',
+  host: process.env.MAIL_HOST || 'smtp-relay.brevo.com',
+  port: mailPort,
+  secure: mailSecure,
   auth: {
     user: process.env.MAIL_USER,
     pass: process.env.MAIL_PASS,
   },
+  connectionTimeout: 10000,
+  greetingTimeout: 10000,
+  socketTimeout: 15000,
 });
+
+function getSender() {
+  const name = process.env.MAIL_FROM_NAME || 'ResQTrack';
+  const rawFrom = process.env.MAIL_FROM || process.env.MAIL_USER || 'system@resqtrack.online';
+  const match = rawFrom.match(/<([^>]+)>/);
+  const email = (match ? match[1] : rawFrom).trim();
+  return { name, email };
+}
+
+function sendBrevoApiEmail({ to, subject, html, sender, apiKey }) {
+  return new Promise((resolve, reject) => {
+    const payload = JSON.stringify({
+      sender: { name: sender.name, email: sender.email },
+      to: [{ email: to }],
+      subject,
+      htmlContent: html,
+    });
+
+    const req = https.request('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: {
+        'accept': 'application/json',
+        'api-key': apiKey,
+        'content-type': 'application/json',
+        'content-length': Buffer.byteLength(payload),
+      },
+      timeout: 10000,
+    }, (res) => {
+      let body = '';
+      res.on('data', chunk => { body += chunk; });
+      res.on('end', () => {
+        if (res.statusCode >= 200 && res.statusCode < 300) {
+          try {
+            resolve(JSON.parse(body || '{}'));
+          } catch {
+            resolve({ raw: body });
+          }
+        } else {
+          reject(new Error(`Brevo HTTP API error [${res.statusCode}]: ${body}`));
+        }
+      });
+    });
+
+    req.on('timeout', () => {
+      req.destroy();
+      reject(new Error('Brevo API request timed out (10s)'));
+    });
+    req.on('error', reject);
+    req.write(payload);
+    req.end();
+  });
+}
+
+async function sendMail({ to, subject, html }) {
+  const sender = getSender();
+  const apiKey = (process.env.BREVO_API_KEY || process.env.MAIL_API_KEY || '').trim();
+
+  if (apiKey) {
+    return sendBrevoApiEmail({ to, subject, html, sender, apiKey });
+  }
+
+  return transporter.sendMail({
+    from: `"${sender.name}" <${sender.email}>`,
+    to,
+    subject,
+    html,
+  });
+}
 
 function escapeHtml(str) {
   return String(str).replace(/[&<>"']/g, (c) => ({
@@ -16,9 +91,10 @@ function escapeHtml(str) {
   }[c]));
 }
 
+exports.sendMail = sendMail;
+
 exports.sendVerificationEmail = async (toEmail, fullName) => {
-  await transporter.sendMail({
-    from: `"${process.env.MAIL_FROM_NAME}" <${process.env.MAIL_FROM}>`,
+  return sendMail({
     to: toEmail,
     subject: 'Your ResQTrack Account Has Been Verified',
     html: `
@@ -35,8 +111,7 @@ exports.sendVerificationEmail = async (toEmail, fullName) => {
 };
 
 exports.sendRejectionEmail = async (toEmail, fullName, reason) => {
-  await transporter.sendMail({
-    from: `"${process.env.MAIL_FROM_NAME}" <${process.env.MAIL_FROM}>`,
+  return sendMail({
     to: toEmail,
     subject: 'Your ResQTrack Registration Was Not Approved',
     html: `
@@ -60,8 +135,7 @@ exports.sendAccountCreatedEmail = async (toEmail, fullName, role, password) => {
     resident: 'Resident',
   }[role] || role;
 
-  await transporter.sendMail({
-    from: `"${process.env.MAIL_FROM_NAME}" <${process.env.MAIL_FROM}>`,
+  return sendMail({
     to: toEmail,
     subject: 'Welcome to ResQTrack — Your Account Details',
     html: `
@@ -85,8 +159,7 @@ exports.sendAccountCreatedEmail = async (toEmail, fullName, role, password) => {
 };
 
 exports.sendBlotterStatusEmail = async (toEmail, complainantName, entryNo, nature, status, note) => {
-  await transporter.sendMail({
-    from: `"${process.env.MAIL_FROM_NAME}" <${process.env.MAIL_FROM}>`,
+  return sendMail({
     to: toEmail,
     subject: `Blotter Entry Update: ${entryNo} - ${status}`,
     html: `
@@ -109,4 +182,3 @@ exports.sendBlotterStatusEmail = async (toEmail, complainantName, entryNo, natur
     `,
   });
 };
-

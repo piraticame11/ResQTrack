@@ -246,14 +246,28 @@ async function confirmReject() {
   const reason = document.getElementById('reject-reason').value.trim();
   if (!reason) { showToast('Please explain why this registration is being rejected', 'error'); return; }
 
-  const res = await api.patch(`/admin/users/${viewingUserId}/reject`, { reason });
-  if (res && res.ok) {
-    showToast('Registration rejected');
-    closeViewModal();
-    await loadUsers();
-  } else {
-    const err = res ? await res.json() : {};
+  const btn = document.querySelector('#reject-panel button[onclick="confirmReject()"]');
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i> Rejecting…';
+  }
+  try {
+    const res = await api.patch(`/admin/users/${viewingUserId}/reject`, { reason });
+    if (res && res.ok) {
+      showToast('Registration rejected');
+      closeViewModal();
+      await loadUsers();
+    } else {
+      const err = res ? await res.json().catch(() => ({})) : {};
+      showToast(err.message || 'Error rejecting user', 'error');
+    }
+  } catch (err) {
     showToast(err.message || 'Error rejecting user', 'error');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = 'Confirm Rejection';
+    }
   }
 }
 
@@ -262,13 +276,21 @@ async function verifyFromModal() {
   const btn = document.getElementById('view-verify-btn');
   btn.disabled = true;
   btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i> Verifying…';
-  const res = await api.patch(`/admin/users/${viewingUserId}/verify`, {});
-  btn.disabled = false;
-  btn.innerHTML = '<i class="fa-solid fa-circle-check mr-1"></i> Verify Account';
-  if (res && res.ok) {
-    showToast('User verified successfully');
-    closeViewModal();
-    await loadUsers();
+  try {
+    const res = await api.patch(`/admin/users/${viewingUserId}/verify`, {});
+    if (res && res.ok) {
+      showToast('User verified successfully');
+      closeViewModal();
+      await loadUsers();
+    } else {
+      const err = res ? await res.json().catch(() => ({})) : {};
+      showToast(err.message || 'Error verifying user', 'error');
+    }
+  } catch (err) {
+    showToast(err.message || 'Error verifying user', 'error');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fa-solid fa-circle-check mr-1"></i> Verify Account';
   }
 }
 

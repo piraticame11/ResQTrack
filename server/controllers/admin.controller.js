@@ -97,11 +97,9 @@ exports.createUser = async (req, res) => {
       details: `${full_name} <${email}>`, ip_address: req.ip, version,
     });
 
-    try {
-      await sendAccountCreatedEmail(email, full_name, role, password);
-    } catch (mailErr) {
-      console.error('Account creation notification email failed:', mailErr.message);
-    }
+    sendAccountCreatedEmail(email, full_name, role, password).catch((mailErr) => {
+      console.error('[Mailer] Account creation notification email failed for %s:', email, mailErr.message);
+    });
 
     res.status(201).json({ message: 'User created', id: result.insertId });
   } catch (err) {
@@ -191,11 +189,9 @@ exports.verifyUser = async (req, res) => {
       details: `${user.full_name} <${user.email}>`, ip_address: req.ip, version,
     });
 
-    try {
-      await sendVerificationEmail(user.email, user.full_name);
-    } catch (mailErr) {
-      console.error('Verification email failed:', mailErr.message);
-    }
+    sendVerificationEmail(user.email, user.full_name).catch((mailErr) => {
+      console.error('[Mailer] Verification email failed for %s:', user.email, mailErr.message);
+    });
 
     res.json({ message: 'User verified' });
   } catch (err) {
@@ -223,11 +219,9 @@ exports.rejectUser = async (req, res) => {
       details: `user #${req.params.id}: ${reason.trim()}`, ip_address: req.ip, version,
     });
 
-    try {
-      await sendRejectionEmail(user.email, user.full_name, reason.trim());
-    } catch (mailErr) {
-      console.error('Rejection email failed:', mailErr.message);
-    }
+    sendRejectionEmail(user.email, user.full_name, reason.trim()).catch((mailErr) => {
+      console.error('[Mailer] Rejection email failed for %s:', user.email, mailErr.message);
+    });
 
     res.json({ message: 'Registration rejected' });
   } catch (err) {
