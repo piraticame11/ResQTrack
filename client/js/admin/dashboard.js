@@ -30,11 +30,10 @@
     const incidents = incRes && incRes.ok ? await incRes.json() : [];
     const locations = locRes && locRes.ok ? await locRes.json() : [];
 
-    // Stats
-    const today = new Date().toISOString().slice(0, 10);
-    const todayInc  = incidents.filter(i => i.reported_at?.slice(0, 10) === today);
+    // Stats (evaluated using local calendar date instead of UTC to avoid premature/stale rollover)
+    const todayInc  = incidents.filter(i => typeof isSameDay === 'function' ? isSameDay(i.reported_at) : (i.reported_at?.slice(0, 10) === new Date().toLocaleDateString('en-CA')));
     const pending   = incidents.filter(i => i.status === 'Pending');
-    const resolved  = incidents.filter(i => i.status === 'Resolved' && i.resolved_at?.slice(0, 10) === today);
+    const resolved  = incidents.filter(i => i.status === 'Resolved' && (typeof isSameDay === 'function' ? isSameDay(i.resolved_at) : (i.resolved_at?.slice(0, 10) === new Date().toLocaleDateString('en-CA'))));
 
     document.getElementById('stat-today').textContent     = todayInc.length;
     document.getElementById('stat-pending').textContent   = pending.length;

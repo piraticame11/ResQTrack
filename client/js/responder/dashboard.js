@@ -116,9 +116,8 @@ async function loadActive() {
   const all = await res.json();
 
   const active   = all.filter(i => ['Pending', 'Assigned', 'Initiate', 'Delayed'].includes(i.status));
-  const today    = new Date().toISOString().slice(0, 10);
   const myActive = active.filter(i => i.assigned_responder_id === currentUser.id);
-  const resolved = all.filter(i => i.status === 'Resolved' && i.resolved_at?.slice(0, 10) === today);
+  const resolved = all.filter(i => i.status === 'Resolved' && (typeof isSameDay === 'function' ? isSameDay(i.resolved_at) : (i.resolved_at?.slice(0, 10) === new Date().toLocaleDateString('en-CA'))));
 
   document.getElementById('stat-active').textContent   = myActive.length;
   document.getElementById('stat-resolved').textContent = resolved.length;

@@ -365,6 +365,17 @@ function formatDate(ts) {
   return new Date(ts).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' });
 }
 
+// Compares calendar day in user's local timezone (guards against UTC date shifts)
+function isSameDay(d1, d2 = new Date()) {
+  if (!d1) return false;
+  const a = new Date(d1);
+  const b = new Date(d2);
+  return !isNaN(a.getTime()) && !isNaN(b.getTime()) &&
+         a.getFullYear() === b.getFullYear() &&
+         a.getMonth() === b.getMonth() &&
+         a.getDate() === b.getDate();
+}
+
 function statusBadge(status) {
   const map = {
     Pending:  'badge-pending',
