@@ -17,7 +17,7 @@ function classifyIncident(text) {
     return { type: 'Fire', triage: 'Red' };
   }
   // Rescue / Medical / Vehicular Accident (Red triage)
-  if (/\b(rescue|saklolo|aksidente|accident|crash|collision|nabangga|banggaan|tulong|trapped|naipit|nahulog|heart attack|stroke|drowning|nalunod|emergency)\b/i.test(lower)) {
+  if (/\b(rescue|saklolo|aksidente|naaksidente|accident|accidents|crash|crashed|collision|disgrasya|nadisgrasya|madisgrasya|nagdisgrasya|nagkadisgrasya|disgrasiya|nadisgrasiya|madisgrasiya|bangga|nabangga|banggaan|nagkabangga|bunggo|nabunggo|nagkabunggo|tulong|trapped|naipit|nahulog|heart attack|stroke|drowning|nalunod|emergency)\b/i.test(lower)) {
     return { type: 'Rescue', triage: 'Red' };
   }
   // Flood / Natural disaster (Orange triage)
@@ -108,7 +108,12 @@ exports.inbound = async (req, res) => {
     }
 
     // 5. Resident matching & Barangay Tenant determination
-    const tenantFromRoute = req.tenantVersion || (req.query?.tenant ? normalizeTenant(req.query.tenant) : null) || (req.query?.version ? normalizeTenant(req.query.version) : null);
+    const tenantFromRoute = req.tenantVersion ||
+      (req.query?.tenant ? normalizeTenant(req.query.tenant) : null) ||
+      (req.query?.version ? normalizeTenant(req.query.version) : null) ||
+      (req.body?.tenant ? normalizeTenant(req.body.tenant) : null) ||
+      (req.body?.version ? normalizeTenant(req.body.version) : null) ||
+      (req.body?.barangay ? normalizeTenant(req.body.barangay) : null);
 
     let reporter = null;
     if (tenantFromRoute) {

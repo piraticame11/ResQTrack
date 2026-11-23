@@ -12,9 +12,21 @@
   window._adminSocket.emit('join:barangay', slug);
   window._adminSocket.emit('join:admin', { version: slug });
 
+  const seenIncidents = new Set();
+
   window._adminSocket.on('incident:new', (inc) => {
+    if (!inc) return;
     if (inc.version && inc.version !== slug) return;
-    // If the report is "Other" or non-urgent (Yellow/Green triage), play a mellow notification sound
+
+    // Deduplicate rapid dual-emits from server (io.to and io.emit)
+    const dedupKey = inc.id ? `id:${inc.id}` : (inc.reference_no ? `ref:${inc.reference_no}` : null);
+    if (dedupKey) {
+      if (seenIncidents.has(dedupKey)) return;
+      seenIncidents.add(dedupKey);
+      setTimeout(() => seenIncidents.delete(dedupKey), 15000);
+    }
+
+    // Play alert sound for emergencies (Fire, Rescue, Crime, Fights, Flood) or chime for Other/non-urgent
     if (inc.incident_type === 'Other' || inc.triage_color === 'Yellow' || inc.triage_color === 'Green') {
       playMellowChime();
     } else {
@@ -24,54 +36,99 @@
   });
 
   window._adminSocket.on('incident:delayed', (inc) => {
+    if (!inc) return;
     if (inc.version && inc.version !== slug) return;
     playDelayedAlertSound();
     showAdminDelayedNotification(inc);
   });
 
   window._adminSocket.on('incident:stale_initiate', (inc) => {
+    if (!inc) return;
     if (inc.version && inc.version !== slug) return;
     playSoftChime();
     showAdminStaleInitiateNotification(inc);
   });
 })();
 
-// Gentle, non-urgent melodic chime for "Other" reports or non-critical notices
-function playMellowChime() {
+// ── Web Audio Management & Autoplay Policy Handling ──
+let _sharedAudioCtx = null;
+
+function getSharedAudioContext() {
   try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    const now = ctx.currentTime;
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return null;
+    if (!_sharedAudioCtx || _sharedAudioCtx.state === 'closed') {
+      _sharedAudioCtx = new AudioCtx();
+    }
+    return _sharedAudioCtx;
+  } catch (err) {
+    console.warn('[Notify] Failed to initialize AudioContext:', err);
+    return null;
+  }
+}
 
-    // Smooth 2-tone melodic chime (E5 -> G#5, gentle sine wave)
-    const osc1 = ctx.createOscillator();
-    const gain1 = ctx.createGain();
-    osc1.type = 'sine';
-    osc1.frequency.setValueAtTime(659.25, now); // E5
-    gain1.gain.setValueAtTime(0, now);
-    gain1.gain.linearRampToValueAtTime(0.18, now + 0.03);
-    gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
-    osc1.connect(gain1);
-    gain1.connect(ctx.destination);
-    osc1.start(now);
-    osc1.stop(now + 0.35);
-
-    const osc2 = ctx.createOscillator();
-    const gain2 = ctx.createGain();
-    osc2.type = 'sine';
-    osc2.frequency.setValueAtTime(830.61, now + 0.12); // G#5
-    gain2.gain.setValueAtTime(0, now + 0.12);
-    gain2.gain.linearRampToValueAtTime(0.20, now + 0.15);
-    gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.65);
-    osc2.connect(gain2);
-    gain2.connect(ctx.destination);
-    osc2.start(now + 0.12);
-    osc2.stop(now + 0.65);
+// Unlock / resume AudioContext on user interaction so incoming
+// socket alerts can immediately produce sound even when the tab was idle
+function unlockAudio() {
+  try {
+    const ctx = getSharedAudioContext();
+    if (ctx && ctx.state === 'suspended') {
+      ctx.resume().catch(() => {});
+    }
   } catch (_) {}
 }
 
-function playAlertSound() {
+['click', 'keydown', 'touchstart', 'pointerdown'].forEach((evt) => {
+  document.addEventListener(evt, unlockAudio, { passive: true });
+});
+
+// Helper to run audio playback safely once context is running
+function runWithAudioContext(callback) {
   try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const ctx = getSharedAudioContext();
+    if (!ctx) return;
+    if (ctx.state === 'suspended') {
+      ctx.resume().then(() => {
+        try { callback(ctx); } catch (e) { console.warn('[Notify] Audio playback error:', e); }
+      }).catch((e) => {
+        console.warn('[Notify] Audio resume blocked by browser policy:', e);
+      });
+    } else {
+      callback(ctx);
+    }
+  } catch (err) {
+    console.warn('[Notify] Audio error:', err);
+  }
+}
+
+// Audible, distinct 3-tone melodic chime for non-critical notices or general reports
+function playMellowChime() {
+  runWithAudioContext((ctx) => {
+    const now = ctx.currentTime;
+    const tones = [
+      { freq: 587.33, start: 0.00, dur: 0.30, gain: 0.35 }, // D5
+      { freq: 739.99, start: 0.12, dur: 0.35, gain: 0.40 }, // F#5
+      { freq: 880.00, start: 0.24, dur: 0.55, gain: 0.45 }, // A5
+    ];
+
+    tones.forEach((t) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(t.freq, now + t.start);
+      gain.gain.setValueAtTime(0, now + t.start);
+      gain.gain.linearRampToValueAtTime(t.gain, now + t.start + 0.03);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + t.start + t.dur);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now + t.start);
+      osc.stop(now + t.start + t.dur);
+    });
+  });
+}
+
+function playAlertSound() {
+  runWithAudioContext((ctx) => {
     const osc  = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.connect(gain);
@@ -96,12 +153,11 @@ function playAlertSound() {
 
     osc.start(now);
     osc.stop(now + totalDur);
-  } catch (_) {}
+  });
 }
 
 function playDelayedAlertSound() {
-  try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+  runWithAudioContext((ctx) => {
     const osc  = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.connect(gain);
@@ -122,13 +178,12 @@ function playDelayedAlertSound() {
 
     osc.start(now);
     osc.stop(now + 1.1);
-  } catch (_) {}
+  });
 }
 
 function playSoftChime() {
-  try {
+  runWithAudioContext((ctx) => {
     // Low volume gentle chime for stale initiate reminders
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
     const osc  = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.connect(gain);
@@ -141,12 +196,12 @@ function playSoftChime() {
     osc.frequency.exponentialRampToValueAtTime(783.99, now + 0.6); // G5
 
     gain.gain.setValueAtTime(0, now);
-    gain.gain.linearRampToValueAtTime(0.15, now + 0.05); // Much lowered volume (0.15)
+    gain.gain.linearRampToValueAtTime(0.25, now + 0.05);
     gain.gain.exponentialRampToValueAtTime(0.001, now + 1.2);
 
     osc.start(now);
     osc.stop(now + 1.2);
-  } catch (_) {}
+  });
 }
 
 const TYPE_COLORS = {
@@ -162,8 +217,14 @@ function showAdminNotification(inc) {
   const slug = typeof getTenantSlug === 'function' ? getTenantSlug() : 'manay';
   const color = TYPE_COLORS[inc.incident_type] || '#6b7280';
   const isOther = inc.incident_type === 'Other';
-  const icon = isOther ? '📋' : '🚨';
-  const header = isOther ? 'New Notice / General Report' : 'New Incident Reported';
+  const isSMS = Boolean(
+    (inc.description && inc.description.includes('[via SMS')) ||
+    (inc.reporter_name && String(inc.reporter_name).startsWith('SMS:'))
+  );
+  const icon = isSMS ? '📱' : (isOther ? '📋' : '🚨');
+  const header = isSMS ? 'New SMS Incident Reported' : (isOther ? 'New Notice / General Report' : 'New Incident Reported');
+
+  const escapeFn = typeof escapeHtml === 'function' ? escapeHtml : (str => str ? String(str).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])) : '');
 
   const el = document.createElement('div');
   el.style.cssText = [
@@ -178,13 +239,13 @@ function showAdminNotification(inc) {
          class="rounded-2xl shadow-2xl p-4 flex items-start gap-3">
       <span class="text-2xl shrink-0 mt-0.5">${icon}</span>
       <div class="flex-1 min-w-0">
-        <p class="font-bold text-gray-800 text-sm">${header}</p>
+        <p class="font-bold text-gray-800 text-sm">${escapeFn(header)}</p>
         <p class="text-gray-600 text-xs mt-0.5">
-          <span class="font-semibold" style="color:${color}">${inc.incident_type}</span>
-          · ${inc.purok_name || (typeof getTenantName === 'function' ? getTenantName() : 'Barangay')}
+          <span class="font-semibold" style="color:${color}">${escapeFn(inc.incident_type)}</span>
+          · ${escapeFn(inc.purok_name || (typeof getTenantName === 'function' ? getTenantName() : 'Barangay'))}
         </p>
-        <p class="font-mono text-xs text-gray-400 mt-0.5">${inc.reference_no}</p>
-        <p class="text-gray-500 text-xs mt-1 line-clamp-2">${inc.description || ''}</p>
+        <p class="font-mono text-xs text-gray-400 mt-0.5">${escapeFn(inc.reference_no)}</p>
+        <p class="text-gray-500 text-xs mt-1 line-clamp-2">${escapeFn(inc.description || '')}</p>
         <a href="/${slug}/admin/incidents"
            class="text-blue-600 text-xs font-medium mt-1.5 inline-block hover:underline">
           View Incidents →

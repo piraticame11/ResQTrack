@@ -100,21 +100,28 @@
       <div id="error-msg" class="hidden mb-4 bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-3 text-sm">
       </div>
 
-      <form id="login-form" class="space-y-5" autocomplete="off">
+      <form id="login-form" class="space-y-5" autocomplete="off" onsubmit="return false;">
+        <!-- Decoy hidden fields to catch browser autofill/credential scanning -->
+        <input type="text" name="fakeusernameremembered" style="display:none!important;position:absolute;left:-9999px;opacity:0;height:0;width:0;" tabindex="-1" autocomplete="off">
+        <input type="password" name="fakepasswordremembered" style="display:none!important;position:absolute;left:-9999px;opacity:0;height:0;width:0;" tabindex="-1" autocomplete="new-password">
+
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-1.5">Email address</label>
           <div class="relative">
             <i class="fa-solid fa-envelope absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
-            <input type="email" id="email" required autocomplete="off" class="input-field pl-9"
-              placeholder="you@example.com">
+            <input type="email" id="email" name="user_email_identity" required autocomplete="off"
+              data-lpignore="true" data-1p-ignore="true" data-bwignore="true"
+              class="input-field pl-9" placeholder="you@example.com">
           </div>
         </div>
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-1.5">Password</label>
           <div class="relative">
             <i class="fa-solid fa-lock absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
-            <input type="password" id="password" required autocomplete="off" class="input-field pl-9"
-              placeholder="••••••••">
+            <input type="password" id="password" name="user_access_token_code" required
+              autocomplete="one-time-code"
+              data-lpignore="true" data-1p-ignore="true" data-bwignore="true"
+              class="input-field pl-9" placeholder="••••••••">
           </div>
         </div>
         <button type="submit" id="login-btn" class="btn-role">
@@ -179,10 +186,20 @@
     document.getElementById('login-form').addEventListener('submit', async (e) => {
       e.preventDefault();
       const btn = document.getElementById('login-btn');
+      const emailEl = document.getElementById('email');
+      const passEl  = document.getElementById('password');
+      if (!emailEl || !passEl) return;
+
+      const emailVal = emailEl.value.trim();
+      const passVal  = passEl.value;
+
       errEl.className = 'hidden mb-4 bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-3 text-sm';
       errEl.classList.add('hidden');
       btn.disabled = true;
       btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Signing in…';
+
+      // Clear the password input immediately so the browser does not snapshot it for saving
+      passEl.value = '';
 
       try {
         const res = await fetch('/api/auth/login', {
@@ -192,8 +209,8 @@
             'X-Barangay-Version': slug
           },
           body: JSON.stringify({
-            email: document.getElementById('email').value.trim(),
-            password: document.getElementById('password').value,
+            email: emailVal,
+            password: passVal,
             version: slug,
           }),
         });
@@ -205,8 +222,15 @@
         localStorage.setItem('user', JSON.stringify(data.user));
         localStorage.setItem('tenant_version', data.user.version || slug);
 
+        // Wipe and detach inputs from DOM before redirecting to ensure browsers
+        // (Chrome, Edge, Safari) never capture or prompt "Save Password"
+        passEl.remove();
+        emailEl.remove();
+
         window.location.href = REDIRECTS[data.user.role] || REDIRECTS.resident;
       } catch (err) {
+        // Restore password field value if failed so user can see/fix if desired
+        passEl.value = passVal;
         errEl.textContent = err.message;
         errEl.classList.remove('hidden');
         btn.disabled = false;
