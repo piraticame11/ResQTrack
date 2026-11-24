@@ -30,16 +30,19 @@ from typing import Any
 
 # Suppress noisy ultralytics/onnxruntime logs on stdout
 os.environ.setdefault("YOLO_VERBOSE", "False")
-os.environ.setdefault("OMP_NUM_THREADS", "2")
-os.environ.setdefault("OPENBLAS_NUM_THREADS", "2")
-os.environ.setdefault("MKL_NUM_THREADS", "2")
+os.environ.setdefault("OMP_NUM_THREADS", "1")
+os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
+os.environ.setdefault("MKL_NUM_THREADS", "1")
+os.environ.setdefault("VECLIB_MAXIMUM_THREADS", "1")
+os.environ.setdefault("NUMEXPR_NUM_THREADS", "1")
 
 import cv2
 import numpy as np
 from PIL import Image, ImageEnhance, ImageOps
 import torch
-if torch.get_num_threads() > 2:
-    torch.set_num_threads(2)
+torch.set_grad_enabled(False)
+if hasattr(torch, "set_num_threads") and torch.get_num_threads() > 1:
+    torch.set_num_threads(1)
 try:
     from rapidocr import RapidOCR
 except ImportError:
@@ -662,9 +665,9 @@ class PhilSysOcrEngine:
 
     def recognize_image(self, image_path: str | Path) -> dict[str, Any]:
         raw_img = ImageOps.exif_transpose(Image.open(image_path)).convert("RGB")
-        max_dim = 1600
+        max_dim = 1280
         if max(raw_img.size) > max_dim:
-            raw_img.thumbnail((max_dim, max_dim), Image.Resampling.LANCZOS)
+            raw_img.thumbnail((max_dim, max_dim), Image.Resampling.BILINEAR)
         upright_img, dets, applied_rot = self._orient_and_detect(raw_img)
         uw, uh = upright_img.size
 
@@ -810,10 +813,14 @@ def serve_loop(engine: PhilSysOcrEngine) -> None:
         try:
             req = json.loads(line)
             image_path = req["image_path"]
-            res = engine.recognize_image(image_path)
+            with torch.inference_mode():
+                res = engine.recognize_image(image_path)
             print(json.dumps({"ok": True, **res}), flush=True)
         except Exception as exc:
             print(json.dumps({"ok": False, "error": str(exc)}), flush=True)
+        finally:
+            import gc
+            gc.collect()
 
 
 def main() -> None:
