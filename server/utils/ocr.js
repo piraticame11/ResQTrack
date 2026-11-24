@@ -181,7 +181,6 @@ async function extractIdText(buffer) {
 
 const ID_TYPE_PATTERNS = [
   [/PHILIPPINE\s*IDENTIFICATION|PHILSYS|PhilID|PAMBANSANG\s*PAGKAKAKILANLAN/i, 'PhilSys National ID'],
-  [/DRIVER'?S?\s*LICENSE/i, "Driver's License"],
 ];
 
 const NAME_LABELS = {
@@ -260,35 +259,9 @@ function parseIdFields(rawText) {
     purok:       null,
   };
 
-  if (idType === "Driver's License") {
-    // Usually Name is right below "Last Name. First Name. Middle Name"
-    const nameLabelIdx = lines.findIndex((l) => /Last Name\.?\s*First Name\.?\s*Middle Name/i.test(l));
-    if (nameLabelIdx !== -1 && nameLabelIdx + 1 < lines.length) {
-      const nameParts = lines[nameLabelIdx + 1].split(',').map((s) => s.trim());
-      if (nameParts.length >= 2) {
-        result.last_name = nameParts[0];
-        const firstMiddle = nameParts.slice(1).join(' ').trim().split(/\s+/);
-        if (firstMiddle.length >= 2) {
-          result.middle_name = firstMiddle.pop();
-          result.first_name = firstMiddle.join(' ');
-        } else {
-          result.first_name = firstMiddle.join(' ');
-        }
-      } else {
-        result.last_name = grabAfterLabel(lines, NAME_LABELS.last_name);
-        result.first_name = grabAfterLabel(lines, NAME_LABELS.first_name);
-        result.middle_name = grabAfterLabel(lines, NAME_LABELS.middle_name);
-      }
-    } else {
-      result.last_name = grabAfterLabel(lines, NAME_LABELS.last_name);
-      result.first_name = grabAfterLabel(lines, NAME_LABELS.first_name);
-      result.middle_name = grabAfterLabel(lines, NAME_LABELS.middle_name);
-    }
-  } else {
-    result.last_name = grabAfterLabel(lines, NAME_LABELS.last_name);
-    result.first_name = grabAfterLabel(lines, NAME_LABELS.first_name);
-    result.middle_name = grabAfterLabel(lines, NAME_LABELS.middle_name);
-  }
+  result.last_name = grabAfterLabel(lines, NAME_LABELS.last_name);
+  result.first_name = grabAfterLabel(lines, NAME_LABELS.first_name);
+  result.middle_name = grabAfterLabel(lines, NAME_LABELS.middle_name);
 
   return result;
 }
@@ -296,8 +269,7 @@ function parseIdFields(rawText) {
 /**
  * Primary ID OCR entry point used by /api/auth/ocr-id.
  * Runs the trained Python PhilSys ML pipeline first, falling back to Tesseract.js
- * when the card is not a PhilSys National ID (e.g., Driver's License) or if Python
- * weights are unavailable.
+ * when Python weights are unavailable.
  */
 async function scanIdImage(filePath) {
   if (isPythonOcrReady()) {
@@ -330,10 +302,21 @@ async function scanIdImage(filePath) {
     const buffer = fs.readFileSync(filePath);
     const text = await extractIdText(buffer);
     const parsed = parseIdFields(text);
-    return { ...parsed, engine: 'tesseract' };
+    const isPhilsys = parsed.id_type === 'PhilSys National ID';
+    return {
+      ...parsed,
+      is_philsys: isPhilsys,
+      error: isPhilsys ? null : 'PhilSys security identifier (PHL seal) was not detected. Please upload a clear photo of a valid Philippine National ID.',
+      engine: 'tesseract',
+    };
   } catch (err) {
     console.warn('[ocr] Text extraction failed:', err.message);
-    return { is_philsys: false, id_type: null, engine: 'fallback' };
+    return {
+      is_philsys: false,
+      error: 'Could not read ID image. Please ensure the card is clear and well-lit.',
+      id_type: null,
+      engine: 'fallback',
+    };
   }
 }
 

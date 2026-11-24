@@ -27,10 +27,10 @@ exports.scanId = async (req, res) => {
       extracted && (extracted.is_philsys === true || extracted.id_type === 'PhilSys National ID')
     );
     if (!isNational) {
-      return res.json({
-        success: true,
+      return res.status(422).json({
+        success: false,
         is_philsys: false,
-        message: 'Non-national ID accepted. Auto-fill is disabled for non-national IDs.',
+        message: extracted?.error || 'PhilSys security identifier (PHL seal) was not detected. Please upload a clear photo of a valid Philippine National ID.',
         extracted: null,
       });
     }
@@ -53,8 +53,12 @@ exports.register = async (req, res) => {
       return res.status(400).json({ message: 'full_name, email and password are required' });
     }
 
-    if (!id_type || !id_type.trim() || !id_number || !id_number.trim()) {
-      return res.status(400).json({ message: 'Please select your ID type and enter its ID number.' });
+    if (!id_type || id_type.trim() !== 'PhilSys National ID') {
+      return res.status(400).json({ message: 'Only PhilSys National ID is accepted for resident registration.' });
+    }
+
+    if (!id_number || !id_number.trim()) {
+      return res.status(400).json({ message: 'Please enter your PhilSys National ID number.' });
     }
 
     // Phone: exactly 11 digits, must start with 09

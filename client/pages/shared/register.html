@@ -303,26 +303,23 @@
                     <div class="flex items-center justify-between mb-1">
                       <label class="block text-xs font-medium text-gray-600">ID Type <span class="text-blue-500">*</span></label>
                       <span id="id-type-locked-badge" class="hidden text-[10px] text-emerald-600 font-semibold items-center gap-1">
-                        <i class="fa-solid fa-lock text-[9px]"></i> Auto-detected
+                        <i class="fa-solid fa-shield-halved text-[9px]"></i> PhilSys Verified
                       </span>
                     </div>
-                    <select id="id_type" required class="input-field text-sm transition-colors">
-                      <option value="">Select ID Type</option>
-                      <option>PhilSys National ID</option>
-                      <option>Driver's License</option>
-                      <option>Others</option>
+                    <select id="id_type" required class="input-field text-sm transition-colors bg-gray-50 text-gray-700">
+                      <option value="PhilSys National ID" selected>PhilSys National ID</option>
                     </select>
                   </div>
                   <div>
                     <label class="block text-xs font-medium text-gray-600 mb-1">ID Number <span class="text-blue-500">*</span></label>
-                    <input type="text" id="id_number" required class="input-field" placeholder="ID number">
+                    <input type="text" id="id_number" required class="input-field" placeholder="PhilSys Card Number (PCN)">
                   </div>
                 </div>
 
                 <!-- Idle state: open camera or upload -->
                 <div id="cam-idle" class="flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-xl p-5 bg-white">
-                  <i class="fa-solid fa-camera text-3xl text-gray-300 mb-2"></i>
-                  <span class="text-xs font-medium text-gray-500 mb-3 text-center">Take or upload a photo of your valid ID</span>
+                  <i class="fa-solid fa-id-card text-3xl text-gray-300 mb-2"></i>
+                  <span class="text-xs font-medium text-gray-500 mb-3 text-center">Take or upload a photo of your PhilSys National ID</span>
                   <div class="flex gap-2">
                     <button type="button" id="btn-open-cam"
                             class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-3.5 py-2 rounded-lg flex items-center gap-1.5 transition-colors">
@@ -970,10 +967,10 @@
       modal.classList.remove('hidden');
       modalIconWrap.className = 'w-16 h-16 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center mx-auto mb-4 border border-blue-100 shadow-inner';
       modalIcon.className = 'fa-solid fa-circle-notch fa-spin text-2xl';
-      modalTitle.textContent = 'Scanning ID';
-      modalDesc.textContent = 'Checking for PhilSys security identifier (PHL seal)…';
+      modalTitle.textContent = 'Scanning National ID';
+      modalDesc.textContent = 'Verifying PhilSys security identifier (PHL seal) and reading details…';
       stepSeal.className = 'flex items-center gap-2 text-blue-600 font-medium';
-      stepSeal.innerHTML = '<i class="fa-solid fa-spinner fa-spin text-blue-500 w-4 text-center"></i><span>Checking PhilSys Security Identifier (PHL Seal)…</span>';
+      stepSeal.innerHTML = '<i class="fa-solid fa-spinner fa-spin text-blue-500 w-4 text-center"></i><span>Verifying PhilSys Security Identifier (PHL Seal)…</span>';
       stepFields.className = 'flex items-center gap-2 text-slate-400';
       stepFields.innerHTML = '<i class="fa-regular fa-circle text-slate-300 w-4 text-center"></i><span>Reading ID Number, Name, Birthdate & Address</span>';
       actions.classList.add('hidden');
@@ -992,61 +989,32 @@
         const res  = await fetch('/api/auth/ocr-id', { method: 'POST', body: fd });
         const data = await res.json();
 
-        // 1. Non-National ID: Do NOT block, keep photo uploaded, skip autofill, set ID type to Others
-        if (data && data.success && data.is_philsys === false) {
-          stepSeal.className = 'flex items-center gap-2 text-blue-600 font-medium';
-          stepSeal.innerHTML = '<i class="fa-solid fa-circle-info text-blue-500 w-4 text-center"></i><span>Non-PhilSys ID (Photo Accepted)</span>';
-          stepFields.className = 'flex items-center gap-2 text-slate-500';
-          stepFields.innerHTML = '<i class="fa-solid fa-pen-to-square text-blue-500 w-4 text-center"></i><span>Auto-fill skipped · Please enter details manually</span>';
-
-          modalIconWrap.className = 'w-16 h-16 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center mx-auto mb-4 border border-blue-100 shadow-inner';
-          modalIcon.className = 'fa-solid fa-id-card text-2xl';
-          modalTitle.textContent = 'ID Photo Accepted';
-          modalDesc.textContent = 'Your ID has been uploaded. Since it is not a PhilSys National ID, auto-fill is disabled and ID Type is set to Others.';
-
-          const idTypeSel = document.getElementById('id_type');
-          if (idTypeSel) {
-            idTypeSel.value = 'Others';
-          }
-          unlockIdType();
-
-          banner.classList.remove('hidden');
-          bannerIcon.className = 'fa-solid fa-circle-check text-blue-600';
-          bannerText.textContent = 'ID photo uploaded. ID Type set to Others — please enter your details manually.';
-          setTimeout(() => banner.classList.add('hidden'), 7000);
-
-          setTimeout(closeModal, 1300);
-          return;
-        }
-
-        // 2. Server or network error response
-        if (!res.ok || !data.success || !data.extracted) {
-          const errMsg = data.message || "ID photo attached. Auto-fill unavailable — please fill in your details manually.";
-          modalIconWrap.className = 'w-16 h-16 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center mx-auto mb-4 border border-blue-100 shadow-inner';
-          modalIcon.className = 'fa-solid fa-id-card text-2xl';
-          modalTitle.textContent = 'ID Photo Attached';
+        // 1. Non-National ID or unverified seal: Do not accept
+        if (!res.ok || !data.success || !data.extracted || data.is_philsys === false) {
+          const errMsg = data.message || "PhilSys security identifier (PHL seal) was not detected. Only a valid PhilSys National ID is accepted.";
+          modalIconWrap.className = 'w-16 h-16 rounded-full bg-red-50 text-red-600 flex items-center justify-center mx-auto mb-4 border border-red-100 shadow-inner';
+          modalIcon.className = 'fa-solid fa-circle-xmark text-2xl';
+          modalTitle.textContent = 'National ID Not Verified';
           modalDesc.textContent = errMsg;
-          stepSeal.className = 'flex items-center gap-2 text-slate-600 font-medium';
-          stepSeal.innerHTML = '<i class="fa-solid fa-circle-info text-blue-500 w-4 text-center"></i><span>Non-PhilSys ID (Photo Accepted)</span>';
-          stepFields.className = 'flex items-center gap-2 text-slate-500';
-          stepFields.innerHTML = '<i class="fa-solid fa-pen-to-square text-blue-500 w-4 text-center"></i><span>Auto-fill unavailable · Please enter details manually</span>';
+          stepSeal.className = 'flex items-center gap-2 text-red-600 font-medium';
+          stepSeal.innerHTML = '<i class="fa-solid fa-circle-xmark text-red-500 w-4 text-center"></i><span>PhilSys Security Identifier Not Detected</span>';
+          stepFields.className = 'flex items-center gap-2 text-slate-400';
+          stepFields.innerHTML = '<i class="fa-solid fa-ban text-slate-300 w-4 text-center"></i><span>Extraction stopped (Only National ID accepted)</span>';
+          actions.classList.remove('hidden');
 
-          const idTypeSel = document.getElementById('id_type');
-          if (idTypeSel && !idTypeSel.value) {
-            idTypeSel.value = 'Others';
-          }
-          unlockIdType();
+          btnClose.onclick = () => {
+            closeModal();
+            idCapture.reset();
+          };
 
           banner.classList.remove('hidden');
-          bannerIcon.className = 'fa-solid fa-circle-check text-blue-600';
-          bannerText.textContent = 'ID photo attached. Please enter your details manually.';
-          setTimeout(() => banner.classList.add('hidden'), 7000);
-
-          setTimeout(closeModal, 1300);
+          bannerIcon.className = 'fa-solid fa-circle-exclamation text-red-500';
+          bannerText.textContent = errMsg;
+          setTimeout(() => banner.classList.add('hidden'), 8000);
           return;
         }
 
-        // 3. PhilSys National ID Verified and Extracted
+        // 2. PhilSys National ID Verified and Extracted
         stepSeal.className = 'flex items-center gap-2 text-emerald-600 font-medium';
         stepSeal.innerHTML = '<i class="fa-solid fa-circle-check text-emerald-500 w-4 text-center"></i><span>PhilSys Security Identifier Verified</span>';
         stepFields.className = 'flex items-center gap-2 text-emerald-600 font-medium';
@@ -1064,35 +1032,15 @@
         fillIfEmpty('birthdate',    ex.birthdate);
         fillIfEmpty('id_number',    ex.id_number);
         fillIfEmpty('address_line', ex.address_line);
-        const locChanged = applyOcrLocation(ex);
+        applyOcrLocation(ex);
 
-        // Auto-correct ID type from scan result and lock the dropdown
+        // Lock ID type to PhilSys National ID
         const idTypeSel = document.getElementById('id_type');
-        const detectedType = ex.id_type || (data.is_philsys ? 'PhilSys National ID' : null);
         if (idTypeSel) {
-          if (detectedType) {
-            let matched = false;
-            for (let i = 0; i < idTypeSel.options.length; i++) {
-              if (
-                idTypeSel.options[i].value.toLowerCase() === detectedType.toLowerCase() ||
-                idTypeSel.options[i].text.toLowerCase() === detectedType.toLowerCase()
-              ) {
-                idTypeSel.selectedIndex = i;
-                matched = true;
-                break;
-              }
-            }
-            if (!matched) {
-              const opt = document.createElement('option');
-              opt.value = detectedType;
-              opt.textContent = detectedType;
-              opt.selected = true;
-              idTypeSel.appendChild(opt);
-            }
-          }
+          idTypeSel.value = 'PhilSys National ID';
           idTypeSel.disabled = true;
           idTypeSel.classList.add('bg-gray-100', 'cursor-not-allowed', 'text-gray-700');
-          idTypeSel.title = 'ID type locked after verification scan';
+          idTypeSel.title = 'PhilSys National ID verified';
           const badge = document.getElementById('id-type-locked-badge');
           if (badge) {
             badge.classList.remove('hidden');
@@ -1108,21 +1056,23 @@
         setTimeout(closeModal, 1100);
       } catch (err) {
         unlockIdType();
-        const idTypeSel = document.getElementById('id_type');
-        if (idTypeSel && !idTypeSel.value) idTypeSel.value = 'Others';
 
-        modalIconWrap.className = 'w-16 h-16 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center mx-auto mb-4 border border-blue-100 shadow-inner';
-        modalIcon.className = 'fa-solid fa-id-card text-2xl';
-        modalTitle.textContent = 'ID Photo Attached';
-        modalDesc.textContent = "Your ID photo has been uploaded. Please fill in the fields manually.";
-        stepSeal.className = 'flex items-center gap-2 text-slate-500';
-        stepSeal.innerHTML = '<i class="fa-solid fa-circle-info text-blue-500 w-4 text-center"></i><span>Manual Entry Mode</span>';
+        modalIconWrap.className = 'w-16 h-16 rounded-full bg-red-50 text-red-600 flex items-center justify-center mx-auto mb-4 border border-red-100 shadow-inner';
+        modalIcon.className = 'fa-solid fa-triangle-exclamation text-2xl';
+        modalTitle.textContent = 'Verification Error';
+        modalDesc.textContent = err.message || "Could not read ID photo. Please ensure it is a clear photo of your PhilSys National ID.";
+        stepSeal.className = 'flex items-center gap-2 text-red-600';
+        stepSeal.innerHTML = '<i class="fa-solid fa-triangle-exclamation text-red-500 w-4 text-center"></i><span>OCR verification encountered an issue</span>';
+        actions.classList.remove('hidden');
+        btnClose.onclick = () => {
+          closeModal();
+          idCapture.reset();
+        };
 
         banner.classList.remove('hidden');
-        bannerIcon.className = 'fa-solid fa-circle-info';
-        bannerText.textContent = "ID photo attached. Please fill in your details manually.";
+        bannerIcon.className = 'fa-solid fa-circle-exclamation text-red-500';
+        bannerText.textContent = "Could not verify PhilSys National ID. Please retake photo.";
         setTimeout(() => banner.classList.add('hidden'), 7000);
-        setTimeout(closeModal, 1300);
       }
     }
 
@@ -1192,11 +1142,14 @@
 
       const idType   = document.getElementById('id_type').value;
       const idNumber = document.getElementById('id_number').value.trim();
-      if (!idType || !idNumber)
-        return showErr('Please select your ID type and enter its ID number.');
+      if (!idType || idType !== 'PhilSys National ID')
+        return showErr('Only PhilSys National ID is accepted for registration.');
+
+      if (!idNumber)
+        return showErr('Please enter your PhilSys National ID number.');
 
       if (!idCapture.getBlob())
-        return showErr('Please capture a photo of your valid ID.');
+        return showErr('Please capture a photo of your PhilSys National ID.');
 
       if (!porCapture.getBlob())
         return showErr('Please capture a photo of a proof-of-residency document (barangay certificate, utility bill, or lease contract).');
@@ -1338,16 +1291,16 @@
       <div id="ocr-modal-icon-wrap" class="w-16 h-16 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center mx-auto mb-4 border border-blue-100 shadow-inner">
         <i class="fa-solid fa-circle-notch fa-spin text-2xl" id="ocr-modal-icon"></i>
       </div>
-      <h3 id="ocr-modal-title" class="text-base font-bold text-slate-800 mb-1">Scanning ID</h3>
+      <h3 id="ocr-modal-title" class="text-base font-bold text-slate-800 mb-1">Scanning National ID</h3>
       <p id="ocr-modal-desc" class="text-xs text-slate-500 leading-relaxed mb-4">
-        Checking for PhilSys security identifier (PHL seal) and reading details…
+        Verifying PhilSys security identifier (PHL seal) and reading details…
       </p>
 
       <!-- Checklist / Step pills -->
       <div class="space-y-2 mb-4 text-left bg-slate-50 p-3.5 rounded-xl border border-slate-100 text-xs">
         <div id="ocr-step-seal" class="flex items-center gap-2 text-slate-600">
           <i class="fa-solid fa-spinner fa-spin text-blue-500 w-4 text-center"></i>
-          <span>Checking PhilSys Security Identifier (PHL Seal)</span>
+          <span>Verifying PhilSys Security Identifier (PHL Seal)</span>
         </div>
         <div id="ocr-step-fields" class="flex items-center gap-2 text-slate-400">
           <i class="fa-regular fa-circle text-slate-300 w-4 text-center"></i>
@@ -1357,7 +1310,7 @@
 
       <div id="ocr-modal-actions" class="hidden flex gap-2">
         <button type="button" id="btn-ocr-close" class="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold py-2.5 rounded-xl transition-colors">
-          Close &amp; Fill Manually
+          Close &amp; Retake Photo
         </button>
       </div>
     </div>
